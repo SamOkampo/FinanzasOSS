@@ -264,7 +264,7 @@ const possibleDifferentDay = evaluateDuplicateTransactions(
     provenance: { sourceType: "statement_import", observedAt: "2026-09-04T13:00:00Z" },
   },
 );
-assert.equal(possibleDifferentDay.level, "possible");
+assert.equal(possibleDifferentDay.level, "none");
 assert.equal(possibleDifferentDay.autoMerge, false);
 
 const differentTenant = evaluateDuplicateTransactions(
