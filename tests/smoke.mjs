@@ -5,13 +5,17 @@ import {
   assertTenantScope,
   assertTransactionBelongsToAccount,
   assertTransactionSchema,
+  buildTransactionFingerprint,
   economicClassForKind,
+  evaluateDuplicateTransactions,
   isConsentActive,
   isPatrimonialTransfer,
   isSpendingTransaction,
   netAccountMovementMinor,
   netEconomicCashFlowMinor,
+  normalizeFingerprintText,
   signedMinorUnits,
+  withTransactionFingerprint,
 } from "../dist/packages/finance-core/src/index.js";
 import { redactForLog } from "../dist/packages/security/src/index.js";
 import { health } from "../dist/apps/api/src/index.js";
@@ -189,6 +193,93 @@ assert.equal(
   80000n,
 );
 assert.equal(netAccountMovementMinor([incomeTransaction, investmentTransfer, expense]), 50000n);
+
+assert.equal(normalizeFingerprintText("  UBER *TRIP Bogotá  "), "uber trip bogota");
+const fingerprintA = buildTransactionFingerprint(expense);
+const fingerprintB = buildTransactionFingerprint({
+  ...expense,
+  id: "tx-expense-copy",
+  rawDescription: "FOOD",
+  provenance: { sourceType: "email_auxiliary", observedAt: "2026-09-03T12:05:00Z" },
+});
+assert.equal(fingerprintA, fingerprintB);
+assert.equal(withTransactionFingerprint(expense).fingerprint, fingerprintA);
+
+const exactDuplicate = evaluateDuplicateTransactions(
+  {
+    ...expense,
+    externalId: "provider-123",
+    provenance: {
+      sourceType: "open_finance_api",
+      observedAt: "2026-09-03T12:00:00Z",
+      provider: "davivienda",
+      sourceRecordId: "provider-123",
+    },
+  },
+  {
+    ...expense,
+    id: "tx-exact-copy",
+    externalId: "provider-123",
+    provenance: {
+      sourceType: "open_finance_api",
+      observedAt: "2026-09-03T12:01:00Z",
+      provider: "davivienda",
+      sourceRecordId: "provider-123",
+    },
+  },
+);
+assert.equal(exactDuplicate.level, "exact");
+assert.equal(exactDuplicate.autoMerge, true);
+
+const likelyDuplicate = evaluateDuplicateTransactions(
+  {
+    ...expense,
+    rawDescription: "UBER *TRIP",
+    counterparty: { kind: "merchant", name: "Uber" },
+  },
+  {
+    ...expense,
+    id: "tx-likely-copy",
+    rawDescription: "Uber Trip",
+    counterparty: { kind: "merchant", name: "UBER" },
+    provenance: { sourceType: "statement_import", observedAt: "2026-09-03T14:00:00Z" },
+  },
+);
+assert.equal(likelyDuplicate.level, "likely");
+assert.equal(likelyDuplicate.autoMerge, false);
+
+const possibleDifferentDay = evaluateDuplicateTransactions(
+  {
+    ...expense,
+    rawDescription: "PAYU UBER",
+    postedAt: "2026-09-03T00:00:00Z",
+    counterparty: { kind: "merchant", name: "Uber" },
+  },
+  {
+    ...expense,
+    id: "tx-possible-copy",
+    rawDescription: "UBER",
+    postedAt: "2026-09-04T00:00:00Z",
+    counterparty: { kind: "merchant", name: "Uber" },
+    provenance: { sourceType: "statement_import", observedAt: "2026-09-04T13:00:00Z" },
+  },
+);
+assert.equal(possibleDifferentDay.level, "possible");
+assert.equal(possibleDifferentDay.autoMerge, false);
+
+const differentTenant = evaluateDuplicateTransactions(
+  expense,
+  { ...expense, id: "tx-other-tenant", tenantId: "tenant-2" },
+);
+assert.equal(differentTenant.level, "none");
+assert.equal(differentTenant.autoMerge, false);
+
+const sameLookingButDifferentScope = evaluateDuplicateTransactions(
+  expense,
+  { ...expense, id: "tx-other-account", accountId: "acc-2" },
+);
+assert.equal(sameLookingButDifferentScope.level, "none");
+
 
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
   merchant: "Uber",
