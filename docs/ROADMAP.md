@@ -14,7 +14,7 @@
 - [x] 1.5 Portafolios como espacio primario; Perfil/Conexiones/Ajustes pasan a navegación secundaria
 
 ## Fase 2 — Finance Core
-- [ ] 2.1 Entidades financieras base: tenant, institution, connection, consent, account, balance, transaction
+- [x] 2.1 Entidades financieras base: tenant, institution, connection, consent, account, balance, transaction
 - [ ] 2.2 Transaction schema universal + categorías/tipos patrimoniales
 - [ ] 2.3 Dedupe y fingerprints
 - [ ] 2.4 Transfer matching entre cuentas propias
