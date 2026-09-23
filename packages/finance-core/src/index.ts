@@ -82,12 +82,84 @@ export interface FinancialConsent {
 export type TransactionDirection = "credit" | "debit";
 export type TransactionStatus = "pending" | "posted" | "reversed";
 export type TransactionKind =
-  | "expense"
+  | "purchase"
   | "income"
+  | "refund"
+  | "fee"
+  | "tax"
   | "transfer"
   | "investment_transfer"
   | "investment_activity"
+  | "debt_payment"
+  | "cash_withdrawal"
+  | "cash_deposit"
+  | "adjustment"
   | "unknown";
+
+export type TransactionEconomicClass =
+  | "expense"
+  | "income"
+  | "refund"
+  | "internal_transfer"
+  | "investment_flow"
+  | "investment_activity"
+  | "debt_flow"
+  | "cash_movement"
+  | "neutral"
+  | "unknown";
+
+export type TransactionCategoryGroup =
+  | "housing"
+  | "food"
+  | "transport"
+  | "education"
+  | "health"
+  | "subscriptions"
+  | "entertainment"
+  | "shopping"
+  | "personal_care"
+  | "travel"
+  | "family"
+  | "utilities"
+  | "business"
+  | "income"
+  | "investments"
+  | "transfers"
+  | "debt"
+  | "taxes_fees"
+  | "cash"
+  | "other";
+
+export type TransactionCategorySource = "provider" | "rule" | "model" | "user" | "system";
+
+export interface TransactionCategoryAssignment {
+  group: TransactionCategoryGroup;
+  code: string;
+  label?: string;
+  source: TransactionCategorySource;
+  confidence?: number;
+}
+
+export type TransactionSourceType =
+  | "open_finance_api"
+  | "provider_api"
+  | "aggregator_api"
+  | "statement_import"
+  | "manual"
+  | "email_auxiliary";
+
+export interface TransactionProvenance {
+  sourceType: TransactionSourceType;
+  observedAt: ISODateTime;
+  provider?: string;
+  sourceRecordId?: string;
+}
+
+export interface TransactionCounterparty {
+  kind: "merchant" | "person" | "institution" | "self" | "unknown";
+  name?: string;
+  accountHint?: string;
+}
 
 export type AccountDomain = "cash" | "credit" | "investment" | "crypto";
 export type FinancialAccountType =
@@ -141,9 +213,11 @@ export interface FinancialTransaction {
   kind: TransactionKind;
   rawDescription: string;
   normalizedDescription?: string;
-  merchant?: string;
-  category?: string;
-  subcategory?: string;
+  counterparty?: TransactionCounterparty;
+  category?: TransactionCategoryAssignment;
+  provenance: TransactionProvenance;
+  originalMoney?: Money;
+  exchangeRate?: number;
   fingerprint?: string;
   transferGroupId?: string;
   investmentActivityId?: string;
@@ -276,17 +350,87 @@ export function signedMinorUnits(tx: Pick<FinancialTransaction, "money" | "direc
   return tx.direction === "debit" ? -tx.money.amountMinor : tx.money.amountMinor;
 }
 
+export function economicClassForKind(kind: TransactionKind): TransactionEconomicClass {
+  switch (kind) {
+    case "purchase":
+    case "fee":
+    case "tax":
+      return "expense";
+    case "income":
+      return "income";
+    case "refund":
+      return "refund";
+    case "transfer":
+      return "internal_transfer";
+    case "investment_transfer":
+      return "investment_flow";
+    case "investment_activity":
+      return "investment_activity";
+    case "debt_payment":
+      return "debt_flow";
+    case "cash_withdrawal":
+    case "cash_deposit":
+      return "cash_movement";
+    case "adjustment":
+      return "neutral";
+    case "unknown":
+      return "unknown";
+  }
+}
+
+export function assertTransactionSchema(transaction: FinancialTransaction): void {
+  if (transaction.money.amountMinor < 0n) throw new Error("Transaction amount must use absolute minor units");
+  if (!transaction.money.currency) throw new Error("Transaction currency is required");
+  if (!transaction.rawDescription.trim()) throw new Error("Transaction rawDescription is required");
+  if (Number.isNaN(Date.parse(transaction.postedAt))) throw new Error("Transaction postedAt must be a valid date");
+  if (Number.isNaN(Date.parse(transaction.provenance.observedAt))) {
+    throw new Error("Transaction provenance observedAt must be a valid date");
+  }
+  if (
+    transaction.category?.confidence !== undefined &&
+    (transaction.category.confidence < 0 || transaction.category.confidence > 1)
+  ) {
+    throw new Error("Transaction category confidence must be between 0 and 1");
+  }
+  if (transaction.exchangeRate !== undefined && transaction.exchangeRate <= 0) {
+    throw new Error("Transaction exchangeRate must be positive");
+  }
+}
+
 export function isSpendingTransaction(tx: Pick<FinancialTransaction, "kind">): boolean {
-  return tx.kind === "expense";
+  return economicClassForKind(tx.kind) === "expense";
 }
 
 export function isPatrimonialTransfer(tx: Pick<FinancialTransaction, "kind">): boolean {
-  return tx.kind === "transfer" || tx.kind === "investment_transfer";
+  const economicClass = economicClassForKind(tx.kind);
+  return (
+    economicClass === "internal_transfer" ||
+    economicClass === "investment_flow" ||
+    economicClass === "cash_movement"
+  );
 }
 
-export function netCashFlowMinor(transactions: readonly FinancialTransaction[]): bigint {
+export function netAccountMovementMinor(transactions: readonly FinancialTransaction[]): bigint {
+  return transactions.reduce((total, tx) => total + signedMinorUnits(tx), 0n);
+}
+
+export function netEconomicCashFlowMinor(transactions: readonly FinancialTransaction[]): bigint {
   return transactions.reduce((total, tx) => {
-    if (isPatrimonialTransfer(tx) || tx.kind === "investment_activity") return total;
+    const economicClass = economicClassForKind(tx.kind);
+    if (
+      economicClass === "internal_transfer" ||
+      economicClass === "investment_flow" ||
+      economicClass === "investment_activity" ||
+      economicClass === "cash_movement" ||
+      economicClass === "neutral"
+    ) {
+      return total;
+    }
     return total + signedMinorUnits(tx);
   }, 0n);
+}
+
+/** @deprecated Prefer netEconomicCashFlowMinor for explicit semantics. */
+export function netCashFlowMinor(transactions: readonly FinancialTransaction[]): bigint {
+  return netEconomicCashFlowMinor(transactions);
 }

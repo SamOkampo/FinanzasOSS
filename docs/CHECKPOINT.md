@@ -2,20 +2,21 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 2.1 — entidades financieras base**.
-- Rama: `feat/phase-2-1-financial-entities`.
-- Próximo bloque exacto: **Fase 2.2 — Transaction schema universal + categorías/tipos patrimoniales**.
+- Último bloque completado: **Fase 2.2 — Transaction schema universal + categorías/tipos patrimoniales**.
+- Rama: `feat/phase-2-2-universal-transactions`.
+- Próximo bloque exacto: **Fase 2.3 — dedupe y fingerprints**.
 
-## 2.1 completado
+## 2.2 completado
 
-- Tenant, Institution, Connection, Consent, Account, Balance y Transaction normalizados.
-- Scope explícito por `tenantId`.
-- Referencias opacas a secretos; no tokens/credenciales en Finance Core.
-- Repositories tenant-scoped para connections, consents, accounts, balances y transactions.
-- Sync checkpoints tenant-scoped y extensibles a inversiones.
-- Invariantes y pruebas negativas para impedir cruces tenant/account/connection.
-- Documentación de entidades e invariantes.
+- `TransactionKind` granular y estable.
+- Efecto económico derivado, sin duplicar clasificaciones persistidas.
+- Categorías jerárquicas con fuente y confianza.
+- Provenance obligatoria para cada movimiento.
+- Counterparty normalizado.
+- Soporte de monto original + tipo de cambio.
+- Separación entre movimiento real de cuenta y flujo económico.
+- Validaciones de esquema y pruebas de inversión/consumo/categorías.
 
-## Gates antes de continuar
+## Gate
 
-El PR de 2.1 debe pasar lint, typecheck, tests y build/CI antes de merge. Si falla, corregir únicamente la causa antes de avanzar.
+No avanzar a 2.3 hasta que el PR de 2.2 pase lint, typecheck, tests y CI.
