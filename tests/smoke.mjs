@@ -285,6 +285,191 @@ const sameLookingButDifferentScope = evaluateDuplicateTransactions(
 assert.equal(sameLookingButDifferentScope.level, "none");
 
 
+const accountB = {
+  ...account,
+  id: "acc-2",
+  externalId: "external-acc-2",
+  name: "Cuenta secundaria",
+};
+
+const ownTransferOut = {
+  ...expense,
+  id: "tx-transfer-out",
+  kind: "transfer",
+  accountId: "acc-1",
+  money: { amountMinor: 50000n, currency: "COP" },
+  direction: "debit",
+  rawDescription: "Transferencia a cuenta propia",
+  category: { group: "transfers", code: "transfers.internal", source: "system" },
+  counterparty: { kind: "self", name: "Cuenta secundaria" },
+  provenance: { sourceType: "open_finance_api", observedAt: "2026-09-05T10:00:00Z", provider: "davivienda" },
+  postedAt: "2026-09-05T00:00:00Z",
+};
+
+const ownTransferIn = {
+  ...ownTransferOut,
+  id: "tx-transfer-in",
+  accountId: "acc-2",
+  direction: "credit",
+  rawDescription: "Transferencia recibida",
+  counterparty: { kind: "self", name: "Cuenta principal" },
+};
+
+const ownTransferMatch = evaluateOwnAccountTransfer(ownTransferOut, account, ownTransferIn, accountB);
+assert.equal(ownTransferMatch.confidence, "high");
+assert.equal(ownTransferMatch.autoLink, true);
+assert.ok(ownTransferMatch.transferGroupId?.startsWith("xfer1_"));
+
+const [linkedOut, linkedIn] = applyOwnAccountTransferMatch(ownTransferOut, ownTransferIn, ownTransferMatch);
+assert.equal(linkedOut.kind, "transfer");
+assert.equal(linkedIn.kind, "transfer");
+assert.equal(linkedOut.transferGroupId, linkedIn.transferGroupId);
+assert.equal(linkedOut.category?.group, "transfers");
+
+const weakOwnTransferCandidate = evaluateOwnAccountTransfer(
+  { ...ownTransferOut, kind: "unknown", category: undefined, counterparty: undefined },
+  account,
+  { ...ownTransferIn, kind: "unknown", category: undefined, counterparty: undefined },
+  accountB,
+);
+assert.equal(weakOwnTransferCandidate.confidence, "low");
+assert.equal(weakOwnTransferCandidate.autoLink, false);
+
+const differentAmountTransfer = evaluateOwnAccountTransfer(
+  ownTransferOut,
+  account,
+  { ...ownTransferIn, money: { amountMinor: 49999n, currency: "COP" } },
+  accountB,
+);
+assert.equal(differentAmountTransfer.confidence, "none");
+
+const investmentTransferDelegated = evaluateOwnAccountTransfer(
+  { ...ownTransferOut, kind: "investment_transfer" },
+  account,
+  ownTransferIn,
+  accountB,
+);
+assert.equal(investmentTransferDelegated.confidence, "none");
+
+const investmentAccount = {
+  id: "acc-hapi",
+  tenantId: "tenant-1",
+  connectionId: "conn-hapi",
+  institutionId: "hapi",
+  externalId: "hapi-account-1",
+  name: "Hapi",
+  type: "brokerage",
+  domain: "investment",
+  currency: "USD",
+};
+
+const bankContribution = {
+  ...expense,
+  id: "tx-bank-contribution",
+  accountId: "acc-1",
+  connectionId: "conn-1",
+  money: { amountMinor: 200000n, currency: "COP" },
+  direction: "debit",
+  kind: "investment_transfer",
+  rawDescription: "Aporte Hapi",
+  category: { group: "investments", code: "investments.contribution", source: "system" },
+  counterparty: { kind: "institution", name: "Hapi" },
+  postedAt: "2026-09-29T00:00:00Z",
+  provenance: { sourceType: "open_finance_api", observedAt: "2026-09-29T10:00:00Z", provider: "davivienda" },
+};
+
+const hapiContribution = {
+  ...expense,
+  id: "tx-hapi-contribution",
+  accountId: "acc-hapi",
+  connectionId: "conn-hapi",
+  money: { amountMinor: 5000n, currency: "USD" },
+  originalMoney: { amountMinor: 200000n, currency: "COP" },
+  direction: "credit",
+  kind: "investment_transfer",
+  rawDescription: "Deposit",
+  category: { group: "investments", code: "investments.contribution", source: "system" },
+  counterparty: { kind: "institution", name: "Davivienda" },
+  postedAt: "2026-09-29T00:00:00Z",
+  provenance: { sourceType: "statement_import", observedAt: "2026-09-30T10:00:00Z", provider: "hapi" },
+};
+
+const investmentContributionMatch = evaluateInvestmentTransfer(
+  bankContribution,
+  account,
+  hapiContribution,
+  investmentAccount,
+);
+assert.equal(investmentContributionMatch.direction, "contribution");
+assert.equal(investmentContributionMatch.moneyMatch, "original_money");
+assert.equal(investmentContributionMatch.confidence, "high");
+assert.equal(investmentContributionMatch.autoLink, true);
+assert.ok(investmentContributionMatch.transferGroupId?.startsWith("invxfer1_"));
+
+const [linkedContributionBank, linkedContributionHapi] = applyInvestmentTransferMatch(
+  bankContribution,
+  hapiContribution,
+  investmentContributionMatch,
+);
+assert.equal(linkedContributionBank.kind, "investment_transfer");
+assert.equal(linkedContributionHapi.kind, "investment_transfer");
+assert.equal(linkedContributionBank.transferGroupId, linkedContributionHapi.transferGroupId);
+assert.equal(isSpendingTransaction(linkedContributionBank), false);
+
+const hapiWithdrawal = {
+  ...hapiContribution,
+  id: "tx-hapi-withdrawal",
+  money: { amountMinor: 2500n, currency: "USD" },
+  originalMoney: { amountMinor: 100000n, currency: "COP" },
+  direction: "debit",
+  rawDescription: "Withdrawal",
+  category: { group: "investments", code: "investments.withdrawal", source: "system" },
+  postedAt: "2026-10-15T00:00:00Z",
+};
+const bankWithdrawal = {
+  ...bankContribution,
+  id: "tx-bank-withdrawal",
+  money: { amountMinor: 100000n, currency: "COP" },
+  direction: "credit",
+  rawDescription: "Retiro Hapi",
+  category: { group: "investments", code: "investments.withdrawal", source: "system" },
+  postedAt: "2026-10-16T00:00:00Z",
+};
+const investmentWithdrawalMatch = evaluateInvestmentTransfer(
+  hapiWithdrawal,
+  investmentAccount,
+  bankWithdrawal,
+  account,
+);
+assert.equal(investmentWithdrawalMatch.direction, "withdrawal");
+assert.equal(investmentWithdrawalMatch.confidence, "high");
+assert.equal(investmentWithdrawalMatch.autoLink, true);
+
+const weakInvestmentCandidate = evaluateInvestmentTransfer(
+  { ...bankContribution, kind: "unknown", category: undefined, counterparty: undefined },
+  account,
+  {
+    ...hapiContribution,
+    kind: "unknown",
+    category: undefined,
+    counterparty: undefined,
+    money: { amountMinor: 200000n, currency: "COP" },
+    originalMoney: undefined,
+  },
+  { ...investmentAccount, currency: "COP" },
+);
+assert.equal(weakInvestmentCandidate.confidence, "medium");
+assert.equal(weakInvestmentCandidate.autoLink, false);
+
+const unrelatedInvestmentAccounts = evaluateInvestmentTransfer(
+  hapiContribution,
+  investmentAccount,
+  { ...hapiContribution, id: "tx-other-investment", accountId: "acc-invest-2" },
+  { ...investmentAccount, id: "acc-invest-2", externalId: "hapi-account-2" },
+);
+assert.equal(unrelatedInvestmentAccounts.confidence, "none");
+
+
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
   merchant: "Uber",
   accessToken: "[REDACTED]",
