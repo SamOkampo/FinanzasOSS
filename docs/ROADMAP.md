@@ -24,7 +24,7 @@
 
 ## Fase 3 — Connector SDK
 - [x] 3.1 Contrato de conectores + access modes
-- [ ] 3.2 Token vault abstraction
+- [x] 3.2 Token vault abstraction
 - [ ] 3.3 Capability matrix: accounts/balances/transactions/positions/activities/snapshots
 - [ ] 3.4 Sync engine incremental e idempotente
 - [ ] 3.5 Health states y reconexión
