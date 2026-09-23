@@ -2,21 +2,22 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 2.4 — transfer matching entre cuentas propias**.
-- Rama: `feat/phase-2-4-own-account-transfers`.
-- Próximo bloque exacto: **Fase 2.5 — investment transfer matching: banco ↔ broker/exchange/wallet**.
+- Último bloque completado: **Fase 2.5 — investment transfer matching banco ↔ broker/exchange/wallet**.
+- Rama: `feat/phase-2-5-investment-transfers`.
+- Próximo bloque exacto: **Fase 2.6 — Portfolio domain**.
 
-## 2.4 completado
+## 2.5 completado
 
-- Matching debit ↔ credit entre cuentas propias.
-- Validación same-tenant/different-account.
-- Monto/moneda exactos y tolerancia temporal.
-- Scoring de señales explícitas.
-- Auto-link solo en confianza alta con señales suficientes.
-- `transferGroupId` determinista.
-- Clasificación como `transfers.internal`.
-- Investment transfers delegadas explícitamente a 2.5.
+- Contribution y withdrawal.
+- Account-domain validation cash ↔ investment/crypto.
+- Matching same-money y cross-currency mediante `originalMoney`.
+- Ventana temporal configurable.
+- Scoring y señales explícitas.
+- Auto-link conservador.
+- `invxfer1_` transferGroupId.
+- Categorías contribution/withdrawal.
+- Pruebas de COP→USD, retiro, candidato débil y cuentas no compatibles.
 
 ## Gate
 
-No avanzar a 2.5 hasta que el PR de 2.4 pase CI.
+No avanzar a 2.6 hasta que el PR de 2.5 pase CI.
