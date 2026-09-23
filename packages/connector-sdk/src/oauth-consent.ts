@@ -19,24 +19,21 @@ export class SandboxOAuthConfigurationError extends Error {
 }
 
 function base64Url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64url");
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 async function sha256(value: string): Promise<string> {
-  const { createHash } = await import("node:crypto");
-  return createHash("sha256").update(value).digest("base64url");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return base64Url(new Uint8Array(digest));
 }
 
-async function randomUrlSafe(bytes: number): Promise<string> {
-  const { randomBytes } = await import("node:crypto");
-  return base64Url(randomBytes(bytes));
+function randomUrlSafe(bytes: number): string {
+  return base64Url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
-/**
- * Builds an authorization request only when every provider-specific value has
- * been explicitly configured from official sandbox documentation. Nothing is
- * inferred and no client secret or bank credential is accepted here.
- */
+/** Builds PKCE authorization only from explicitly verified sandbox config. */
 export async function buildSandboxOAuthAuthorizationRequest(
   config: SandboxOAuthConsentConfig,
 ): Promise<SandboxOAuthAuthorizationRequest> {
@@ -60,8 +57,8 @@ export async function buildSandboxOAuthAuthorizationRequest(
     throw new SandboxOAuthConfigurationError("Non-local redirect URIs must use HTTPS");
   }
 
-  const state = await randomUrlSafe(32);
-  const codeVerifier = await randomUrlSafe(48);
+  const state = randomUrlSafe(32);
+  const codeVerifier = randomUrlSafe(48);
   const codeChallenge = await sha256(codeVerifier);
 
   parsedEndpoint.searchParams.set("response_type", "code");
