@@ -1,0 +1,80 @@
+:root {
+  --fos-radius-control: 999px;
+  --fos-radius-card: 24px;
+  --fos-radius-panel: 30px;
+  --fos-target-min: 44px;
+  --fos-motion-quick: 180ms;
+  --fos-motion-standard: 280ms;
+  --fos-motion-expressive: 420ms;
+  --fos-glass-blur: 20px;
+
+  --fos-space-1: 4px;
+  --fos-space-2: 8px;
+  --fos-space-3: 12px;
+  --fos-space-4: 16px;
+  --fos-space-5: 24px;
+  --fos-space-6: 32px;
+
+  --fos-z-canvas: 0;
+  --fos-z-surface: 10;
+  --fos-z-floating: 30;
+  --fos-z-modal: 50;
+}
+
+[data-finanzasos-surface="solid"] {
+  isolation: isolate;
+}
+
+[data-finanzasos-surface="floating"],
+[data-finanzasos-surface="glass"] {
+  backdrop-filter: blur(var(--fos-glass-blur));
+  -webkit-backdrop-filter: blur(var(--fos-glass-blur));
+}
+
+[data-finanzasos-money] {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-finanzasos-control="capsule"] {
+  min-height: var(--fos-target-min);
+  border-radius: var(--fos-radius-control);
+  transition:
+    transform var(--fos-motion-quick) ease,
+    box-shadow var(--fos-motion-quick) ease;
+}
+
+[data-finanzasos-control="capsule"]:active {
+  transform: scale(0.98);
+}
+
+[data-finanzasos-primary-nav] {
+  min-height: 60px;
+  border-radius: var(--fos-radius-control);
+  z-index: var(--fos-z-floating);
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  [data-finanzasos-primary-nav] {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fos-motion-quick: 80ms;
+    --fos-motion-standard: 120ms;
+    --fos-motion-expressive: 120ms;
+  }
+
+  [data-finanzasos-control="capsule"]:active {
+    transform: none;
+  }
+}
