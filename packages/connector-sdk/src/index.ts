@@ -23,6 +23,28 @@ export type ConnectionHealth =
   | "api_down"
   | "syncing";
 
+export interface ConnectorHealthReport {
+  state: ConnectionHealth;
+  checkedAt: string;
+  detail?: string;
+  retryAfterMs?: number;
+}
+
+export type ConnectorRecoveryAction =
+  | "none"
+  | "retry"
+  | "reauthorize"
+  | "renew_consent"
+  | "reconfigure"
+  | "wait";
+
+export interface ConnectorRecoveryPlan {
+  action: ConnectorRecoveryAction;
+  automatic: boolean;
+  userActionRequired: boolean;
+  retryAfterMs?: number;
+}
+
 export interface ConnectorDescriptor {
   connectorId: string;
   institutionId: string;
@@ -81,7 +103,7 @@ export interface FinancialConnector {
   getInvestmentActivities?(ctx: ConnectorContext, cursor?: string): Promise<InvestmentActivityPage>;
   getPortfolioSnapshots?(ctx: ConnectorContext, cursor?: string): Promise<PortfolioSnapshotPage>;
   revokeConsent?(ctx: ConnectorContext): Promise<void>;
-  healthCheck(ctx: ConnectorContext): Promise<ConnectionHealth>;
+  healthCheck(ctx: ConnectorContext): Promise<ConnectorHealthReport>;
 }
 
 export type ConnectorErrorCode =
@@ -113,6 +135,74 @@ export class ConnectorError extends Error {
     if (options.retryAfterMs !== undefined) this.retryAfterMs = options.retryAfterMs;
     if (options.providerCode !== undefined) this.providerCode = options.providerCode;
   }
+}
+
+
+export function validateHealthReport(report: ConnectorHealthReport): void {
+  if (Number.isNaN(Date.parse(report.checkedAt))) {
+    throw new ConnectorError("Health report checkedAt must be a valid date", "INVALID_RESPONSE", false);
+  }
+  if (report.retryAfterMs !== undefined && (!Number.isFinite(report.retryAfterMs) || report.retryAfterMs < 0)) {
+    throw new ConnectorError("Health report retryAfterMs must be non-negative", "INVALID_RESPONSE", false);
+  }
+}
+
+export function recoveryPlanForHealth(report: ConnectorHealthReport): ConnectorRecoveryPlan {
+  validateHealthReport(report);
+
+  switch (report.state) {
+    case "connected":
+      return { action: "none", automatic: false, userActionRequired: false };
+    case "syncing":
+      return { action: "wait", automatic: true, userActionRequired: false };
+    case "degraded":
+      return {
+        action: "retry",
+        automatic: true,
+        userActionRequired: false,
+        ...(report.retryAfterMs !== undefined ? { retryAfterMs: report.retryAfterMs } : {}),
+      };
+    case "api_down":
+      return {
+        action: "retry",
+        automatic: true,
+        userActionRequired: false,
+        ...(report.retryAfterMs !== undefined ? { retryAfterMs: report.retryAfterMs } : {}),
+      };
+    case "auth_required":
+      return { action: "reauthorize", automatic: false, userActionRequired: true };
+    case "consent_expired":
+      return { action: "renew_consent", automatic: false, userActionRequired: true };
+  }
+}
+
+export function healthReportFromConnectorError(error: ConnectorError, checkedAt: string): ConnectorHealthReport {
+  const base = {
+    checkedAt,
+    detail: error.message,
+    ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
+  };
+
+  switch (error.code) {
+    case "AUTH":
+      return { state: "auth_required", ...base };
+    case "CONSENT":
+      return { state: "consent_expired", ...base };
+    case "RATE_LIMIT":
+      return { state: "degraded", ...base };
+    case "UPSTREAM":
+      return { state: "api_down", ...base };
+    case "INVALID_RESPONSE":
+      return { state: "degraded", ...base };
+    case "CONFIGURATION":
+    case "UNSUPPORTED":
+      return { state: "degraded", ...base };
+  }
+}
+
+export function connectorCanSync(report: ConnectorHealthReport): boolean {
+  validateHealthReport(report);
+  return report.state === "connected" || report.state === "degraded";
 }
 
 const capabilityMethodMap: Record<

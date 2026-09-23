@@ -38,8 +38,11 @@ import {
   ConnectorError,
   connectorSupports,
   findConnectorsSupporting,
+  healthReportFromConnectorError,
+  recoveryPlanForHealth,
   validateConnectorContract,
   validateConnectorDescriptor,
+  validateHealthReport,
 } from "../dist/packages/connector-sdk/src/index.js";
 import {
   asSecretReference,
@@ -826,7 +829,7 @@ const validConnector = {
     return { items: [] };
   },
   async healthCheck() {
-    return "connected";
+    return { state: "connected", checkedAt: "2026-09-23T18:00:00Z" };
   },
 };
 
@@ -924,6 +927,63 @@ assert.throws(
   () => buildConnectorCapabilityMatrix([validConnector.descriptor, validConnector.descriptor]),
   /Duplicate connector descriptor/,
 );
+
+
+const connectedHealth = { state: "connected", checkedAt: "2026-09-23T18:00:00Z" };
+const authHealth = { state: "auth_required", checkedAt: "2026-09-23T18:00:00Z" };
+const consentHealth = { state: "consent_expired", checkedAt: "2026-09-23T18:00:00Z" };
+assert.deepEqual(recoveryPlanForHealth(connectedHealth), {
+  action: "none",
+  automatic: false,
+  userActionRequired: false,
+});
+assert.deepEqual(recoveryPlanForHealth(authHealth), {
+  action: "reauthorize",
+  automatic: false,
+  userActionRequired: true,
+});
+assert.deepEqual(recoveryPlanForHealth(consentHealth), {
+  action: "renew_consent",
+  automatic: false,
+  userActionRequired: true,
+});
+assert.equal(connectorCanSync(connectedHealth), true);
+assert.equal(
+  connectorCanSync({ state: "degraded", checkedAt: "2026-09-23T18:00:00Z", retryAfterMs: 1000 }),
+  true,
+);
+assert.equal(
+  connectorCanSync({ state: "api_down", checkedAt: "2026-09-23T18:00:00Z" }),
+  false,
+);
+assert.throws(
+  () => validateHealthReport({ state: "connected", checkedAt: "invalid-date" }),
+  /valid date/,
+);
+assert.throws(
+  () => validateHealthReport({ state: "degraded", checkedAt: "2026-09-23T18:00:00Z", retryAfterMs: -1 }),
+  /non-negative/,
+);
+
+const rateLimitHealth = healthReportFromConnectorError(
+  new ConnectorError("Too many requests", "RATE_LIMIT", true, { retryAfterMs: 5000 }),
+  "2026-09-23T18:00:00Z",
+);
+assert.equal(rateLimitHealth.state, "degraded");
+assert.equal(rateLimitHealth.retryAfterMs, 5000);
+assert.deepEqual(recoveryPlanForHealth(rateLimitHealth), {
+  action: "retry",
+  automatic: true,
+  userActionRequired: false,
+  retryAfterMs: 5000,
+});
+
+const upstreamHealth = healthReportFromConnectorError(
+  new ConnectorError("Provider unavailable", "UPSTREAM", true),
+  "2026-09-23T18:00:00Z",
+);
+assert.equal(upstreamHealth.state, "api_down");
+assert.equal(recoveryPlanForHealth(upstreamHealth).action, "retry");
 
 
 const syncContext = { tenantId: "tenant-1", connectionId: "conn-sync" };
