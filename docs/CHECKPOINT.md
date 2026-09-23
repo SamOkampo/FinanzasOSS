@@ -2,22 +2,20 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 3.4 — Sync engine incremental e idempotente**.
-- Rama: `feat/phase-3-4-sync-engine`.
-- Próximo bloque exacto: **Fase 3.5 — Health states y reconexión**.
+- Último bloque completado: **Fase 3.5 — health states y reconexión**.
+- Rama: `feat/phase-3-5-health-recovery`.
+- Próximo bloque exacto: **Fase 3.6 — read-only enforcement para brokers/exchanges**.
 
-## 3.4 completado
+## 3.5 completado
 
-- Sync secuencial por recurso.
-- Checkpoints tenant+connection.
-- Paginación incremental con nextCursor/checkpointCursor.
-- Idempotency keys deterministas y order-independent.
-- Checkpoint solo después de persistencia exitosa.
-- Límite de 1–100 páginas por recurso.
-- Detección de cursor repetido.
-- Reanudación tras truncamiento/fallo.
-- Tests de retry, checkpoint, idempotencia y loops acotados.
+- ConnectorHealthReport estructurado.
+- Validación de checkedAt/retryAfter.
+- Recovery plan derivado por estado.
+- Mapping de ConnectorError a health.
+- Reintentos automáticos vs acciones humanas diferenciados.
+- Elegibilidad de sync por estado.
+- Tests de auth, consent, rate-limit y upstream outage.
 
 ## Gate
 
-No avanzar a 3.5 hasta que el PR de 3.4 pase CI.
+No avanzar a 3.6 hasta que el PR de 3.5 pase CI.
