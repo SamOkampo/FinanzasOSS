@@ -36,7 +36,12 @@ import {
   validateConnectorContract,
   validateConnectorDescriptor,
 } from "../dist/packages/connector-sdk/src/index.js";
-import { redactForLog } from "../dist/packages/security/src/index.js";
+import {
+  asSecretReference,
+  assertConnectorSecretMaterial,
+  assertVaultScope,
+  redactForLog,
+} from "../dist/packages/security/src/index.js";
 import { health } from "../dist/apps/api/src/index.js";
 import { elevationFor, resolveMotionDuration, touchTokens } from "../dist/packages/ui/src/index.js";
 import {
@@ -864,11 +869,68 @@ assert.throws(
   /declares positions/,
 );
 
-assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
-  merchant: "Uber",
-  accessToken: "[REDACTED]",
-  client_secret: "[REDACTED]",
-});
+assert.doesNotThrow(() => assertVaultScope({ tenantId: "tenant-1", connectionId: "conn-1" }));
+assert.throws(
+  () => assertVaultScope({ tenantId: "", connectionId: "conn-1" }),
+  /tenantId is required/,
+);
+assert.doesNotThrow(() =>
+  assertConnectorSecretMaterial({
+    kind: "oauth",
+    accessToken: "access-secret",
+    refreshToken: "refresh-secret",
+    expiresAt: "2026-10-01T00:00:00Z",
+    scopes: ["accounts", "transactions"],
+  }),
+);
+assert.doesNotThrow(() =>
+  assertConnectorSecretMaterial({
+    kind: "api_key",
+    apiKey: "read-only-key",
+    apiSecret: "signed-read-secret",
+  }),
+);
+assert.throws(
+  () =>
+    assertConnectorSecretMaterial({
+      kind: "oauth",
+      accessToken: "token",
+      expiresAt: "not-a-date",
+    }),
+  /valid date/,
+);
+assert.throws(
+  () =>
+    assertConnectorSecretMaterial({
+      kind: "api_key",
+      apiKey: "key",
+      privateKey: "must-never-enter-vault",
+    }),
+  /Forbidden credential field/,
+);
+assert.equal(asSecretReference("vault://tenant-1/conn-1/secret-1"), "vault://tenant-1/conn-1/secret-1");
+assert.throws(() => asSecretReference("vault ref with spaces"), /whitespace/);
+
+assert.deepEqual(
+  redactForLog({
+    merchant: "Uber",
+    accessToken: "secret",
+    nested: {
+      apiKey: "key",
+      safe: "visible",
+      deeper: [{ refresh_token: "refresh" }, { amount: 42 }],
+    },
+  }),
+  {
+    merchant: "Uber",
+    accessToken: "[REDACTED]",
+    nested: {
+      apiKey: "[REDACTED]",
+      safe: "visible",
+      deeper: [{ refresh_token: "[REDACTED]" }, { amount: 42 }],
+    },
+  },
+);
 assert.equal(health("0.1.0").status, "ok");
 assert.equal(elevationFor("modal"), 50);
 assert.equal(resolveMotionDuration("expressive", "reduced"), 120);
