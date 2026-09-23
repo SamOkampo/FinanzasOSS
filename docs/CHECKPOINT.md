@@ -2,21 +2,22 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 2.6 — Portfolio domain**.
-- Rama: `feat/phase-2-6-portfolio-domain-v2`.
-- Próximo bloque exacto: **Fase 2.7 — métricas de aportes vs rendimiento, realized/unrealized P&L, income/fees/tax**.
+- Último bloque completado: **Fase 2.7 — métricas patrimoniales y de rendimiento**.
+- Rama: `feat/phase-2-7-portfolio-metrics`.
+- Próximo bloque exacto: **Fase 3.1 — contrato de conectores + access modes**.
 
-## 2.6 completado
+## 2.7 completado
 
-- Portfolio, Asset, Position, InvestmentActivity y PortfolioSnapshot tenant-scoped.
-- Identificadores múltiples de activos con namespace.
-- Cantidades como DecimalString para evitar precisión binaria.
-- Soporte de posiciones fraccionarias y negativas.
-- Invariantes portfolio/account/asset/tenant.
-- Contratos de persistencia específicos para portafolios.
-- Pruebas de pertenencia, precisión decimal, actividad y snapshots.
-- Cobertura histórica 2.4/2.5 reparada previamente en PR dedicado.
+- Separación estricta de netContributions y performance.
+- marketValue, cashValue y totalValue.
+- realized/unrealized P&L signed.
+- dividendos/intereses como income.
+- fees e impuestos separados.
+- netPerformance explicable.
+- Consolidación únicamente en moneda base; sin FX implícito.
+- Completeness report para datos faltantes o monedas excluidas.
+- Tests de aportes, rendimiento positivo/negativo y FX incompleto.
 
 ## Gate
 
-No avanzar a 2.7 hasta que el PR de 2.6 pase lint, typecheck y tests.
+No iniciar Fase 3 hasta que el PR de 2.7 pase lint, typecheck y tests.
