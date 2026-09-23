@@ -1,5 +1,7 @@
 import type {
+  ConnectionAccessMode,
   FinancialAccount,
+  FinancialCapability,
   FinancialTransaction,
   InvestmentActivity,
   Money,
@@ -7,18 +9,30 @@ import type {
   Position,
 } from "../../finance-core/src/index.js";
 
-export type ConnectorCapability =
-  | "accounts"
-  | "balances"
-  | "transactions"
-  | "positions"
-  | "investment_activities"
-  | "portfolio_snapshots"
-  | "cards"
-  | "payments";
+export type ConnectorCapability = Extract<
+  FinancialCapability,
+  "accounts" | "balances" | "transactions" | "positions" | "investment_activities" | "portfolio_snapshots"
+>;
+export type ConnectorAccessMode = ConnectionAccessMode;
+export type ConnectorEnvironment = "sandbox" | "production" | "local_import";
+export type ConnectionHealth =
+  | "connected"
+  | "degraded"
+  | "auth_required"
+  | "consent_expired"
+  | "api_down"
+  | "syncing";
 
-export type ConnectionHealth = "connected" | "degraded" | "auth_required" | "consent_expired" | "api_down" | "syncing";
-export type ConnectorAccessMode = "oauth" | "read_only_api_key" | "public_address" | "statement_import" | "aggregator";
+export interface ConnectorDescriptor {
+  connectorId: string;
+  institutionId: string;
+  displayName: string;
+  version: string;
+  environment: ConnectorEnvironment;
+  accessMode: ConnectorAccessMode;
+  capabilities: readonly ConnectorCapability[];
+  dataAccess: "read_only";
+}
 
 export interface ConnectorContext {
   tenantId: string;
@@ -28,6 +42,7 @@ export interface ConnectorContext {
 export interface ConsentRequest {
   redirectUri: string;
   requestedCapabilities: readonly ConnectorCapability[];
+  purpose?: string;
 }
 
 export interface ConsentStart {
@@ -36,20 +51,15 @@ export interface ConsentStart {
   expiresAt: string;
 }
 
-export interface TransactionPage {
-  items: FinancialTransaction[];
+export interface ConnectorPage<T> {
+  items: T[];
   nextCursor?: string;
 }
 
-export interface InvestmentActivityPage {
-  items: InvestmentActivity[];
-  nextCursor?: string;
-}
-
-export interface PositionPage {
-  items: Position[];
-  nextCursor?: string;
-}
+export type TransactionPage = ConnectorPage<FinancialTransaction>;
+export type InvestmentActivityPage = ConnectorPage<InvestmentActivity>;
+export type PositionPage = ConnectorPage<Position>;
+export type PortfolioSnapshotPage = ConnectorPage<PortfolioSnapshot>;
 
 export interface BalanceRecord {
   accountExternalId: string;
@@ -59,27 +69,108 @@ export interface BalanceRecord {
 }
 
 export interface FinancialConnector {
-  readonly institutionId: string;
-  readonly accessMode: ConnectorAccessMode;
-  readonly capabilities: ReadonlySet<ConnectorCapability>;
+  readonly descriptor: ConnectorDescriptor;
   createConsent?(ctx: ConnectorContext, request: ConsentRequest): Promise<ConsentStart>;
   getAccounts(ctx: ConnectorContext): Promise<FinancialAccount[]>;
   getBalances?(ctx: ConnectorContext): Promise<BalanceRecord[]>;
   getTransactions?(ctx: ConnectorContext, cursor?: string): Promise<TransactionPage>;
   getPositions?(ctx: ConnectorContext, cursor?: string): Promise<PositionPage>;
   getInvestmentActivities?(ctx: ConnectorContext, cursor?: string): Promise<InvestmentActivityPage>;
-  getPortfolioSnapshots?(ctx: ConnectorContext, cursor?: string): Promise<{ items: PortfolioSnapshot[]; nextCursor?: string }>;
+  getPortfolioSnapshots?(ctx: ConnectorContext, cursor?: string): Promise<PortfolioSnapshotPage>;
   revokeConsent?(ctx: ConnectorContext): Promise<void>;
   healthCheck(ctx: ConnectorContext): Promise<ConnectionHealth>;
 }
 
+export type ConnectorErrorCode =
+  | "AUTH"
+  | "CONSENT"
+  | "RATE_LIMIT"
+  | "UPSTREAM"
+  | "INVALID_RESPONSE"
+  | "UNSUPPORTED"
+  | "CONFIGURATION";
+
+export interface ConnectorErrorOptions {
+  retryAfterMs?: number;
+  providerCode?: string;
+}
+
 export class ConnectorError extends Error {
+  readonly retryAfterMs?: number;
+  readonly providerCode?: string;
+
   constructor(
     message: string,
-    readonly code: "AUTH" | "CONSENT" | "RATE_LIMIT" | "UPSTREAM" | "INVALID_RESPONSE" | "UNSUPPORTED",
+    readonly code: ConnectorErrorCode,
     readonly retryable: boolean,
+    options: ConnectorErrorOptions = {},
   ) {
     super(message);
     this.name = "ConnectorError";
+    if (options.retryAfterMs !== undefined) this.retryAfterMs = options.retryAfterMs;
+    if (options.providerCode !== undefined) this.providerCode = options.providerCode;
+  }
+}
+
+const capabilityMethodMap: Record<
+  Exclude<ConnectorCapability, "accounts">,
+  keyof FinancialConnector
+> = {
+  balances: "getBalances",
+  transactions: "getTransactions",
+  positions: "getPositions",
+  investment_activities: "getInvestmentActivities",
+  portfolio_snapshots: "getPortfolioSnapshots",
+};
+
+export function validateConnectorDescriptor(descriptor: ConnectorDescriptor): void {
+  if (!descriptor.connectorId.trim()) throw new ConnectorError("connectorId is required", "CONFIGURATION", false);
+  if (!descriptor.institutionId.trim()) throw new ConnectorError("institutionId is required", "CONFIGURATION", false);
+  if (!descriptor.displayName.trim()) throw new ConnectorError("displayName is required", "CONFIGURATION", false);
+  if (!descriptor.version.trim()) throw new ConnectorError("connector version is required", "CONFIGURATION", false);
+  if (descriptor.dataAccess !== "read_only") {
+    throw new ConnectorError("MVP connectors must be read-only", "CONFIGURATION", false);
+  }
+  if (!descriptor.capabilities.includes("accounts")) {
+    throw new ConnectorError("Every connector must expose accounts", "CONFIGURATION", false);
+  }
+  if (new Set(descriptor.capabilities).size !== descriptor.capabilities.length) {
+    throw new ConnectorError("Connector capabilities cannot contain duplicates", "CONFIGURATION", false);
+  }
+}
+
+export function connectorSupports(
+  connector: Pick<FinancialConnector, "descriptor">,
+  capability: ConnectorCapability,
+): boolean {
+  return connector.descriptor.capabilities.includes(capability);
+}
+
+export function assertConnectorSupports(
+  connector: Pick<FinancialConnector, "descriptor">,
+  capability: ConnectorCapability,
+): void {
+  if (!connectorSupports(connector, capability)) {
+    throw new ConnectorError(
+      `Connector ${connector.descriptor.connectorId} does not support ${capability}`,
+      "UNSUPPORTED",
+      false,
+    );
+  }
+}
+
+export function validateConnectorContract(connector: FinancialConnector): void {
+  validateConnectorDescriptor(connector.descriptor);
+
+  for (const capability of connector.descriptor.capabilities) {
+    if (capability === "accounts") continue;
+    const method = capabilityMethodMap[capability];
+    if (typeof connector[method] !== "function") {
+      throw new ConnectorError(
+        `Connector declares ${capability} but does not implement ${String(method)}`,
+        "CONFIGURATION",
+        false,
+      );
+    }
   }
 }
