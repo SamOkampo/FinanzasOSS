@@ -23,7 +23,7 @@
 - [x] 2.7 Métricas: aportes netos vs rendimiento, realized/unrealized P&L, income/fees/tax
 
 ## Fase 3 — Connector SDK
-- [ ] 3.1 Contrato de conectores + access modes
+- [x] 3.1 Contrato de conectores + access modes
 - [ ] 3.2 Token vault abstraction
 - [ ] 3.3 Capability matrix: accounts/balances/transactions/positions/activities/snapshots
 - [ ] 3.4 Sync engine incremental e idempotente
