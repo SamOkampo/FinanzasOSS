@@ -2,21 +2,21 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 2.2 — Transaction schema universal + categorías/tipos patrimoniales**.
-- Rama: `feat/phase-2-2-universal-transactions`.
-- Próximo bloque exacto: **Fase 2.3 — dedupe y fingerprints**.
+- Último bloque completado: **Fase 2.3 — dedupe y fingerprints**.
+- Rama: `feat/phase-2-3-dedupe-fingerprints`.
+- Próximo bloque exacto: **Fase 2.4 — transfer matching entre cuentas propias**.
 
-## 2.2 completado
+## 2.3 completado
 
-- `TransactionKind` granular y estable.
-- Efecto económico derivado, sin duplicar clasificaciones persistidas.
-- Categorías jerárquicas con fuente y confianza.
-- Provenance obligatoria para cada movimiento.
-- Counterparty normalizado.
-- Soporte de monto original + tipo de cambio.
-- Separación entre movimiento real de cuenta y flujo económico.
-- Validaciones de esquema y pruebas de inversión/consumo/categorías.
+- Fingerprint estable y versionado.
+- Normalización de descripción.
+- Exact identity por externalId/sourceRecordId.
+- Evaluación `exact / likely / possible / none`.
+- Auto-merge limitado exclusivamente a identidad exacta.
+- Scope por cuenta/cuenta canónica para evitar falsos positivos.
+- Repository lookups para externalId y fingerprint.
+- Pruebas de duplicado exacto, heurístico, tenant distinto y cuenta distinta.
 
 ## Gate
 
-No avanzar a 2.3 hasta que el PR de 2.2 pase lint, typecheck, tests y CI.
+No avanzar a 2.4 hasta que el PR de 2.3 pase CI.
