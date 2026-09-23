@@ -20,7 +20,7 @@
 - [x] 2.4 Transfer matching entre cuentas propias
 - [x] 2.5 Investment transfer matching: banco ↔ broker/exchange/wallet
 - [x] 2.6 Portfolio domain: Portfolio, Asset, Position, InvestmentActivity, PortfolioSnapshot
-- [ ] 2.7 Métricas: aportes netos vs rendimiento, realized/unrealized P&L, income/fees/tax
+- [x] 2.7 Métricas: aportes netos vs rendimiento, realized/unrealized P&L, income/fees/tax
 
 ## Fase 3 — Connector SDK
 - [ ] 3.1 Contrato de conectores + access modes

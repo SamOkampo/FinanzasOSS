@@ -303,6 +303,7 @@ export interface InvestmentActivity {
   quantity?: DecimalString;
   unitPrice?: Money;
   fee?: Money;
+  realizedPnl?: Money;
   linkedTransactionId?: string;
 }
 
@@ -377,6 +378,192 @@ export function assertPortfolioSnapshotBelongsToPortfolio(snapshot: PortfolioSna
   assertTenantScope(portfolio.tenantId, snapshot, "portfolio snapshot");
   if (snapshot.portfolioId !== portfolio.id) throw new Error("Portfolio snapshot mismatch");
   if (Number.isNaN(Date.parse(snapshot.asOf))) throw new Error("Portfolio snapshot asOf must be a valid date");
+}
+
+export interface PortfolioMetricsCompleteness {
+  isComplete: boolean;
+  excludedCurrencies: readonly CurrencyCode[];
+  positionsWithoutMarketValue: number;
+  positionsWithoutUnrealizedPnl: number;
+  sellActivitiesWithoutRealizedPnl: number;
+  cashValueMissing: boolean;
+}
+
+export interface PortfolioMetrics {
+  portfolioId: string;
+  baseCurrency: CurrencyCode;
+  asOf: ISODateTime;
+  marketValue: Money;
+  cashValue: Money;
+  totalValue: Money;
+  netContributions: Money;
+  realizedPnl: Money;
+  unrealizedPnl: Money;
+  income: Money;
+  fees: Money;
+  taxes: Money;
+  netPerformance: Money;
+  completeness: PortfolioMetricsCompleteness;
+}
+
+export interface DerivePortfolioMetricsInput {
+  portfolio: Portfolio;
+  positions: readonly Position[];
+  activities: readonly InvestmentActivity[];
+  snapshot?: PortfolioSnapshot;
+  asOf: ISODateTime;
+}
+
+function moneyInCurrency(amountMinor: bigint, currency: CurrencyCode): Money {
+  return { amountMinor, currency };
+}
+
+function assertNonNegativeMoney(money: Money, label: string): void {
+  if (money.amountMinor < 0n) throw new Error(`${label} must use a non-negative absolute amount`);
+}
+
+export function derivePortfolioMetrics(input: DerivePortfolioMetricsInput): PortfolioMetrics {
+  const { portfolio, positions, activities, snapshot, asOf } = input;
+  if (Number.isNaN(Date.parse(asOf))) throw new Error("Portfolio metrics asOf must be a valid date");
+  if (snapshot) assertPortfolioSnapshotBelongsToPortfolio(snapshot, portfolio);
+
+  const baseCurrency = portfolio.baseCurrency.toUpperCase();
+  const excludedCurrencies = new Set<CurrencyCode>();
+
+  const include = (money: Money | undefined): bigint | null => {
+    if (!money) return null;
+    if (money.currency.toUpperCase() !== baseCurrency) {
+      excludedCurrencies.add(money.currency.toUpperCase());
+      return null;
+    }
+    return money.amountMinor;
+  };
+
+  let positionsWithoutMarketValue = 0;
+  let positionsWithoutUnrealizedPnl = 0;
+  let sellActivitiesWithoutRealizedPnl = 0;
+
+  let marketValueMinor = 0n;
+  if (snapshot) {
+    const value = include(snapshot.marketValue);
+    if (value !== null) marketValueMinor = value;
+  } else {
+    for (const position of positions) {
+      assertTenantScope(portfolio.tenantId, position, "position metrics");
+      if (position.portfolioId !== portfolio.id) throw new Error("Position metrics portfolio mismatch");
+      const value = include(position.marketValue);
+      if (value === null) positionsWithoutMarketValue += 1;
+      else marketValueMinor += value;
+    }
+  }
+
+  let cashValueMinor = 0n;
+  let cashValueMissing = true;
+  if (snapshot?.cashValue) {
+    const value = include(snapshot.cashValue);
+    if (value !== null) {
+      cashValueMinor = value;
+      cashValueMissing = false;
+    }
+  }
+
+  let netContributionsMinor = 0n;
+  if (snapshot?.netContributions) {
+    const value = include(snapshot.netContributions);
+    if (value !== null) netContributionsMinor = value;
+  } else {
+    for (const activity of activities) {
+      assertTenantScope(portfolio.tenantId, activity, "investment activity metrics");
+      if (activity.portfolioId !== portfolio.id) throw new Error("Investment activity metrics portfolio mismatch");
+      if (activity.kind !== "deposit" && activity.kind !== "withdrawal") continue;
+      const amount = include(activity.cashAmount);
+      if (amount === null) continue;
+      assertNonNegativeMoney(activity.cashAmount!, "Contribution cashAmount");
+      netContributionsMinor += activity.kind === "deposit" ? amount : -amount;
+    }
+  }
+
+  let realizedPnlMinor = 0n;
+  let unrealizedPnlMinor = 0n;
+  let incomeMinor = 0n;
+  let feesMinor = 0n;
+  let taxesMinor = 0n;
+
+  for (const position of positions) {
+    assertTenantScope(portfolio.tenantId, position, "position metrics");
+    if (position.portfolioId !== portfolio.id) throw new Error("Position metrics portfolio mismatch");
+    const pnl = include(position.unrealizedPnl);
+    if (pnl === null) positionsWithoutUnrealizedPnl += 1;
+    else unrealizedPnlMinor += pnl;
+  }
+
+  for (const activity of activities) {
+    assertTenantScope(portfolio.tenantId, activity, "investment activity metrics");
+    if (activity.portfolioId !== portfolio.id) throw new Error("Investment activity metrics portfolio mismatch");
+
+    if (activity.realizedPnl) {
+      const realized = include(activity.realizedPnl);
+      if (realized !== null) realizedPnlMinor += realized;
+    } else if (activity.kind === "sell") {
+      sellActivitiesWithoutRealizedPnl += 1;
+    }
+
+    if ((activity.kind === "dividend" || activity.kind === "interest") && activity.cashAmount) {
+      assertNonNegativeMoney(activity.cashAmount, "Investment income cashAmount");
+      const amount = include(activity.cashAmount);
+      if (amount !== null) incomeMinor += amount;
+    }
+
+    if (activity.kind === "fee" && activity.cashAmount) {
+      assertNonNegativeMoney(activity.cashAmount, "Fee cashAmount");
+      const amount = include(activity.cashAmount);
+      if (amount !== null) feesMinor += amount;
+    } else if (activity.fee) {
+      assertNonNegativeMoney(activity.fee, "Activity fee");
+      const fee = include(activity.fee);
+      if (fee !== null) feesMinor += fee;
+    }
+
+    if (activity.kind === "tax" && activity.cashAmount) {
+      assertNonNegativeMoney(activity.cashAmount, "Tax cashAmount");
+      const amount = include(activity.cashAmount);
+      if (amount !== null) taxesMinor += amount;
+    }
+  }
+
+  const totalValueMinor = marketValueMinor + cashValueMinor;
+  const netPerformanceMinor = realizedPnlMinor + unrealizedPnlMinor + incomeMinor - feesMinor - taxesMinor;
+  const excluded = [...excludedCurrencies].sort();
+  const isComplete =
+    excluded.length === 0 &&
+    positionsWithoutMarketValue === 0 &&
+    positionsWithoutUnrealizedPnl === 0 &&
+    sellActivitiesWithoutRealizedPnl === 0 &&
+    !cashValueMissing;
+
+  return {
+    portfolioId: portfolio.id,
+    baseCurrency,
+    asOf,
+    marketValue: moneyInCurrency(marketValueMinor, baseCurrency),
+    cashValue: moneyInCurrency(cashValueMinor, baseCurrency),
+    totalValue: moneyInCurrency(totalValueMinor, baseCurrency),
+    netContributions: moneyInCurrency(netContributionsMinor, baseCurrency),
+    realizedPnl: moneyInCurrency(realizedPnlMinor, baseCurrency),
+    unrealizedPnl: moneyInCurrency(unrealizedPnlMinor, baseCurrency),
+    income: moneyInCurrency(incomeMinor, baseCurrency),
+    fees: moneyInCurrency(feesMinor, baseCurrency),
+    taxes: moneyInCurrency(taxesMinor, baseCurrency),
+    netPerformance: moneyInCurrency(netPerformanceMinor, baseCurrency),
+    completeness: {
+      isComplete,
+      excludedCurrencies: excluded,
+      positionsWithoutMarketValue,
+      positionsWithoutUnrealizedPnl,
+      sellActivitiesWithoutRealizedPnl,
+      cashValueMissing,
+    },
+  };
 }
 
 export interface TransferMatchCandidate {
