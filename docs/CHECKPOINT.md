@@ -2,20 +2,19 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 3.2 — Token Vault abstraction**.
-- Rama: `feat/phase-3-2-token-vault`.
-- Próximo bloque exacto: **Fase 3.3 — capability matrix**.
+- Último bloque completado: **Fase 3.3 — capability matrix**.
+- Rama: `feat/phase-3-3-capability-matrix`.
+- Próximo bloque exacto: **Fase 3.4 — Sync engine incremental e idempotente**.
 
-## 3.2 completado
+## 3.3 completado
 
-- VaultScope obligatorio tenant + connection.
-- OAuth y API-key secret material tipados.
-- Seed/private key/password no representados y rechazados en runtime.
-- SecretReference opaco.
-- put/get/rotate/revoke.
-- Redacción recursiva de secretos en logs.
-- Tests de scope, secretos válidos/prohibidos y redaction.
+- Lista canónica de capabilities del Connector SDK.
+- Matriz derivada de descriptors, sin hardcode por institución.
+- Flags accounts/balances/transactions/positions/activities/snapshots.
+- Unicidad por connectorId + environment.
+- Descubrimiento por conjunto de capabilities y entorno.
+- Tests con conectores heterogéneos.
 
 ## Gate
 
-No avanzar a 3.3 hasta que el PR de 3.2 pase CI.
+No avanzar a 3.4 hasta que el PR de 3.3 pase CI.
