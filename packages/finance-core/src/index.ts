@@ -775,3 +775,231 @@ export function applyOwnAccountTransferMatch(
 
   return [update(a), update(b)];
 }
+
+
+export type InvestmentTransferDirection = "contribution" | "withdrawal";
+export type InvestmentTransferConfidence = "high" | "medium" | "low" | "none";
+
+export interface InvestmentTransferMatchOptions {
+  dateToleranceDays?: number;
+}
+
+export interface InvestmentTransferMatch {
+  confidence: InvestmentTransferConfidence;
+  autoLink: boolean;
+  score: number;
+  direction?: InvestmentTransferDirection;
+  cashTransactionId?: string;
+  investmentTransactionId?: string;
+  cashAccountId?: string;
+  investmentAccountId?: string;
+  transferGroupId?: string;
+  moneyMatch?: "same_money" | "original_money";
+  reasons: readonly string[];
+}
+
+function isInvestmentAccountDomain(domain: AccountDomain): boolean {
+  return domain === "investment" || domain === "crypto";
+}
+
+function moneyEquals(a: Money, b: Money): boolean {
+  return a.currency.toUpperCase() === b.currency.toUpperCase() && a.amountMinor === b.amountMinor;
+}
+
+function investmentTransferMoneyMatch(
+  cashTransaction: FinancialTransaction,
+  investmentTransaction: FinancialTransaction,
+): "same_money" | "original_money" | null {
+  if (moneyEquals(cashTransaction.money, investmentTransaction.money)) return "same_money";
+  if (investmentTransaction.originalMoney && moneyEquals(cashTransaction.money, investmentTransaction.originalMoney)) {
+    return "original_money";
+  }
+  if (cashTransaction.originalMoney && moneyEquals(cashTransaction.originalMoney, investmentTransaction.money)) {
+    return "original_money";
+  }
+  if (
+    cashTransaction.originalMoney &&
+    investmentTransaction.originalMoney &&
+    moneyEquals(cashTransaction.originalMoney, investmentTransaction.originalMoney)
+  ) {
+    return "original_money";
+  }
+  return null;
+}
+
+function investmentTransferSignalScore(
+  transaction: FinancialTransaction,
+): { score: number; explicitSignals: number; reasons: string[] } {
+  let score = 0;
+  let explicitSignals = 0;
+  const reasons: string[] = [];
+
+  if (transaction.kind === "investment_transfer") {
+    score += 10;
+    explicitSignals += 1;
+    reasons.push("transaction kind is investment_transfer");
+  }
+  if (transaction.category?.group === "investments") {
+    score += 5;
+    reasons.push("category group is investments");
+  }
+  if (transaction.counterparty?.kind === "institution") {
+    score += 3;
+    reasons.push("counterparty is an institution");
+  }
+
+  return { score, explicitSignals, reasons };
+}
+
+export function buildInvestmentTransferGroupId(a: FinancialTransaction, b: FinancialTransaction): string {
+  const ids = [a.id, b.id].sort();
+  return `invxfer1_${fnv1a64(["invxfer1", a.tenantId, ...ids].join("|"))}`;
+}
+
+export function evaluateInvestmentTransfer(
+  a: FinancialTransaction,
+  accountA: FinancialAccount,
+  b: FinancialTransaction,
+  accountB: FinancialAccount,
+  options: InvestmentTransferMatchOptions = {},
+): InvestmentTransferMatch {
+  assertTransactionBelongsToAccount(a, accountA);
+  assertTransactionBelongsToAccount(b, accountB);
+
+  if (a.tenantId !== b.tenantId || accountA.tenantId !== accountB.tenantId) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["different tenant"] };
+  }
+  if (accountA.id === accountB.id) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["same account"] };
+  }
+
+  const aIsInvestment = isInvestmentAccountDomain(accountA.domain);
+  const bIsInvestment = isInvestmentAccountDomain(accountB.domain);
+  if (aIsInvestment === bIsInvestment) {
+    return {
+      confidence: "none",
+      autoLink: false,
+      score: 0,
+      reasons: ["requires exactly one cash account and one investment/crypto account"],
+    };
+  }
+
+  const investmentTransaction = aIsInvestment ? a : b;
+  const investmentAccount = aIsInvestment ? accountA : accountB;
+  const cashTransaction = aIsInvestment ? b : a;
+  const cashAccount = aIsInvestment ? accountB : accountA;
+
+  if (cashAccount.domain !== "cash") {
+    return {
+      confidence: "none",
+      autoLink: false,
+      score: 0,
+      reasons: ["funding side must be a cash-domain account"],
+    };
+  }
+
+  let direction: InvestmentTransferDirection | null = null;
+  if (cashTransaction.direction === "debit" && investmentTransaction.direction === "credit") {
+    direction = "contribution";
+  } else if (investmentTransaction.direction === "debit" && cashTransaction.direction === "credit") {
+    direction = "withdrawal";
+  }
+  if (!direction) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["directions do not form contribution/withdrawal"] };
+  }
+
+  const moneyMatch = investmentTransferMoneyMatch(cashTransaction, investmentTransaction);
+  if (!moneyMatch) {
+    return {
+      confidence: "none",
+      autoLink: false,
+      score: 0,
+      reasons: ["no exact or original-money match"],
+    };
+  }
+
+  const tolerance = Math.max(0, options.dateToleranceDays ?? 3);
+  const dayDistance = Math.abs(
+    transactionDayNumber(cashTransaction.postedAt) - transactionDayNumber(investmentTransaction.postedAt),
+  );
+  if (dayDistance > tolerance) {
+    return {
+      confidence: "none",
+      autoLink: false,
+      score: 0,
+      reasons: ["posting dates outside investment-transfer tolerance"],
+    };
+  }
+
+  let score = moneyMatch === "same_money" ? 55 : 50;
+  const reasons: string[] = [
+    "same tenant + cash/investment account pair + contribution/withdrawal directions",
+    moneyMatch === "same_money" ? "same amount/currency" : "matched through originalMoney",
+  ];
+
+  if (dayDistance === 0) {
+    score += 15;
+    reasons.push("same posting day");
+  } else if (dayDistance === 1) {
+    score += 10;
+    reasons.push("posting dates one day apart");
+  } else {
+    score += 5;
+    reasons.push("posting dates within investment-transfer tolerance");
+  }
+
+  const cashSignal = investmentTransferSignalScore(cashTransaction);
+  const investmentSignal = investmentTransferSignalScore(investmentTransaction);
+  score += cashSignal.score + investmentSignal.score;
+  reasons.push(...cashSignal.reasons, ...investmentSignal.reasons);
+
+  score = Math.min(99, score);
+  const confidence: InvestmentTransferConfidence =
+    score >= 85 ? "high" : score >= 70 ? "medium" : score >= 60 ? "low" : "none";
+  const explicitSignals = cashSignal.explicitSignals + investmentSignal.explicitSignals;
+  const autoLink = confidence === "high" && explicitSignals >= 1;
+  const transferGroupId =
+    confidence === "none" ? undefined : buildInvestmentTransferGroupId(cashTransaction, investmentTransaction);
+
+  return {
+    confidence,
+    autoLink,
+    score,
+    direction,
+    cashTransactionId: cashTransaction.id,
+    investmentTransactionId: investmentTransaction.id,
+    cashAccountId: cashAccount.id,
+    investmentAccountId: investmentAccount.id,
+    ...(transferGroupId ? { transferGroupId } : {}),
+    moneyMatch,
+    reasons,
+  };
+}
+
+export function applyInvestmentTransferMatch(
+  a: FinancialTransaction,
+  b: FinancialTransaction,
+  match: InvestmentTransferMatch,
+): readonly [FinancialTransaction, FinancialTransaction] {
+  const transferGroupId = match.transferGroupId;
+  const direction = match.direction;
+  if (!match.autoLink || !transferGroupId || !direction) {
+    throw new Error("Investment transfer match is not eligible for automatic linking");
+  }
+
+  const category: TransactionCategoryAssignment = {
+    group: "investments",
+    code: direction === "contribution" ? "investments.contribution" : "investments.withdrawal",
+    label: direction === "contribution" ? "Aporte a portafolio" : "Retiro de portafolio",
+    source: "system",
+  };
+
+  const update = (transaction: FinancialTransaction): FinancialTransaction => ({
+    ...transaction,
+    kind: "investment_transfer",
+    transferGroupId,
+    category: transaction.category?.source === "user" ? transaction.category : category,
+  });
+
+  return [update(a), update(b)];
+}
