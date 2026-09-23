@@ -16,7 +16,7 @@
 ## Fase 2 — Finance Core
 - [x] 2.1 Entidades financieras base: tenant, institution, connection, consent, account, balance, transaction
 - [x] 2.2 Transaction schema universal + categorías/tipos patrimoniales
-- [ ] 2.3 Dedupe y fingerprints
+- [x] 2.3 Dedupe y fingerprints
 - [ ] 2.4 Transfer matching entre cuentas propias
 - [ ] 2.5 Investment transfer matching: banco ↔ broker/exchange/wallet
 - [ ] 2.6 Portfolio domain: Portfolio, Asset, Position, InvestmentActivity, PortfolioSnapshot

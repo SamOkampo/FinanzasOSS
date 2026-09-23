@@ -36,6 +36,15 @@ export interface BalanceRepository {
 export interface TransactionRepository {
   upsertMany(ctx: TenantContext, transactions: readonly FinancialTransaction[]): Promise<number>;
   listByAccount(ctx: TenantContext, accountId: string): Promise<FinancialTransaction[]>;
+  findByExternalId(
+    ctx: TenantContext,
+    connectionId: string,
+    externalId: string,
+  ): Promise<FinancialTransaction | null>;
+  findCandidatesByFingerprint(
+    ctx: TenantContext,
+    fingerprint: string,
+  ): Promise<FinancialTransaction[]>;
 }
 
 export interface SyncCheckpoint {
