@@ -29,6 +29,13 @@ import {
   signedMinorUnits,
   withTransactionFingerprint,
 } from "../dist/packages/finance-core/src/index.js";
+import {
+  assertConnectorSupports,
+  ConnectorError,
+  connectorSupports,
+  validateConnectorContract,
+  validateConnectorDescriptor,
+} from "../dist/packages/connector-sdk/src/index.js";
 import { redactForLog } from "../dist/packages/security/src/index.js";
 import { health } from "../dist/apps/api/src/index.js";
 import { elevationFor, resolveMotionDuration, touchTokens } from "../dist/packages/ui/src/index.js";
@@ -780,6 +787,82 @@ const lossMetrics = derivePortfolioMetrics({
 });
 assert.equal(lossMetrics.netPerformance.amountMinor, -1500n);
 
+
+const validConnector = {
+  descriptor: {
+    connectorId: "davivienda-sandbox",
+    institutionId: "davivienda",
+    displayName: "Davivienda Sandbox",
+    version: "0.1.0",
+    environment: "sandbox",
+    accessMode: "open_finance_oauth",
+    capabilities: ["accounts", "balances", "transactions"],
+    dataAccess: "read_only",
+  },
+  async createConsent() {
+    return {
+      authorizationUrl: "https://example.test/oauth",
+      stateReference: "state-ref",
+      expiresAt: "2026-09-23T18:30:00Z",
+    };
+  },
+  async getAccounts() {
+    return [];
+  },
+  async getBalances() {
+    return [];
+  },
+  async getTransactions() {
+    return { items: [] };
+  },
+  async healthCheck() {
+    return "connected";
+  },
+};
+
+assert.doesNotThrow(() => validateConnectorContract(validConnector));
+assert.equal(connectorSupports(validConnector, "transactions"), true);
+assert.equal(connectorSupports(validConnector, "positions"), false);
+assert.throws(
+  () => assertConnectorSupports(validConnector, "positions"),
+  (error) => error instanceof ConnectorError && error.code === "UNSUPPORTED",
+);
+
+assert.throws(
+  () =>
+    validateConnectorDescriptor({
+      ...validConnector.descriptor,
+      capabilities: ["transactions"],
+    }),
+  /must expose accounts/,
+);
+assert.throws(
+  () =>
+    validateConnectorDescriptor({
+      ...validConnector.descriptor,
+      capabilities: ["accounts", "accounts"],
+    }),
+  /cannot contain duplicates/,
+);
+assert.throws(
+  () =>
+    validateConnectorDescriptor({
+      ...validConnector.descriptor,
+      dataAccess: "read_write",
+    }),
+  /read-only/,
+);
+assert.throws(
+  () =>
+    validateConnectorContract({
+      ...validConnector,
+      descriptor: {
+        ...validConnector.descriptor,
+        capabilities: ["accounts", "positions"],
+      },
+    }),
+  /declares positions/,
+);
 
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
   merchant: "Uber",
