@@ -1,0 +1,15 @@
+{
+  "name": "finanzasos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "lint": "node scripts/repo-lint.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "npm run build --silent && node tests/smoke.mjs",
+    "ci": "npm run lint && npm run typecheck && npm run test"
+  }
+}
