@@ -14,6 +14,7 @@ import {
   assertTransactionBelongsToAccount,
   assertTransactionSchema,
   buildTransactionFingerprint,
+  derivePortfolioMetrics,
   economicClassForKind,
   evaluateDuplicateTransactions,
   evaluateInvestmentTransfer,
@@ -621,6 +622,163 @@ assert.throws(
     ),
   /Tenant scope mismatch/,
 );
+
+
+const portfolioActivities = [
+  { ...buyActivity },
+  {
+    id: "activity-deposit",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    kind: "deposit",
+    occurredAt: "2026-09-01T12:00:00Z",
+    cashAmount: { amountMinor: 80000n, currency: "USD" },
+  },
+  {
+    id: "activity-sell",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    assetId: "asset-qqqm",
+    kind: "sell",
+    occurredAt: "2026-09-21T12:00:00Z",
+    cashAmount: { amountMinor: 25000n, currency: "USD" },
+    quantity: "0.1",
+    realizedPnl: { amountMinor: 5000n, currency: "USD" },
+  },
+  {
+    id: "activity-dividend",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    assetId: "asset-qqqm",
+    kind: "dividend",
+    occurredAt: "2026-09-22T12:00:00Z",
+    cashAmount: { amountMinor: 1000n, currency: "USD" },
+  },
+  {
+    id: "activity-interest",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    kind: "interest",
+    occurredAt: "2026-09-22T12:00:00Z",
+    cashAmount: { amountMinor: 200n, currency: "USD" },
+  },
+  {
+    id: "activity-fee",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    kind: "fee",
+    occurredAt: "2026-09-22T12:00:00Z",
+    cashAmount: { amountMinor: 100n, currency: "USD" },
+  },
+  {
+    id: "activity-tax",
+    tenantId: "tenant-1",
+    portfolioId: "portfolio-main",
+    accountId: "acc-hapi",
+    kind: "tax",
+    occurredAt: "2026-09-22T12:00:00Z",
+    cashAmount: { amountMinor: 50n, currency: "USD" },
+  },
+];
+
+const portfolioMetrics = derivePortfolioMetrics({
+  portfolio,
+  positions: [fractionalPosition],
+  activities: portfolioActivities,
+  snapshot: portfolioSnapshot,
+  asOf: "2026-09-23T17:00:00Z",
+});
+assert.equal(portfolioMetrics.marketValue.amountMinor, 100000n);
+assert.equal(portfolioMetrics.cashValue.amountMinor, 5000n);
+assert.equal(portfolioMetrics.totalValue.amountMinor, 105000n);
+assert.equal(portfolioMetrics.netContributions.amountMinor, 80000n);
+assert.equal(portfolioMetrics.realizedPnl.amountMinor, 5000n);
+assert.equal(portfolioMetrics.unrealizedPnl.amountMinor, 1234n);
+assert.equal(portfolioMetrics.income.amountMinor, 1200n);
+assert.equal(portfolioMetrics.fees.amountMinor, 100n);
+assert.equal(portfolioMetrics.taxes.amountMinor, 50n);
+assert.equal(portfolioMetrics.netPerformance.amountMinor, 7284n);
+assert.equal(portfolioMetrics.completeness.isComplete, true);
+
+const contributionDerivedMetrics = derivePortfolioMetrics({
+  portfolio,
+  positions: [fractionalPosition],
+  activities: [
+    {
+      id: "activity-deposit-derived",
+      tenantId: "tenant-1",
+      portfolioId: "portfolio-main",
+      accountId: "acc-hapi",
+      kind: "deposit",
+      occurredAt: "2026-09-01T12:00:00Z",
+      cashAmount: { amountMinor: 80000n, currency: "USD" },
+    },
+    {
+      id: "activity-withdrawal-derived",
+      tenantId: "tenant-1",
+      portfolioId: "portfolio-main",
+      accountId: "acc-hapi",
+      kind: "withdrawal",
+      occurredAt: "2026-09-10T12:00:00Z",
+      cashAmount: { amountMinor: 10000n, currency: "USD" },
+    },
+  ],
+  asOf: "2026-09-23T17:00:00Z",
+});
+assert.equal(contributionDerivedMetrics.netContributions.amountMinor, 70000n);
+assert.equal(contributionDerivedMetrics.netPerformance.amountMinor, 1234n);
+assert.equal(contributionDerivedMetrics.completeness.cashValueMissing, true);
+assert.equal(contributionDerivedMetrics.completeness.isComplete, false);
+
+const fxIncompleteMetrics = derivePortfolioMetrics({
+  portfolio,
+  positions: [
+    {
+      ...fractionalPosition,
+      marketValue: { amountMinor: 90000n, currency: "EUR" },
+      unrealizedPnl: { amountMinor: -500n, currency: "EUR" },
+    },
+  ],
+  activities: [
+    {
+      id: "activity-eur-dividend",
+      tenantId: "tenant-1",
+      portfolioId: "portfolio-main",
+      accountId: "acc-hapi",
+      kind: "dividend",
+      occurredAt: "2026-09-22T12:00:00Z",
+      cashAmount: { amountMinor: 100n, currency: "EUR" },
+    },
+  ],
+  asOf: "2026-09-23T17:00:00Z",
+});
+assert.deepEqual(fxIncompleteMetrics.completeness.excludedCurrencies, ["EUR"]);
+assert.equal(fxIncompleteMetrics.completeness.isComplete, false);
+assert.equal(fxIncompleteMetrics.income.amountMinor, 0n);
+
+const lossMetrics = derivePortfolioMetrics({
+  portfolio,
+  positions: [{ ...fractionalPosition, unrealizedPnl: { amountMinor: -1000n, currency: "USD" } }],
+  activities: [
+    {
+      id: "activity-loss-sale",
+      tenantId: "tenant-1",
+      portfolioId: "portfolio-main",
+      accountId: "acc-hapi",
+      kind: "sell",
+      occurredAt: "2026-09-22T12:00:00Z",
+      realizedPnl: { amountMinor: -500n, currency: "USD" },
+    },
+  ],
+  snapshot: portfolioSnapshot,
+  asOf: "2026-09-23T17:00:00Z",
+});
+assert.equal(lossMetrics.netPerformance.amountMinor, -1500n);
 
 
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
