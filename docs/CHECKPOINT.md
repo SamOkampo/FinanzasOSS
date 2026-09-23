@@ -2,22 +2,21 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 2.7 — métricas patrimoniales y de rendimiento**.
-- Rama: `feat/phase-2-7-portfolio-metrics`.
-- Próximo bloque exacto: **Fase 3.1 — contrato de conectores + access modes**.
+- Último bloque completado: **Fase 3.1 — contrato de conectores + access modes**.
+- Rama: `feat/phase-3-1-connector-contract`.
+- Próximo bloque exacto: **Fase 3.2 — Token Vault abstraction**.
 
-## 2.7 completado
+## 3.1 completado
 
-- Separación estricta de netContributions y performance.
-- marketValue, cashValue y totalValue.
-- realized/unrealized P&L signed.
-- dividendos/intereses como income.
-- fees e impuestos separados.
-- netPerformance explicable.
-- Consolidación únicamente en moneda base; sin FX implícito.
-- Completeness report para datos faltantes o monedas excluidas.
-- Tests de aportes, rendimiento positivo/negativo y FX incompleto.
+- ConnectorCapability derivado del Finance Core, sin enums duplicados.
+- MVP read-only: payments/cards fuera del contrato de conectores.
+- ConnectorDescriptor versionado con environment/accessMode/capabilities.
+- Página genérica para recursos paginados.
+- Contrato de consent/accounts/balances/transactions/positions/activities/snapshots.
+- ConnectorError normalizado.
+- Runtime validation descriptor ↔ métodos.
+- Tests para capabilities falsas, duplicadas y read-write rechazado.
 
 ## Gate
 
-No iniciar Fase 3 hasta que el PR de 2.7 pase lint, typecheck y tests.
+No avanzar a 3.2 hasta que el PR de 3.1 pase CI.
