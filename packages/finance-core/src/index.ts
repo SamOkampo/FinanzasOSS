@@ -744,7 +744,7 @@ export function evaluateOwnAccountTransfer(
     score,
     sourceTransactionId: source.id,
     destinationTransactionId: destination.id,
-    transferGroupId,
+    ...(transferGroupId ? { transferGroupId } : {}),
     reasons,
   };
 }
@@ -754,7 +754,8 @@ export function applyOwnAccountTransferMatch(
   b: FinancialTransaction,
   match: OwnTransferMatch,
 ): readonly [FinancialTransaction, FinancialTransaction] {
-  if (!match.autoLink || !match.transferGroupId) {
+  const transferGroupId = match.transferGroupId;
+  if (!match.autoLink || !transferGroupId) {
     throw new Error("Own-account transfer match is not eligible for automatic linking");
   }
 
@@ -768,7 +769,7 @@ export function applyOwnAccountTransferMatch(
   const update = (transaction: FinancialTransaction): FinancialTransaction => ({
     ...transaction,
     kind: "transfer",
-    transferGroupId: match.transferGroupId,
+    transferGroupId,
     category: transaction.category?.source === "user" ? transaction.category : category,
   });
 
