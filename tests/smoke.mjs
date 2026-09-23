@@ -4,10 +4,13 @@ import {
   assertBalanceBelongsToAccount,
   assertTenantScope,
   assertTransactionBelongsToAccount,
+  assertTransactionSchema,
+  economicClassForKind,
   isConsentActive,
   isPatrimonialTransfer,
   isSpendingTransaction,
-  netCashFlowMinor,
+  netAccountMovementMinor,
+  netEconomicCashFlowMinor,
   signedMinorUnits,
 } from "../dist/packages/finance-core/src/index.js";
 import { redactForLog } from "../dist/packages/security/src/index.js";
@@ -64,8 +67,10 @@ const expense = {
   money: { amountMinor: 20000n, currency: "COP" },
   direction: "debit",
   status: "posted",
-  kind: "expense",
+  kind: "purchase",
   rawDescription: "Food",
+  category: { group: "food", code: "food.restaurant", source: "system", confidence: 0.98 },
+  provenance: { sourceType: "open_finance_api", observedAt: "2026-09-03T12:00:00Z", provider: "davivienda" },
 };
 
 assert.doesNotThrow(() => assertTenantScope("tenant-1", account, "account"));
@@ -121,39 +126,69 @@ assert.equal(
 
 assert.equal(signedMinorUnits({ money: { amountMinor: 1200n, currency: "COP" }, direction: "debit" }), -1200n);
 assert.equal(signedMinorUnits({ money: { amountMinor: 1200n, currency: "COP" }, direction: "credit" }), 1200n);
-assert.equal(isSpendingTransaction({ kind: "expense" }), true);
+assert.equal(isSpendingTransaction({ kind: "purchase" }), true);
 assert.equal(isSpendingTransaction({ kind: "investment_transfer" }), false);
 assert.equal(isPatrimonialTransfer({ kind: "investment_transfer" }), true);
+assert.equal(economicClassForKind("purchase"), "expense");
+assert.equal(economicClassForKind("investment_transfer"), "investment_flow");
+assert.equal(economicClassForKind("cash_withdrawal"), "cash_movement");
+assert.doesNotThrow(() => assertTransactionSchema(expense));
+assert.throws(
+  () => assertTransactionSchema({ ...expense, money: { amountMinor: -1n, currency: "COP" } }),
+  /absolute minor units/,
+);
+assert.throws(
+  () =>
+    assertTransactionSchema({
+      ...expense,
+      category: { group: "food", code: "food.restaurant", source: "model", confidence: 1.1 },
+    }),
+  /confidence/,
+);
+assert.throws(
+  () => assertTransactionSchema({ ...expense, exchangeRate: 0 }),
+  /exchangeRate/,
+);
+
+const incomeTransaction = {
+  id: "1",
+  tenantId: "tenant-1",
+  connectionId: "c",
+  accountId: "a",
+  postedAt: "2026-09-01",
+  money: { amountMinor: 100000n, currency: "COP" },
+  direction: "credit",
+  status: "posted",
+  kind: "income",
+  rawDescription: "Income",
+  provenance: { sourceType: "manual", observedAt: "2026-09-01T12:00:00Z" },
+};
+
+const investmentTransfer = {
+  id: "2",
+  tenantId: "tenant-1",
+  connectionId: "c",
+  accountId: "a",
+  postedAt: "2026-09-02",
+  money: { amountMinor: 30000n, currency: "COP" },
+  direction: "debit",
+  status: "posted",
+  kind: "investment_transfer",
+  rawDescription: "Hapi funding",
+  counterparty: { kind: "institution", name: "Hapi" },
+  category: { group: "investments", code: "investments.contribution", source: "system" },
+  provenance: { sourceType: "manual", observedAt: "2026-09-02T12:00:00Z" },
+};
+
 assert.equal(
-  netCashFlowMinor([
-    {
-      id: "1",
-      tenantId: "tenant-1",
-      connectionId: "c",
-      accountId: "a",
-      postedAt: "2026-09-01",
-      money: { amountMinor: 100000n, currency: "COP" },
-      direction: "credit",
-      status: "posted",
-      kind: "income",
-      rawDescription: "Income",
-    },
-    {
-      id: "2",
-      tenantId: "tenant-1",
-      connectionId: "c",
-      accountId: "a",
-      postedAt: "2026-09-02",
-      money: { amountMinor: 30000n, currency: "COP" },
-      direction: "debit",
-      status: "posted",
-      kind: "investment_transfer",
-      rawDescription: "Hapi funding",
-    },
+  netEconomicCashFlowMinor([
+    incomeTransaction,
+    investmentTransfer,
     expense,
   ]),
   80000n,
 );
+assert.equal(netAccountMovementMinor([incomeTransaction, investmentTransfer, expense]), 50000n);
 
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {
   merchant: "Uber",
