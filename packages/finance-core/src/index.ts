@@ -434,3 +434,195 @@ export function netEconomicCashFlowMinor(transactions: readonly FinancialTransac
 export function netCashFlowMinor(transactions: readonly FinancialTransaction[]): bigint {
   return netEconomicCashFlowMinor(transactions);
 }
+
+
+export type DuplicateMatchLevel = "exact" | "likely" | "possible" | "none";
+
+export interface DedupeOptions {
+  scopeKeyA?: string;
+  scopeKeyB?: string;
+  dateToleranceDays?: number;
+}
+
+export interface DedupeEvaluation {
+  level: DuplicateMatchLevel;
+  autoMerge: boolean;
+  score: number;
+  reasons: readonly string[];
+  fingerprintA: string;
+  fingerprintB: string;
+}
+
+export function normalizeFingerprintText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function fnv1a64(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= BigInt(value.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function transactionDayKey(postedAt: ISODateTime): string {
+  const parsed = new Date(postedAt);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Cannot fingerprint transaction with invalid postedAt");
+  return parsed.toISOString().slice(0, 10);
+}
+
+function transactionDayNumber(postedAt: ISODateTime): number {
+  const day = transactionDayKey(postedAt);
+  return Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+}
+
+export function buildTransactionFingerprint(transaction: FinancialTransaction, scopeKey = transaction.accountId): string {
+  assertTransactionSchema(transaction);
+  const canonical = [
+    "fp1",
+    transaction.tenantId,
+    scopeKey,
+    transaction.direction,
+    transaction.money.currency.toUpperCase(),
+    transaction.money.amountMinor.toString(),
+    transactionDayKey(transaction.postedAt),
+    normalizeFingerprintText(transaction.rawDescription),
+  ].join("|");
+  return `fp1_${fnv1a64(canonical)}`;
+}
+
+export function withTransactionFingerprint(
+  transaction: FinancialTransaction,
+  scopeKey = transaction.accountId,
+): FinancialTransaction {
+  return { ...transaction, fingerprint: buildTransactionFingerprint(transaction, scopeKey) };
+}
+
+function exactSourceIdentityMatch(a: FinancialTransaction, b: FinancialTransaction): string | null {
+  if (a.externalId && b.externalId && a.connectionId === b.connectionId && a.externalId === b.externalId) {
+    return "same connection + externalId";
+  }
+  if (
+    a.provenance.provider &&
+    b.provenance.provider &&
+    a.provenance.provider === b.provenance.provider &&
+    a.provenance.sourceRecordId &&
+    b.provenance.sourceRecordId &&
+    a.provenance.sourceRecordId === b.provenance.sourceRecordId
+  ) {
+    return "same provider + sourceRecordId";
+  }
+  return null;
+}
+
+function descriptionScore(a: string, b: string): number {
+  const normalizedA = normalizeFingerprintText(a);
+  const normalizedB = normalizeFingerprintText(b);
+  if (!normalizedA || !normalizedB) return 0;
+  if (normalizedA === normalizedB) return 20;
+  const shorter = normalizedA.length <= normalizedB.length ? normalizedA : normalizedB;
+  const longer = shorter === normalizedA ? normalizedB : normalizedA;
+  return shorter.length >= 5 && longer.includes(shorter) ? 12 : 0;
+}
+
+export function evaluateDuplicateTransactions(
+  a: FinancialTransaction,
+  b: FinancialTransaction,
+  options: DedupeOptions = {},
+): DedupeEvaluation {
+  const scopeKeyA = options.scopeKeyA ?? a.accountId;
+  const scopeKeyB = options.scopeKeyB ?? b.accountId;
+  const fingerprintA = buildTransactionFingerprint(a, scopeKeyA);
+  const fingerprintB = buildTransactionFingerprint(b, scopeKeyB);
+  const reasons: string[] = [];
+
+  if (a.tenantId !== b.tenantId) {
+    return { level: "none", autoMerge: false, score: 0, reasons: ["different tenant"], fingerprintA, fingerprintB };
+  }
+  if (scopeKeyA !== scopeKeyB) {
+    return { level: "none", autoMerge: false, score: 0, reasons: ["different dedupe scope"], fingerprintA, fingerprintB };
+  }
+
+  const exactSourceMatch = exactSourceIdentityMatch(a, b);
+  if (exactSourceMatch) {
+    return {
+      level: "exact",
+      autoMerge: true,
+      score: 100,
+      reasons: [exactSourceMatch],
+      fingerprintA,
+      fingerprintB,
+    };
+  }
+
+  if (
+    a.direction !== b.direction ||
+    a.money.currency.toUpperCase() !== b.money.currency.toUpperCase() ||
+    a.money.amountMinor !== b.money.amountMinor
+  ) {
+    return {
+      level: "none",
+      autoMerge: false,
+      score: 0,
+      reasons: ["amount, currency or direction differ"],
+      fingerprintA,
+      fingerprintB,
+    };
+  }
+
+  const tolerance = Math.max(0, options.dateToleranceDays ?? 1);
+  const dayDistance = Math.abs(transactionDayNumber(a.postedAt) - transactionDayNumber(b.postedAt));
+  if (dayDistance > tolerance) {
+    return {
+      level: "none",
+      autoMerge: false,
+      score: 0,
+      reasons: ["posting dates outside tolerance"],
+      fingerprintA,
+      fingerprintB,
+    };
+  }
+
+  let score = 45;
+  reasons.push("same scope + amount + currency + direction");
+
+  if (dayDistance === 0) {
+    score += 15;
+    reasons.push("same posting day");
+  } else {
+    score += 8;
+    reasons.push("posting day within tolerance");
+  }
+
+  const description = descriptionScore(a.rawDescription, b.rawDescription);
+  if (description > 0) {
+    score += description;
+    reasons.push(description === 20 ? "same normalized description" : "compatible normalized description");
+  }
+
+  const counterpartyA = normalizeFingerprintText(a.counterparty?.name ?? "");
+  const counterpartyB = normalizeFingerprintText(b.counterparty?.name ?? "");
+  if (counterpartyA && counterpartyB && counterpartyA === counterpartyB) {
+    score += 10;
+    reasons.push("same normalized counterparty");
+  }
+
+  score = Math.min(99, score);
+  const level: DuplicateMatchLevel = score >= 80 ? "likely" : score >= 65 ? "possible" : "none";
+  return {
+    level,
+    autoMerge: false,
+    score,
+    reasons,
+    fingerprintA,
+    fingerprintB,
+  };
+}
