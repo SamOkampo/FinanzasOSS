@@ -1,9 +1,14 @@
 import type {
+  Asset,
   FinancialAccount,
   FinancialBalance,
   FinancialConnection,
   FinancialConsent,
   FinancialTransaction,
+  InvestmentActivity,
+  Portfolio,
+  PortfolioSnapshot,
+  Position,
 } from "../../finance-core/src/index.js";
 
 export interface TenantContext {
@@ -45,6 +50,37 @@ export interface TransactionRepository {
     ctx: TenantContext,
     fingerprint: string,
   ): Promise<FinancialTransaction[]>;
+}
+
+export interface PortfolioRepository {
+  upsert(ctx: TenantContext, portfolio: Portfolio): Promise<void>;
+  getById(ctx: TenantContext, portfolioId: string): Promise<Portfolio | null>;
+  list(ctx: TenantContext): Promise<Portfolio[]>;
+}
+
+export interface AssetRepository {
+  upsertMany(ctx: TenantContext, assets: readonly Asset[]): Promise<number>;
+  getById(ctx: TenantContext, assetId: string): Promise<Asset | null>;
+}
+
+export interface PositionRepository {
+  replaceSnapshot(
+    ctx: TenantContext,
+    portfolioId: string,
+    asOf: string,
+    positions: readonly Position[],
+  ): Promise<number>;
+  listLatestByPortfolio(ctx: TenantContext, portfolioId: string): Promise<Position[]>;
+}
+
+export interface InvestmentActivityRepository {
+  upsertMany(ctx: TenantContext, activities: readonly InvestmentActivity[]): Promise<number>;
+  listByPortfolio(ctx: TenantContext, portfolioId: string): Promise<InvestmentActivity[]>;
+}
+
+export interface PortfolioSnapshotRepository {
+  upsert(ctx: TenantContext, snapshot: PortfolioSnapshot): Promise<void>;
+  listByPortfolio(ctx: TenantContext, portfolioId: string): Promise<PortfolioSnapshot[]>;
 }
 
 export interface SyncCheckpoint {
