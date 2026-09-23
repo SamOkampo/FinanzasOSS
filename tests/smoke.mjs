@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import {
   assertAccountBelongsToConnection,
+  assertAssetBelongsToTenant,
   assertBalanceBelongsToAccount,
+  assertDecimalString,
+  assertInvestmentActivityBelongsToPortfolio,
+  assertPortfolioAccountMembership,
+  assertPortfolioSnapshotBelongsToPortfolio,
+  assertPositionBelongsToPortfolio,
   assertTenantScope,
   applyInvestmentTransferMatch,
   applyOwnAccountTransferMatch,
@@ -14,6 +20,7 @@ import {
   evaluateOwnAccountTransfer,
   isConsentActive,
   isPatrimonialTransfer,
+  isValidDecimalString,
   isSpendingTransaction,
   netAccountMovementMinor,
   netEconomicCashFlowMinor,
@@ -468,6 +475,152 @@ const unrelatedInvestmentAccounts = evaluateInvestmentTransfer(
   { ...investmentAccount, id: "acc-invest-2", externalId: "hapi-account-2" },
 );
 assert.equal(unrelatedInvestmentAccounts.confidence, "none");
+
+
+assert.equal(isValidDecimalString("0.123456789"), true);
+assert.equal(isValidDecimalString("-0.5"), true);
+assert.equal(isValidDecimalString("42"), true);
+assert.equal(isValidDecimalString("01.2"), false);
+assert.equal(isValidDecimalString("1e-5"), false);
+assert.equal(isValidDecimalString(""), false);
+assert.doesNotThrow(() => assertDecimalString("0.00000001", "fractional quantity"));
+assert.throws(() => assertDecimalString("01.2", "fractional quantity"), /canonical decimal string/);
+
+const portfolio = {
+  id: "portfolio-main",
+  tenantId: "tenant-1",
+  name: "Portafolio principal",
+  baseCurrency: "USD",
+  status: "active",
+  accountIds: ["acc-hapi"],
+};
+
+const qqqmAsset = {
+  id: "asset-qqqm",
+  tenantId: "tenant-1",
+  symbol: "QQQM",
+  name: "Invesco NASDAQ 100 ETF",
+  assetClass: "etf",
+  currency: "USD",
+  identifiers: [
+    { kind: "ticker", value: "QQQM", namespace: "NASDAQ" },
+    { kind: "provider", value: "hapi:QQQM", namespace: "hapi" },
+  ],
+};
+
+assert.doesNotThrow(() => assertPortfolioAccountMembership(portfolio, investmentAccount));
+assert.throws(
+  () => assertPortfolioAccountMembership(portfolio, account),
+  /Account is not part of portfolio|investment or crypto domain/,
+);
+assert.doesNotThrow(() => assertAssetBelongsToTenant(qqqmAsset, "tenant-1"));
+assert.throws(
+  () => assertAssetBelongsToTenant({ ...qqqmAsset, tenantId: "tenant-2" }, "tenant-1"),
+  /Tenant scope mismatch/,
+);
+assert.throws(
+  () => assertAssetBelongsToTenant({ ...qqqmAsset, identifiers: [{ kind: "ticker", value: "" }] }, "tenant-1"),
+  /identifiers cannot be empty/,
+);
+
+const fractionalPosition = {
+  id: "position-qqqm",
+  tenantId: "tenant-1",
+  portfolioId: "portfolio-main",
+  accountId: "acc-hapi",
+  assetId: "asset-qqqm",
+  quantity: "1.23456789",
+  averageCostPerUnit: { amountMinor: 18000n, currency: "USD" },
+  marketPrice: { amountMinor: 19000n, currency: "USD" },
+  marketValue: { amountMinor: 23456n, currency: "USD" },
+  costBasis: { amountMinor: 22222n, currency: "USD" },
+  unrealizedPnl: { amountMinor: 1234n, currency: "USD" },
+  asOf: "2026-09-23T17:00:00Z",
+};
+
+assert.doesNotThrow(() =>
+  assertPositionBelongsToPortfolio(fractionalPosition, portfolio, investmentAccount, qqqmAsset),
+);
+assert.doesNotThrow(() =>
+  assertPositionBelongsToPortfolio(
+    { ...fractionalPosition, quantity: "-0.5" },
+    portfolio,
+    investmentAccount,
+    qqqmAsset,
+  ),
+);
+assert.throws(
+  () =>
+    assertPositionBelongsToPortfolio(
+      { ...fractionalPosition, portfolioId: "portfolio-other" },
+      portfolio,
+      investmentAccount,
+      qqqmAsset,
+    ),
+  /Position portfolio mismatch/,
+);
+assert.throws(
+  () =>
+    assertPositionBelongsToPortfolio(
+      { ...fractionalPosition, quantity: "1e-8" },
+      portfolio,
+      investmentAccount,
+      qqqmAsset,
+    ),
+  /canonical decimal string/,
+);
+
+const buyActivity = {
+  id: "activity-buy-qqqm",
+  tenantId: "tenant-1",
+  portfolioId: "portfolio-main",
+  accountId: "acc-hapi",
+  assetId: "asset-qqqm",
+  kind: "buy",
+  occurredAt: "2026-09-20T15:00:00Z",
+  cashAmount: { amountMinor: 5000n, currency: "USD" },
+  quantity: "0.25",
+  unitPrice: { amountMinor: 20000n, currency: "USD" },
+  fee: { amountMinor: 0n, currency: "USD" },
+};
+
+assert.doesNotThrow(() =>
+  assertInvestmentActivityBelongsToPortfolio(buyActivity, portfolio, investmentAccount, qqqmAsset),
+);
+assert.throws(
+  () =>
+    assertInvestmentActivityBelongsToPortfolio(
+      { ...buyActivity, quantity: "0.2.5" },
+      portfolio,
+      investmentAccount,
+      qqqmAsset,
+    ),
+  /canonical decimal string/,
+);
+
+const portfolioSnapshot = {
+  id: "snapshot-1",
+  tenantId: "tenant-1",
+  portfolioId: "portfolio-main",
+  asOf: "2026-09-23T17:00:00Z",
+  marketValue: { amountMinor: 100000n, currency: "USD" },
+  cashValue: { amountMinor: 5000n, currency: "USD" },
+  netContributions: { amountMinor: 80000n, currency: "USD" },
+};
+
+assert.doesNotThrow(() => assertPortfolioSnapshotBelongsToPortfolio(portfolioSnapshot, portfolio));
+assert.throws(
+  () => assertPortfolioSnapshotBelongsToPortfolio({ ...portfolioSnapshot, asOf: "not-a-date" }, portfolio),
+  /valid date/,
+);
+assert.throws(
+  () =>
+    assertPortfolioSnapshotBelongsToPortfolio(
+      { ...portfolioSnapshot, tenantId: "tenant-2" },
+      portfolio,
+    ),
+  /Tenant scope mismatch/,
+);
 
 
 assert.deepEqual(redactForLog({ merchant: "Uber", accessToken: "secret", client_secret: "secret2" }), {

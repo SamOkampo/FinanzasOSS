@@ -19,7 +19,7 @@
 - [x] 2.3 Dedupe y fingerprints
 - [x] 2.4 Transfer matching entre cuentas propias
 - [x] 2.5 Investment transfer matching: banco ↔ broker/exchange/wallet
-- [ ] 2.6 Portfolio domain: Portfolio, Asset, Position, InvestmentActivity, PortfolioSnapshot
+- [x] 2.6 Portfolio domain: Portfolio, Asset, Position, InvestmentActivity, PortfolioSnapshot
 - [ ] 2.7 Métricas: aportes netos vs rendimiento, realized/unrealized P&L, income/fees/tax
 
 ## Fase 3 — Connector SDK
