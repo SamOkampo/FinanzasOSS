@@ -53,7 +53,10 @@ export interface ConsentStart {
 
 export interface ConnectorPage<T> {
   items: T[];
+  /** Cursor for the next page in the current bounded run. */
   nextCursor?: string;
+  /** Durable incremental cursor to use on the next sync. Prefer emitting this on the terminal page. */
+  checkpointCursor?: string;
 }
 
 export type TransactionPage = ConnectorPage<FinancialTransaction>;
@@ -254,4 +257,319 @@ export function findConnectorsSupporting(
       (environment === undefined || row.environment === environment) &&
       requiredCapabilities.every((capability) => row.capabilities[capability]),
   );
+}
+
+
+export interface ConnectorSyncCheckpoint {
+  resource: ConnectorCapability;
+  cursor?: string;
+  updatedAt: string;
+}
+
+export interface ConnectorSyncCheckpointStore {
+  load(ctx: ConnectorContext, resource: ConnectorCapability): Promise<ConnectorSyncCheckpoint | null>;
+  save(ctx: ConnectorContext, checkpoint: ConnectorSyncCheckpoint): Promise<void>;
+}
+
+export interface SyncBatchMetadata {
+  resource: ConnectorCapability;
+  idempotencyKey: string;
+  requestCursor?: string;
+  nextCursor?: string;
+  checkpointCursor?: string;
+}
+
+export interface ConnectorSyncSink {
+  writeAccounts(
+    ctx: ConnectorContext,
+    items: readonly FinancialAccount[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+  writeBalances(
+    ctx: ConnectorContext,
+    items: readonly BalanceRecord[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+  writeTransactions(
+    ctx: ConnectorContext,
+    items: readonly FinancialTransaction[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+  writePositions(
+    ctx: ConnectorContext,
+    items: readonly Position[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+  writeInvestmentActivities(
+    ctx: ConnectorContext,
+    items: readonly InvestmentActivity[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+  writePortfolioSnapshots(
+    ctx: ConnectorContext,
+    items: readonly PortfolioSnapshot[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void>;
+}
+
+export interface ConnectorSyncRequest {
+  resources?: readonly ConnectorCapability[];
+  resetCursor?: boolean;
+  maxPagesPerResource?: number;
+}
+
+export interface ConnectorSyncResourceResult {
+  resource: ConnectorCapability;
+  pages: number;
+  items: number;
+  truncated: boolean;
+  checkpointCursor?: string;
+}
+
+export interface ConnectorSyncResult {
+  connectorId: string;
+  resources: readonly ConnectorSyncResourceResult[];
+}
+
+function syncHash(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= BigInt(value.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function canonicalizeSyncValue(value: unknown): string {
+  if (typeof value === "bigint") return `bigint:${value.toString()}`;
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (typeof value !== "object") return JSON.stringify(value);
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalizeSyncValue(item)).join(",")}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalizeSyncValue(nested)}`);
+  return `{${entries.join(",")}}`;
+}
+
+export function buildSyncIdempotencyKey(
+  ctx: ConnectorContext,
+  connectorId: string,
+  resource: ConnectorCapability,
+  requestCursor: string | undefined,
+  items: readonly unknown[],
+): string {
+  const canonicalItems = items.map((item) => canonicalizeSyncValue(item)).sort();
+  const canonical = [
+    "sync1",
+    ctx.tenantId,
+    ctx.connectionId,
+    connectorId,
+    resource,
+    requestCursor ?? "root",
+    ...canonicalItems,
+  ].join("|");
+  return `sync1_${syncHash(canonical)}`;
+}
+
+function syncMetadata(
+  ctx: ConnectorContext,
+  connectorId: string,
+  resource: ConnectorCapability,
+  requestCursor: string | undefined,
+  items: readonly unknown[],
+  nextCursor?: string,
+  checkpointCursor?: string,
+): SyncBatchMetadata {
+  return {
+    resource,
+    idempotencyKey: buildSyncIdempotencyKey(ctx, connectorId, resource, requestCursor, items),
+    ...(requestCursor !== undefined ? { requestCursor } : {}),
+    ...(nextCursor !== undefined ? { nextCursor } : {}),
+    ...(checkpointCursor !== undefined ? { checkpointCursor } : {}),
+  };
+}
+
+function checkpointAfterPage(
+  resource: ConnectorCapability,
+  now: string,
+  nextCursor?: string,
+  checkpointCursor?: string,
+): ConnectorSyncCheckpoint {
+  const cursor = nextCursor ?? checkpointCursor;
+  return {
+    resource,
+    ...(cursor !== undefined ? { cursor } : {}),
+    updatedAt: now,
+  };
+}
+
+export class ConnectorSyncEngine {
+  constructor(
+    private readonly checkpointStore: ConnectorSyncCheckpointStore,
+    private readonly sink: ConnectorSyncSink,
+    private readonly now: () => string = () => new Date().toISOString(),
+  ) {}
+
+  async sync(
+    connector: FinancialConnector,
+    ctx: ConnectorContext,
+    request: ConnectorSyncRequest = {},
+  ): Promise<ConnectorSyncResult> {
+    validateConnectorContract(connector);
+    if (!ctx.tenantId.trim() || !ctx.connectionId.trim()) {
+      throw new ConnectorError("Sync context requires tenantId and connectionId", "CONFIGURATION", false);
+    }
+
+    const resources = request.resources ?? connector.descriptor.capabilities;
+    for (const resource of resources) assertConnectorSupports(connector, resource);
+
+    const maxPages = request.maxPagesPerResource ?? 10;
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) {
+      throw new ConnectorError("maxPagesPerResource must be an integer from 1 to 100", "CONFIGURATION", false);
+    }
+
+    const results: ConnectorSyncResourceResult[] = [];
+    for (const resource of resources) {
+      results.push(await this.syncResource(connector, ctx, resource, request.resetCursor === true, maxPages));
+    }
+
+    return { connectorId: connector.descriptor.connectorId, resources: results };
+  }
+
+  private async syncResource(
+    connector: FinancialConnector,
+    ctx: ConnectorContext,
+    resource: ConnectorCapability,
+    resetCursor: boolean,
+    maxPages: number,
+  ): Promise<ConnectorSyncResourceResult> {
+    if (resource === "accounts") {
+      const items = await connector.getAccounts(ctx);
+      const metadata = syncMetadata(ctx, connector.descriptor.connectorId, resource, undefined, items);
+      if (items.length > 0) await this.sink.writeAccounts(ctx, items, metadata);
+      const checkpoint = checkpointAfterPage(resource, this.now());
+      await this.checkpointStore.save(ctx, checkpoint);
+      return { resource, pages: 1, items: items.length, truncated: false };
+    }
+
+    if (resource === "balances") {
+      if (!connector.getBalances) throw new ConnectorError("getBalances is not implemented", "CONFIGURATION", false);
+      const items = await connector.getBalances(ctx);
+      const metadata = syncMetadata(ctx, connector.descriptor.connectorId, resource, undefined, items);
+      if (items.length > 0) await this.sink.writeBalances(ctx, items, metadata);
+      const checkpoint = checkpointAfterPage(resource, this.now());
+      await this.checkpointStore.save(ctx, checkpoint);
+      return { resource, pages: 1, items: items.length, truncated: false };
+    }
+
+    const previous = resetCursor ? null : await this.checkpointStore.load(ctx, resource);
+    let requestCursor = previous?.cursor;
+    let pages = 0;
+    let itemCount = 0;
+    let lastCheckpointCursor: string | undefined = previous?.cursor;
+    const seenPageCursors = new Set<string>();
+    let truncated = false;
+
+    while (pages < maxPages) {
+      if (requestCursor !== undefined) {
+        if (seenPageCursors.has(requestCursor)) {
+          throw new ConnectorError("Connector pagination cursor repeated in the same run", "INVALID_RESPONSE", false);
+        }
+        seenPageCursors.add(requestCursor);
+      }
+
+      const page = await this.fetchPage(connector, ctx, resource, requestCursor);
+      const metadata = syncMetadata(
+        ctx,
+        connector.descriptor.connectorId,
+        resource,
+        requestCursor,
+        page.items,
+        page.nextCursor,
+        page.checkpointCursor,
+      );
+
+      if (page.items.length > 0) {
+        await this.writePage(resource, ctx, page.items, metadata);
+      }
+
+      pages += 1;
+      itemCount += page.items.length;
+
+      const checkpoint = checkpointAfterPage(
+        resource,
+        this.now(),
+        page.nextCursor,
+        page.nextCursor === undefined ? page.checkpointCursor : undefined,
+      );
+      await this.checkpointStore.save(ctx, checkpoint);
+      lastCheckpointCursor = checkpoint.cursor;
+
+      if (!page.nextCursor) {
+        truncated = false;
+        break;
+      }
+
+      requestCursor = page.nextCursor;
+      if (pages >= maxPages) truncated = true;
+    }
+
+    return {
+      resource,
+      pages,
+      items: itemCount,
+      truncated,
+      ...(lastCheckpointCursor !== undefined ? { checkpointCursor: lastCheckpointCursor } : {}),
+    };
+  }
+
+  private async fetchPage(
+    connector: FinancialConnector,
+    ctx: ConnectorContext,
+    resource: Exclude<ConnectorCapability, "accounts" | "balances">,
+    cursor?: string,
+  ): Promise<ConnectorPage<FinancialTransaction | Position | InvestmentActivity | PortfolioSnapshot>> {
+    switch (resource) {
+      case "transactions":
+        if (!connector.getTransactions) throw new ConnectorError("getTransactions is not implemented", "CONFIGURATION", false);
+        return connector.getTransactions(ctx, cursor);
+      case "positions":
+        if (!connector.getPositions) throw new ConnectorError("getPositions is not implemented", "CONFIGURATION", false);
+        return connector.getPositions(ctx, cursor);
+      case "investment_activities":
+        if (!connector.getInvestmentActivities) {
+          throw new ConnectorError("getInvestmentActivities is not implemented", "CONFIGURATION", false);
+        }
+        return connector.getInvestmentActivities(ctx, cursor);
+      case "portfolio_snapshots":
+        if (!connector.getPortfolioSnapshots) {
+          throw new ConnectorError("getPortfolioSnapshots is not implemented", "CONFIGURATION", false);
+        }
+        return connector.getPortfolioSnapshots(ctx, cursor);
+    }
+  }
+
+  private async writePage(
+    resource: Exclude<ConnectorCapability, "accounts" | "balances">,
+    ctx: ConnectorContext,
+    items: readonly (FinancialTransaction | Position | InvestmentActivity | PortfolioSnapshot)[],
+    metadata: SyncBatchMetadata,
+  ): Promise<void> {
+    switch (resource) {
+      case "transactions":
+        return this.sink.writeTransactions(ctx, items as readonly FinancialTransaction[], metadata);
+      case "positions":
+        return this.sink.writePositions(ctx, items as readonly Position[], metadata);
+      case "investment_activities":
+        return this.sink.writeInvestmentActivities(ctx, items as readonly InvestmentActivity[], metadata);
+      case "portfolio_snapshots":
+        return this.sink.writePortfolioSnapshots(ctx, items as readonly PortfolioSnapshot[], metadata);
+    }
+  }
 }
