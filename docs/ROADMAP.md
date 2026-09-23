@@ -28,10 +28,10 @@
 - [x] 3.3 Capability matrix: accounts/balances/transactions/positions/activities/snapshots
 - [x] 3.4 Sync engine incremental e idempotente
 - [x] 3.5 Health states y reconexión
-- [ ] 3.6 Read-only enforcement para brokers/exchanges
+- [x] 3.6 Read-only enforcement para brokers/exchanges
 
 ## Fase 4 — Bancolombia sandbox
-- [ ] 4.1 Discovery/productos Open Banking aplicables
+- [x] 4.1 Discovery/productos Open Banking aplicables
 - [ ] 4.2 OAuth/consent sandbox
 - [ ] 4.3 Cuentas/saldos
 - [ ] 4.4 Transacciones
@@ -142,7 +142,6 @@
 - [ ] 16.5 Responsive/accesibilidad/performance
 - [ ] 16.6 Defectos visuales: overlap/overflow/z-index/modal/loading
 - [ ] 16.7 Revisión final roadmap y criterios de lanzamiento
-
 
 ---
 
