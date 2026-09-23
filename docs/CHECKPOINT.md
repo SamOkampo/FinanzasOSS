@@ -2,18 +2,19 @@
 
 ## Estado actual
 
-- Último bloque completado: **Fase 3.6 — read-only enforcement para brokers/exchanges**.
-- Rama: `feat/phase-3-6-read-only-enforcement`.
-- Próximo bloque exacto: **Fase 4.1 — Discovery/productos Open Banking aplicables de Bancolombia**.
+- Último bloque completado: **Fase 4.1 — Discovery/productos Open Banking aplicables de Bancolombia**.
+- Rama: `docs/phase-4-1-bancolombia-discovery`.
+- Próximo bloque exacto: **Fase 4.2 — OAuth/consent sandbox**.
 
-## 3.6 completado
+## 4.1 completado
 
-- Política explícita y fail-closed para adapters de broker, exchange y wallet.
-- Trading, retiros y transferencias deshabilitados por contrato durante el MVP.
-- Private keys y seed phrases prohibidas para wallets.
-- Capacidades de lectura declarativas para posiciones, actividad y snapshots.
-- Regresiones que rechazan money-moving capabilities y secretos de wallet.
+- Verificado el marco oficial AISP/PSU de Bancolombia para acceso consentido a información de cuenta.
+- Verificado el flujo oficial de acceso a Sandbox y suscripción de productos API.
+- Confirmado que la API pública de validación de titularidad identificada no expone saldos, movimientos ni estado de cuenta y no sirve por sí sola como agregador.
+- No se inventaron endpoints/scopes de Account Information que no estén públicamente confirmados.
+- Cuentas, saldos y transacciones permanecen fail-closed hasta confirmar producto, scopes y endpoints en el catálogo/portal oficial autorizado.
+- Iniciación de pagos y screen scraping quedan explícitamente fuera del adapter read-only.
 
 ## Gate
 
-No avanzar a 4.1 hasta que el PR de 3.6 pase CI y se integre en main.
+No avanzar a 4.2 hasta que este PR pase CI y se integre en main. En 4.2 no conectar contra endpoints inferidos: usar únicamente configuración oficial verificada, sin secretos en el repositorio y sin datos financieros reales.
