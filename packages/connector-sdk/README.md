@@ -70,3 +70,23 @@ Puede incluir `retryAfterMs` y `providerCode` sin filtrar secretos.
 - local_import
 
 Que exista el valor `production` en el tipo no autoriza a FinanzasOSS a usar APIs productivas. El acceso productivo sigue bloqueado por las fases y controles del roadmap.
+
+
+## Capability matrix
+
+La matriz se deriva de los `ConnectorDescriptor`; no existe una segunda lista manual por banco.
+
+`buildConnectorCapabilityMatrix()` produce una fila por `connectorId + environment` con flags para:
+
+- accounts
+- balances
+- transactions
+- positions
+- investment_activities
+- portfolio_snapshots
+
+Dos descriptores con el mismo connectorId y environment son inválidos. El mismo connectorId sí puede coexistir en sandbox y production.
+
+`findConnectorsSupporting()` permite buscar conectores que cumplan un conjunto de capacidades, opcionalmente filtrando por entorno.
+
+La UI y el backend deben consultar esta matriz en vez de asumir que todas las instituciones exponen los mismos recursos.

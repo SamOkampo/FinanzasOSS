@@ -31,8 +31,11 @@ import {
 } from "../dist/packages/finance-core/src/index.js";
 import {
   assertConnectorSupports,
+  buildConnectorCapabilityMatrix,
+  CONNECTOR_CAPABILITIES,
   ConnectorError,
   connectorSupports,
+  findConnectorsSupporting,
   validateConnectorContract,
   validateConnectorDescriptor,
 } from "../dist/packages/connector-sdk/src/index.js";
@@ -867,6 +870,57 @@ assert.throws(
       },
     }),
   /declares positions/,
+);
+
+
+assert.deepEqual(CONNECTOR_CAPABILITIES, [
+  "accounts",
+  "balances",
+  "transactions",
+  "positions",
+  "investment_activities",
+  "portfolio_snapshots",
+]);
+
+const capabilityMatrix = buildConnectorCapabilityMatrix([
+  validConnector.descriptor,
+  {
+    connectorId: "hapi-statements",
+    institutionId: "hapi",
+    displayName: "Hapi Statements",
+    version: "0.1.0",
+    environment: "local_import",
+    accessMode: "statement_import",
+    capabilities: ["accounts", "positions", "investment_activities", "portfolio_snapshots"],
+    dataAccess: "read_only",
+  },
+]);
+assert.equal(capabilityMatrix.length, 2);
+assert.equal(capabilityMatrix[0].institutionId, "davivienda");
+assert.equal(capabilityMatrix[0].capabilities.transactions, true);
+assert.equal(capabilityMatrix[0].capabilities.positions, false);
+assert.equal(capabilityMatrix[1].institutionId, "hapi");
+assert.equal(capabilityMatrix[1].capabilities.positions, true);
+assert.equal(capabilityMatrix[1].capabilities.transactions, false);
+
+assert.deepEqual(
+  findConnectorsSupporting(capabilityMatrix, ["accounts", "transactions"], "sandbox").map((row) => row.connectorId),
+  ["davivienda-sandbox"],
+);
+assert.deepEqual(
+  findConnectorsSupporting(capabilityMatrix, ["positions"], "local_import").map((row) => row.connectorId),
+  ["hapi-statements"],
+);
+
+assert.doesNotThrow(() =>
+  buildConnectorCapabilityMatrix([
+    validConnector.descriptor,
+    { ...validConnector.descriptor, environment: "production" },
+  ]),
+);
+assert.throws(
+  () => buildConnectorCapabilityMatrix([validConnector.descriptor, validConnector.descriptor]),
+  /Duplicate connector descriptor/,
 );
 
 assert.doesNotThrow(() => assertVaultScope({ tenantId: "tenant-1", connectionId: "conn-1" }));

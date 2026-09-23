@@ -174,3 +174,84 @@ export function validateConnectorContract(connector: FinancialConnector): void {
     }
   }
 }
+
+
+export const CONNECTOR_CAPABILITIES: readonly ConnectorCapability[] = Object.freeze([
+  "accounts",
+  "balances",
+  "transactions",
+  "positions",
+  "investment_activities",
+  "portfolio_snapshots",
+]);
+
+export interface ConnectorCapabilityMatrixRow {
+  connectorId: string;
+  institutionId: string;
+  displayName: string;
+  version: string;
+  environment: ConnectorEnvironment;
+  accessMode: ConnectorAccessMode;
+  capabilities: Readonly<Record<ConnectorCapability, boolean>>;
+}
+
+function capabilityFlags(descriptor: ConnectorDescriptor): Readonly<Record<ConnectorCapability, boolean>> {
+  return Object.freeze(
+    Object.fromEntries(
+      CONNECTOR_CAPABILITIES.map((capability) => [
+        capability,
+        descriptor.capabilities.includes(capability),
+      ]),
+    ) as Record<ConnectorCapability, boolean>,
+  );
+}
+
+export function buildConnectorCapabilityMatrix(
+  descriptors: readonly ConnectorDescriptor[],
+): readonly ConnectorCapabilityMatrixRow[] {
+  const seen = new Set<string>();
+
+  const rows = descriptors.map((descriptor) => {
+    validateConnectorDescriptor(descriptor);
+    const key = `${descriptor.connectorId}::${descriptor.environment}`;
+    if (seen.has(key)) {
+      throw new ConnectorError(
+        `Duplicate connector descriptor for ${key}`,
+        "CONFIGURATION",
+        false,
+      );
+    }
+    seen.add(key);
+
+    return {
+      connectorId: descriptor.connectorId,
+      institutionId: descriptor.institutionId,
+      displayName: descriptor.displayName,
+      version: descriptor.version,
+      environment: descriptor.environment,
+      accessMode: descriptor.accessMode,
+      capabilities: capabilityFlags(descriptor),
+    };
+  });
+
+  return Object.freeze(
+    rows.sort(
+      (a, b) =>
+        a.institutionId.localeCompare(b.institutionId) ||
+        a.connectorId.localeCompare(b.connectorId) ||
+        a.environment.localeCompare(b.environment),
+    ),
+  );
+}
+
+export function findConnectorsSupporting(
+  matrix: readonly ConnectorCapabilityMatrixRow[],
+  requiredCapabilities: readonly ConnectorCapability[],
+  environment?: ConnectorEnvironment,
+): readonly ConnectorCapabilityMatrixRow[] {
+  return matrix.filter(
+    (row) =>
+      (environment === undefined || row.environment === environment) &&
+      requiredCapabilities.every((capability) => row.capabilities[capability]),
+  );
+}
