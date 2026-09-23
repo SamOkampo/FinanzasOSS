@@ -626,3 +626,151 @@ export function evaluateDuplicateTransactions(
     fingerprintB,
   };
 }
+
+
+export type OwnTransferConfidence = "high" | "medium" | "low" | "none";
+
+export interface OwnTransferMatchOptions {
+  dateToleranceDays?: number;
+}
+
+export interface OwnTransferMatch {
+  confidence: OwnTransferConfidence;
+  autoLink: boolean;
+  score: number;
+  sourceTransactionId?: string;
+  destinationTransactionId?: string;
+  transferGroupId?: string;
+  reasons: readonly string[];
+}
+
+function ownTransferSignalScore(transaction: FinancialTransaction): { score: number; explicitSignals: number; reasons: string[] } {
+  let score = 0;
+  let explicitSignals = 0;
+  const reasons: string[] = [];
+
+  if (transaction.kind === "transfer") {
+    score += 10;
+    explicitSignals += 1;
+    reasons.push("transaction kind is transfer");
+  }
+  if (transaction.category?.group === "transfers") {
+    score += 5;
+    reasons.push("category group is transfers");
+  }
+  if (transaction.counterparty?.kind === "self") {
+    score += 10;
+    explicitSignals += 1;
+    reasons.push("counterparty marked as self");
+  }
+
+  return { score, explicitSignals, reasons };
+}
+
+export function buildTransferGroupId(a: FinancialTransaction, b: FinancialTransaction): string {
+  const ids = [a.id, b.id].sort();
+  return `xfer1_${fnv1a64(["xfer1", a.tenantId, ...ids].join("|"))}`;
+}
+
+export function evaluateOwnAccountTransfer(
+  a: FinancialTransaction,
+  accountA: FinancialAccount,
+  b: FinancialTransaction,
+  accountB: FinancialAccount,
+  options: OwnTransferMatchOptions = {},
+): OwnTransferMatch {
+  assertTransactionBelongsToAccount(a, accountA);
+  assertTransactionBelongsToAccount(b, accountB);
+
+  const reasons: string[] = [];
+
+  if (a.tenantId !== b.tenantId || accountA.tenantId !== accountB.tenantId) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["different tenant"] };
+  }
+  if (accountA.id === accountB.id) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["same account"] };
+  }
+  if (a.kind === "investment_transfer" || b.kind === "investment_transfer") {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["investment transfer delegated to Phase 2.5"] };
+  }
+  if (a.direction === b.direction) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["transactions do not have opposite directions"] };
+  }
+  if (
+    a.money.currency.toUpperCase() !== b.money.currency.toUpperCase() ||
+    a.money.amountMinor !== b.money.amountMinor
+  ) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["amount or currency differ"] };
+  }
+
+  const source = a.direction === "debit" ? a : b;
+  const destination = a.direction === "credit" ? a : b;
+  const tolerance = Math.max(0, options.dateToleranceDays ?? 2);
+  const dayDistance = Math.abs(transactionDayNumber(source.postedAt) - transactionDayNumber(destination.postedAt));
+
+  if (dayDistance > tolerance) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: ["posting dates outside transfer tolerance"] };
+  }
+
+  let score = 50;
+  reasons.push("same tenant + different accounts + opposite directions + same amount/currency");
+
+  if (dayDistance === 0) {
+    score += 15;
+    reasons.push("same posting day");
+  } else if (dayDistance === 1) {
+    score += 10;
+    reasons.push("posting dates one day apart");
+  } else {
+    score += 5;
+    reasons.push("posting dates within transfer tolerance");
+  }
+
+  const signalA = ownTransferSignalScore(a);
+  const signalB = ownTransferSignalScore(b);
+  score += signalA.score + signalB.score;
+  reasons.push(...signalA.reasons, ...signalB.reasons);
+
+  score = Math.min(99, score);
+  const confidence: OwnTransferConfidence =
+    score >= 85 ? "high" : score >= 70 ? "medium" : score >= 60 ? "low" : "none";
+  const explicitSignals = signalA.explicitSignals + signalB.explicitSignals;
+  const autoLink = confidence === "high" && explicitSignals >= 2;
+  const transferGroupId = confidence === "none" ? undefined : buildTransferGroupId(source, destination);
+
+  return {
+    confidence,
+    autoLink,
+    score,
+    sourceTransactionId: source.id,
+    destinationTransactionId: destination.id,
+    transferGroupId,
+    reasons,
+  };
+}
+
+export function applyOwnAccountTransferMatch(
+  a: FinancialTransaction,
+  b: FinancialTransaction,
+  match: OwnTransferMatch,
+): readonly [FinancialTransaction, FinancialTransaction] {
+  if (!match.autoLink || !match.transferGroupId) {
+    throw new Error("Own-account transfer match is not eligible for automatic linking");
+  }
+
+  const category: TransactionCategoryAssignment = {
+    group: "transfers",
+    code: "transfers.internal",
+    label: "Transferencia entre cuentas propias",
+    source: "system",
+  };
+
+  const update = (transaction: FinancialTransaction): FinancialTransaction => ({
+    ...transaction,
+    kind: "transfer",
+    transferGroupId: match.transferGroupId,
+    category: transaction.category?.source === "user" ? transaction.category : category,
+  });
+
+  return [update(a), update(b)];
+}
