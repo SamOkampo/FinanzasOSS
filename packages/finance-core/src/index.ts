@@ -223,8 +223,11 @@ export interface FinancialTransaction {
   investmentActivityId?: string;
 }
 
+export type DecimalString = string;
 export type InvestmentProviderKind = "broker" | "exchange" | "wallet" | "statement_import";
+export type PortfolioStatus = "active" | "archived";
 export type AssetClass = "cash" | "stock" | "etf" | "crypto" | "bond" | "fund" | "option" | "other";
+export type AssetIdentifierKind = "isin" | "cusip" | "figi" | "ticker" | "crypto_contract" | "provider";
 export type InvestmentActivityKind =
   | "buy"
   | "sell"
@@ -235,6 +238,7 @@ export type InvestmentActivityKind =
   | "fee"
   | "tax"
   | "transfer"
+  | "corporate_action"
   | "other";
 
 export interface InvestmentProvider {
@@ -248,34 +252,47 @@ export interface Portfolio {
   tenantId: string;
   name: string;
   baseCurrency: CurrencyCode;
+  status: PortfolioStatus;
   accountIds: readonly string[];
+  createdAt?: ISODateTime;
+  updatedAt?: ISODateTime;
+}
+
+export interface AssetIdentifier {
+  kind: AssetIdentifierKind;
+  value: string;
+  namespace?: string;
 }
 
 export interface Asset {
   id: string;
+  tenantId: string;
   symbol?: string;
   name: string;
   assetClass: AssetClass;
   currency: CurrencyCode;
-  isin?: string;
+  identifiers: readonly AssetIdentifier[];
   providerAssetId?: string;
 }
 
 export interface Position {
   id: string;
+  tenantId: string;
   portfolioId: string;
   accountId: string;
   assetId: string;
-  quantity: number;
-  averageCost?: Money;
+  quantity: DecimalString;
+  averageCostPerUnit?: Money;
   marketPrice?: Money;
   marketValue?: Money;
+  costBasis?: Money;
   unrealizedPnl?: Money;
   asOf: ISODateTime;
 }
 
 export interface InvestmentActivity {
   id: string;
+  tenantId: string;
   portfolioId: string;
   accountId: string;
   externalId?: string;
@@ -283,7 +300,7 @@ export interface InvestmentActivity {
   kind: InvestmentActivityKind;
   occurredAt: ISODateTime;
   cashAmount?: Money;
-  quantity?: number;
+  quantity?: DecimalString;
   unitPrice?: Money;
   fee?: Money;
   linkedTransactionId?: string;
@@ -291,11 +308,75 @@ export interface InvestmentActivity {
 
 export interface PortfolioSnapshot {
   id: string;
+  tenantId: string;
   portfolioId: string;
   asOf: ISODateTime;
   marketValue: Money;
   cashValue?: Money;
   netContributions?: Money;
+}
+
+export function isValidDecimalString(value: string): boolean {
+  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value);
+}
+
+export function assertDecimalString(value: string, label = "decimal"): void {
+  if (!isValidDecimalString(value)) throw new Error(`${label} must be a canonical decimal string`);
+}
+
+export function assertPortfolioAccountMembership(portfolio: Portfolio, account: FinancialAccount): void {
+  assertTenantScope(portfolio.tenantId, account, "portfolio account");
+  if (!portfolio.accountIds.includes(account.id)) throw new Error("Account is not part of portfolio");
+  if (account.domain !== "investment" && account.domain !== "crypto") {
+    throw new Error("Portfolio accounts must use investment or crypto domain");
+  }
+}
+
+export function assertAssetBelongsToTenant(asset: Asset, tenantId: string): void {
+  assertTenantScope(tenantId, asset, "asset");
+  if (!asset.name.trim()) throw new Error("Asset name is required");
+  if (!asset.currency.trim()) throw new Error("Asset currency is required");
+  if (asset.identifiers.some((identifier) => !identifier.value.trim())) {
+    throw new Error("Asset identifiers cannot be empty");
+  }
+}
+
+export function assertPositionBelongsToPortfolio(
+  position: Position,
+  portfolio: Portfolio,
+  account: FinancialAccount,
+  asset: Asset,
+): void {
+  assertTenantScope(portfolio.tenantId, position, "position");
+  assertPortfolioAccountMembership(portfolio, account);
+  assertAssetBelongsToTenant(asset, portfolio.tenantId);
+  if (position.portfolioId !== portfolio.id) throw new Error("Position portfolio mismatch");
+  if (position.accountId !== account.id) throw new Error("Position account mismatch");
+  if (position.assetId !== asset.id) throw new Error("Position asset mismatch");
+  assertDecimalString(position.quantity, "Position quantity");
+}
+
+export function assertInvestmentActivityBelongsToPortfolio(
+  activity: InvestmentActivity,
+  portfolio: Portfolio,
+  account: FinancialAccount,
+  asset?: Asset,
+): void {
+  assertTenantScope(portfolio.tenantId, activity, "investment activity");
+  assertPortfolioAccountMembership(portfolio, account);
+  if (activity.portfolioId !== portfolio.id) throw new Error("Investment activity portfolio mismatch");
+  if (activity.accountId !== account.id) throw new Error("Investment activity account mismatch");
+  if (activity.quantity !== undefined) assertDecimalString(activity.quantity, "Investment activity quantity");
+  if (asset) {
+    assertAssetBelongsToTenant(asset, portfolio.tenantId);
+    if (activity.assetId !== asset.id) throw new Error("Investment activity asset mismatch");
+  }
+}
+
+export function assertPortfolioSnapshotBelongsToPortfolio(snapshot: PortfolioSnapshot, portfolio: Portfolio): void {
+  assertTenantScope(portfolio.tenantId, snapshot, "portfolio snapshot");
+  if (snapshot.portfolioId !== portfolio.id) throw new Error("Portfolio snapshot mismatch");
+  if (Number.isNaN(Date.parse(snapshot.asOf))) throw new Error("Portfolio snapshot asOf must be a valid date");
 }
 
 export interface TransferMatchCandidate {
