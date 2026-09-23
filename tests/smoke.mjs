@@ -32,7 +32,9 @@ import {
 import {
   assertConnectorSupports,
   buildConnectorCapabilityMatrix,
+  buildSyncIdempotencyKey,
   CONNECTOR_CAPABILITIES,
+  ConnectorSyncEngine,
   ConnectorError,
   connectorSupports,
   findConnectorsSupporting,
@@ -922,6 +924,172 @@ assert.throws(
   () => buildConnectorCapabilityMatrix([validConnector.descriptor, validConnector.descriptor]),
   /Duplicate connector descriptor/,
 );
+
+
+const syncContext = { tenantId: "tenant-1", connectionId: "conn-sync" };
+const syncTx1 = {
+  ...expense,
+  id: "sync-tx-1",
+  connectionId: "conn-sync",
+  accountId: "acc-sync",
+  externalId: "ext-sync-1",
+};
+const syncTx2 = {
+  ...expense,
+  id: "sync-tx-2",
+  connectionId: "conn-sync",
+  accountId: "acc-sync",
+  externalId: "ext-sync-2",
+  money: { amountMinor: 21000n, currency: "COP" },
+};
+
+assert.equal(
+  buildSyncIdempotencyKey(syncContext, "sync-test", "transactions", undefined, [syncTx1, syncTx2]),
+  buildSyncIdempotencyKey(syncContext, "sync-test", "transactions", undefined, [syncTx2, syncTx1]),
+);
+
+function createMemoryCheckpointStore() {
+  const values = new Map();
+  const saves = [];
+  const key = (ctx, resource) => `${ctx.tenantId}|${ctx.connectionId}|${resource}`;
+  return {
+    values,
+    saves,
+    async load(ctx, resource) {
+      return values.get(key(ctx, resource)) ?? null;
+    },
+    async save(ctx, checkpoint) {
+      values.set(key(ctx, checkpoint.resource), checkpoint);
+      saves.push({ ctx, checkpoint });
+    },
+  };
+}
+
+function createRecordingSink() {
+  const writes = [];
+  return {
+    writes,
+    async writeAccounts(ctx, items, metadata) {
+      writes.push({ resource: "accounts", ctx, items: [...items], metadata });
+    },
+    async writeBalances(ctx, items, metadata) {
+      writes.push({ resource: "balances", ctx, items: [...items], metadata });
+    },
+    async writeTransactions(ctx, items, metadata) {
+      writes.push({ resource: "transactions", ctx, items: [...items], metadata });
+    },
+    async writePositions(ctx, items, metadata) {
+      writes.push({ resource: "positions", ctx, items: [...items], metadata });
+    },
+    async writeInvestmentActivities(ctx, items, metadata) {
+      writes.push({ resource: "investment_activities", ctx, items: [...items], metadata });
+    },
+    async writePortfolioSnapshots(ctx, items, metadata) {
+      writes.push({ resource: "portfolio_snapshots", ctx, items: [...items], metadata });
+    },
+  };
+}
+
+const transactionCursorCalls = [];
+const pagedSyncConnector = {
+  descriptor: {
+    connectorId: "sync-test",
+    institutionId: "test-bank",
+    displayName: "Sync Test",
+    version: "0.1.0",
+    environment: "sandbox",
+    accessMode: "open_finance_oauth",
+    capabilities: ["accounts", "transactions"],
+    dataAccess: "read_only",
+  },
+  async getAccounts() {
+    return [];
+  },
+  async getTransactions(_ctx, cursor) {
+    transactionCursorCalls.push(cursor ?? "root");
+    if (cursor === undefined) return { items: [syncTx1], nextCursor: "page-2" };
+    if (cursor === "page-2") return { items: [syncTx2], checkpointCursor: "sync-2" };
+    if (cursor === "sync-2") return { items: [], checkpointCursor: "sync-2" };
+    throw new Error(`Unexpected cursor ${cursor}`);
+  },
+  async healthCheck() {
+    return "connected";
+  },
+};
+
+const checkpointStore = createMemoryCheckpointStore();
+const recordingSink = createRecordingSink();
+let syncClockTick = 0;
+const syncEngine = new ConnectorSyncEngine(
+  checkpointStore,
+  recordingSink,
+  () => `2026-09-23T18:10:0${syncClockTick++}Z`,
+);
+
+const firstSync = await syncEngine.sync(pagedSyncConnector, syncContext, {
+  resources: ["transactions"],
+  maxPagesPerResource: 10,
+});
+assert.equal(firstSync.resources[0].pages, 2);
+assert.equal(firstSync.resources[0].items, 2);
+assert.equal(firstSync.resources[0].truncated, false);
+assert.equal(firstSync.resources[0].checkpointCursor, "sync-2");
+assert.equal(recordingSink.writes.length, 2);
+assert.notEqual(
+  recordingSink.writes[0].metadata.idempotencyKey,
+  recordingSink.writes[1].metadata.idempotencyKey,
+);
+assert.equal(
+  checkpointStore.values.get("tenant-1|conn-sync|transactions").cursor,
+  "sync-2",
+);
+
+const secondSync = await syncEngine.sync(pagedSyncConnector, syncContext, {
+  resources: ["transactions"],
+});
+assert.equal(secondSync.resources[0].pages, 1);
+assert.equal(secondSync.resources[0].items, 0);
+assert.equal(recordingSink.writes.length, 2);
+assert.deepEqual(transactionCursorCalls, ["root", "page-2", "sync-2"]);
+
+const failingCheckpointStore = createMemoryCheckpointStore();
+const failingSink = createRecordingSink();
+failingSink.writeTransactions = async () => {
+  throw new Error("database unavailable");
+};
+const failingEngine = new ConnectorSyncEngine(failingCheckpointStore, failingSink, () => "2026-09-23T18:20:00Z");
+await assert.rejects(
+  () =>
+    failingEngine.sync(pagedSyncConnector, { tenantId: "tenant-1", connectionId: "conn-fail" }, {
+      resources: ["transactions"],
+    }),
+  /database unavailable/,
+);
+assert.equal(failingCheckpointStore.values.size, 0);
+
+const endlessConnector = {
+  ...pagedSyncConnector,
+  descriptor: {
+    ...pagedSyncConnector.descriptor,
+    connectorId: "endless-test",
+  },
+  async getTransactions(_ctx, cursor) {
+    const current = cursor ?? "root";
+    const next = current === "root" ? "page-1" : `page-${Number(current.split("-")[1]) + 1}`;
+    return { items: [syncTx1], nextCursor: next };
+  },
+};
+const boundedStore = createMemoryCheckpointStore();
+const boundedSink = createRecordingSink();
+const boundedEngine = new ConnectorSyncEngine(boundedStore, boundedSink, () => "2026-09-23T18:30:00Z");
+const boundedResult = await boundedEngine.sync(endlessConnector, syncContext, {
+  resources: ["transactions"],
+  maxPagesPerResource: 2,
+});
+assert.equal(boundedResult.resources[0].pages, 2);
+assert.equal(boundedResult.resources[0].truncated, true);
+assert.equal(boundedResult.resources[0].checkpointCursor, "page-2");
+assert.equal(boundedSink.writes.length, 2);
 
 assert.doesNotThrow(() => assertVaultScope({ tenantId: "tenant-1", connectionId: "conn-1" }));
 assert.throws(
