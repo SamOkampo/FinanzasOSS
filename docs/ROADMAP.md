@@ -39,7 +39,7 @@
 - [x] 4.6 Tests y fixtures
 
 ## Fase 5 — Davivienda sandbox
-- [ ] 5.1 Registro y auth sandbox
+- [x] 5.1 Registro y auth sandbox — discovery oficial documentado; parámetros/endpoints detallados permanecen fail-closed hasta verificación en catálogo autenticado
 - [ ] 5.2 Consentimiento
 - [ ] 5.3 Cuentas/saldos/transacciones
 - [ ] 5.4 Normalización/reconexión
