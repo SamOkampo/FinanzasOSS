@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "synthetic": true,
+    "provider": "bancolombia-sandbox-contract",
+    "notice": "No real customer, account, endpoint, token, scope, or financial data."
+  },
+  "configuration": {
+    "accountsEndpoint": "https://example.invalid/accounts",
+    "balancesEndpoint": "https://example.invalid/balances",
+    "transactionsEndpoint": "https://example.invalid/transactions",
+    "grantedCapabilities": ["accounts", "balances", "transactions"]
+  },
+  "errors": [
+    { "input": { "status": 401 }, "expected": { "failure": "auth", "retryable": false } },
+    { "input": { "status": 403 }, "expected": { "failure": "consent", "retryable": false } },
+    { "input": { "status": 429, "retryAfterMs": 1500 }, "expected": { "failure": "rate_limit", "retryable": true, "retryAfterMs": 1500 } },
+    { "input": { "status": 503, "providerCode": "TEMP" }, "expected": { "failure": "upstream", "retryable": true, "providerCode": "TEMP" } },
+    { "input": { "status": 400 }, "expected": { "failure": "invalid_response", "retryable": false } },
+    { "input": {}, "expected": { "failure": "configuration", "retryable": false } }
+  ]
+}

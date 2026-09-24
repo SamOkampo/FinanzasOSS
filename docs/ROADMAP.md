@@ -35,8 +35,8 @@
 - [x] 4.2 OAuth/consent sandbox
 - [x] 4.3 Cuentas/saldos — contrato/gate fail-closed listo; endpoints reales siguen bloqueados hasta verificación oficial
 - [x] 4.4 Transacciones — contrato/gate read-only fail-closed; endpoints reales siguen bloqueados hasta verificación oficial
-- [ ] 4.5 Normalización/revocación/errores
-- [ ] 4.6 Tests y fixtures
+- [x] 4.5 Normalización/revocación/errores
+- [x] 4.6 Tests y fixtures
 
 ## Fase 5 — Davivienda sandbox
 - [ ] 5.1 Registro y auth sandbox

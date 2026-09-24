@@ -2,20 +2,19 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 4.4 — Transacciones** (`3ff3ebc`).
-- Bloque implementado en PR: **Fase 4.5 — Normalización/revocación/errores**.
-- Rama: `feat/phase-4-5-normalization-revocation-errors`.
-- Próximo bloque exacto tras CI verde e integración: **Fase 4.6 — Tests y fixtures**.
+- Último bloque integrado en `main`: **Fase 4.5 — Normalización/revocación/errores** (`c55498f`).
+- Bloque implementado en PR: **Fase 4.6 — Tests y fixtures**.
+- Rama: `test/phase-4-6-fixtures`.
+- Próximo bloque exacto tras CI verde e integración: **Fase 5.1 — Davivienda: registro y auth sandbox**.
 
-## 4.5 implementado
+## 4.6 implementado
 
-- Revocación local de consentimiento con cierre inmediato de todas las capacidades Account Information.
-- El gate permanece fail-closed: un consentimiento revocado no puede leer cuentas, saldos ni transacciones.
-- Normalización provider-neutral de fallos HTTP: auth, consent, rate limit, upstream, invalid response y configuration.
-- Política de retry explícita: 401/403 no reintentables, 429/5xx reintentables; `retryAfterMs` y `providerCode` se preservan cuando existen.
-- Regresiones sin datos reales y endpoints únicamente `example.invalid`.
-- No se infieren endpoints, scopes ni productos de Bancolombia.
+- Fixture sintético versionado para el contrato Account Information de Bancolombia sandbox, sin datos reales, tokens, scopes ni endpoints productivos.
+- Cobertura fixture-driven para accounts, balances y transactions con endpoints `example.invalid`.
+- Regresión de revocación: después de revocar consentimiento ninguna capability puede leerse.
+- Tabla de fixtures para normalización de errores 401/403/429/5xx/4xx/configuration y política de retry.
+- El test de fixtures queda conectado al comando normal `npm test` y por tanto al CI.
 
 ## Gate
 
-No avanzar a 4.6 hasta que CI de este PR quede verde y se integre en `main`. Los endpoints reales de Account Information continúan bloqueados hasta verificación oficial. No habilitar producción, pagos, screen scraping ni credenciales bancarias.
+No avanzar a Fase 5 hasta que CI de este PR quede verde y 4.6 se integre en `main`. Los endpoints reales de Account Information continúan bloqueados hasta verificación oficial. No habilitar producción, pagos, screen scraping, credenciales bancarias ni datos financieros reales.
