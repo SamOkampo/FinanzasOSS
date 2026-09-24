@@ -2,19 +2,20 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 4.5 — Normalización/revocación/errores** (`c55498f`).
-- Bloque implementado en PR: **Fase 4.6 — Tests y fixtures**.
-- Rama: `test/phase-4-6-fixtures`.
-- Próximo bloque exacto tras CI verde e integración: **Fase 5.1 — Davivienda: registro y auth sandbox**.
+- Último bloque integrado en `main`: **Fase 4.6 — Tests y fixtures** (`c7a15c6`).
+- Bloque implementado en PR: **Fase 5.1 — Davivienda: registro y auth sandbox**.
+- Rama: `feat/phase-5-1-davivienda-auth-discovery`.
+- Próximo bloque exacto tras CI verde e integración: **Fase 5.2 — Consentimiento**.
 
-## 4.6 implementado
+## 5.1 implementado
 
-- Fixture sintético versionado para el contrato Account Information de Bancolombia sandbox, sin datos reales, tokens, scopes ni endpoints productivos.
-- Cobertura fixture-driven para accounts, balances y transactions con endpoints `example.invalid`.
-- Regresión de revocación: después de revocar consentimiento ninguna capability puede leerse.
-- Tabla de fixtures para normalización de errores 401/403/429/5xx/4xx/configuration y política de retry.
-- El test de fixtures queda conectado al comando normal `npm test` y por tanto al CI.
+- Discovery contrastado únicamente contra documentación pública oficial del Developer Portal Davivienda.
+- Confirmado: registro de cuenta de desarrollador, aplicación con Client ID/Client Secret, suscripción a plan y ambiente Sandbox.
+- Confirmado: Client ID separado por ambiente y certificado de pruebas distinto del certificado de producción.
+- Confirmada la existencia pública del producto `Autenticación Web`, descrito por Davivienda como integración con el widget de autenticación de Open Banking.
+- Los detalles técnicos del producto están detrás del login/registro del portal; por ello no se inventan authorization/token URLs, scopes, parámetros del widget ni endpoints de Account Information.
+- `docs/connectors/davivienda-sandbox.md` documenta la evidencia, límites y política fail-closed.
 
 ## Gate
 
-No avanzar a Fase 5 hasta que CI de este PR quede verde y 4.6 se integre en `main`. Los endpoints reales de Account Information continúan bloqueados hasta verificación oficial. No habilitar producción, pagos, screen scraping, credenciales bancarias ni datos financieros reales.
+No avanzar a 5.2 hasta que CI de este PR quede verde y 5.1 se integre en `main`. Para 5.2, cualquier consentimiento real debe derivarse de parámetros oficiales del sandbox/producto aplicable. Si no existe un producto read-only apto, el conector permanece no disponible/fail-closed; nunca sustituirlo por screen scraping. No habilitar producción, pagos, transferencias, credenciales bancarias ni datos financieros reales.
