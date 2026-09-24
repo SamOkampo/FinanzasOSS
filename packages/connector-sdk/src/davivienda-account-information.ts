@@ -57,9 +57,9 @@ export function createDaviviendaAccountInformationGate(
 
   try {
     return new AccountInformationGate({
-      accountsEndpoint: config.accountsEndpoint,
-      balancesEndpoint: config.balancesEndpoint,
-      transactionsEndpoint: config.transactionsEndpoint,
+      ...(config.accountsEndpoint !== undefined ? { accountsEndpoint: config.accountsEndpoint } : {}),
+      ...(config.balancesEndpoint !== undefined ? { balancesEndpoint: config.balancesEndpoint } : {}),
+      ...(config.transactionsEndpoint !== undefined ? { transactionsEndpoint: config.transactionsEndpoint } : {}),
       grantedCapabilities: granted,
       consentState: "active",
     });
