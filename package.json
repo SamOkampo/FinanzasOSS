@@ -9,7 +9,7 @@
     "lint": "node scripts/repo-lint.mjs",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "test": "npm run build --silent && node --import ./tests/connector-health-globals.mjs tests/smoke.mjs && node tests/read-only-policy.mjs && node tests/oauth-consent.mjs && node tests/account-information.mjs",
+    "test": "npm run build --silent && node --import ./tests/connector-health-globals.mjs tests/smoke.mjs && node tests/read-only-policy.mjs && node tests/oauth-consent.mjs && node tests/account-information.mjs && node tests/account-information-fixtures.mjs",
     "ci": "npm run lint && npm run typecheck && npm run test"
   }
 }
