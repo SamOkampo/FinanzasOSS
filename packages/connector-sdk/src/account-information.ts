@@ -1,8 +1,9 @@
-export type AccountInformationCapability = "accounts" | "balances";
+export type AccountInformationCapability = "accounts" | "balances" | "transactions";
 
 export interface AccountInformationConfig {
   accountsEndpoint?: string;
   balancesEndpoint?: string;
+  transactionsEndpoint?: string;
   grantedCapabilities: readonly AccountInformationCapability[];
 }
 
@@ -19,6 +20,16 @@ export interface ReadOnlyBalance {
   amount: string;
   kind: "available" | "current" | "other";
   asOf?: string;
+}
+
+export interface ReadOnlyTransaction {
+  externalId: string;
+  accountExternalId: string;
+  amount: string;
+  currency: string;
+  bookedAt: string;
+  description?: string;
+  status?: "pending" | "booked";
 }
 
 export class AccountInformationUnavailableError extends Error {
@@ -47,16 +58,22 @@ function verifiedHttpsEndpoint(value: string | undefined): URL | undefined {
 export class AccountInformationGate {
   readonly accountsEndpoint: URL | undefined;
   readonly balancesEndpoint: URL | undefined;
+  readonly transactionsEndpoint: URL | undefined;
   private readonly granted: ReadonlySet<AccountInformationCapability>;
 
   constructor(config: AccountInformationConfig) {
     this.accountsEndpoint = verifiedHttpsEndpoint(config.accountsEndpoint);
     this.balancesEndpoint = verifiedHttpsEndpoint(config.balancesEndpoint);
+    this.transactionsEndpoint = verifiedHttpsEndpoint(config.transactionsEndpoint);
     this.granted = new Set(config.grantedCapabilities);
   }
 
   endpointFor(capability: AccountInformationCapability): URL {
-    const endpoint = capability === "accounts" ? this.accountsEndpoint : this.balancesEndpoint;
+    const endpoint = capability === "accounts"
+      ? this.accountsEndpoint
+      : capability === "balances"
+        ? this.balancesEndpoint
+        : this.transactionsEndpoint;
     if (!this.granted.has(capability) || !endpoint) {
       throw new AccountInformationUnavailableError(capability);
     }
