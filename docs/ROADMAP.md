@@ -40,9 +40,9 @@
 
 ## Fase 5 — Davivienda sandbox
 - [x] 5.1 Registro y auth sandbox — discovery oficial documentado; parámetros/endpoints detallados permanecen fail-closed hasta verificación en catálogo autenticado
-- [ ] 5.2 Consentimiento
+- [x] 5.2 Consentimiento — gate fail-closed integrado; parámetros reales permanecen bloqueados hasta verificación oficial
 - [x] 5.3 Cuentas/saldos/transacciones — gate read-only fail-closed integrado; endpoints reales permanecen bloqueados hasta verificación oficial
-- [ ] 5.4 Normalización/reconexión
+- [x] 5.4 Normalización/reconexión — errores provider-neutral y recuperación segura integrados
 - [ ] 5.5 Tests y fixtures
 
 ## Fase 6 — Nequi + Daviplata

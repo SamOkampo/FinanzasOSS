@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "synthetic": true,
+    "provider": "davivienda-sandbox-contract",
+    "notice": "No real customer, account, endpoint, token, scope, credential, certificate, or financial data."
+  },
+  "configuration": {
+    "consentVerified": true,
+    "accountsEndpoint": "https://sandbox.example.invalid/accounts",
+    "balancesEndpoint": "https://sandbox.example.invalid/balances",
+    "transactionsEndpoint": "https://sandbox.example.invalid/transactions",
+    "grantedCapabilities": ["accounts", "balances", "transactions"]
+  },
+  "recovery": [
+    { "input": { "status": 401, "providerCode": "synthetic-auth" }, "failure": "auth", "health": "auth_required", "action": "reauthorize", "automatic": false },
+    { "input": { "status": 403 }, "failure": "consent", "health": "consent_expired", "action": "renew_consent", "automatic": false },
+    { "input": { "status": 429, "retryAfterMs": 2500 }, "failure": "rate_limit", "health": "degraded", "action": "retry", "automatic": true, "retryAfterMs": 2500 },
+    { "input": { "status": 503 }, "failure": "upstream", "health": "api_down", "action": "retry", "automatic": true },
+    { "input": { "status": 422 }, "failure": "invalid_response", "automatic": false },
+    { "input": {}, "failure": "configuration", "automatic": false }
+  ]
+}
