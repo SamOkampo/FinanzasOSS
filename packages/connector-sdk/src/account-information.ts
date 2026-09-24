@@ -45,8 +45,8 @@ function verifiedHttpsEndpoint(value: string | undefined): URL | undefined {
  * fails closed instead of guessing provider URLs or OAuth scopes.
  */
 export class AccountInformationGate {
-  readonly accountsEndpoint?: URL;
-  readonly balancesEndpoint?: URL;
+  readonly accountsEndpoint: URL | undefined;
+  readonly balancesEndpoint: URL | undefined;
   private readonly granted: ReadonlySet<AccountInformationCapability>;
 
   constructor(config: AccountInformationConfig) {
