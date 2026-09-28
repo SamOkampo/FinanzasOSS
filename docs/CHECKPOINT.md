@@ -2,11 +2,11 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 5.5 — Tests y fixtures** (`8ea4356`).
-- Bloque completado en esta rama: **Fase 6.1 — Discovery Open Finance y acceso como tercero para Nequi + DaviPlata**.
-- Próximo bloque exacto tras CI verde e integración: **Fase 6.2 — Nequi adapter**.
+- Último bloque integrado en `main`: **Fase 6.1 — Discovery Open Finance y acceso como tercero para Nequi + DaviPlata** (`640c961`).
+- Fase 6.1 integrada correctamente mediante PR #29 con CI verde.
+- Próximo bloque exacto: **Fase 6.2 — Nequi adapter**.
 
-## 6.1 completado
+## 6.1 integrado
 
 - Discovery oficial documentado para Nequi y DaviPlata.
 - Las superficies públicas verificadas permanecen orientadas principalmente a pagos/negocios y no se tratan como acceso de account-information del consumidor.
@@ -16,4 +16,4 @@
 
 ## Gate siguiente
 
-No iniciar 6.2 hasta que esta rama pase CI y 6.1 se integre en `main`. Mantener producción, pagos, transferencias, trading, retiros, credenciales bancarias y datos financieros reales fuera de alcance.
+Fase 6.1 está cerrada. El siguiente bloque permitido es únicamente **6.2 — Nequi adapter**. Mantener producción, pagos, transferencias, trading, retiros, credenciales bancarias y datos financieros reales fuera de alcance.
