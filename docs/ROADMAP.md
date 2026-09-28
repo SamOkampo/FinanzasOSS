@@ -46,7 +46,7 @@
 - [x] 5.5 Tests y fixtures
 
 ## Fase 6 — Nequi + Daviplata
-- [ ] 6.1 Discovery Open Finance y acceso como tercero
+- [x] 6.1 Discovery Open Finance y acceso como tercero
 - [ ] 6.2 Nequi adapter
 - [ ] 6.3 Daviplata adapter
 - [ ] 6.4 Reconciliación PSE/transferencias internas
