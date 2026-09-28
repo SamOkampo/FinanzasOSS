@@ -55,5 +55,8 @@ export function daviviendaRecoveryDecision(
     },
   );
   const health = healthReportFromConnectorError(error, checkedAt);
-  return { normalized, health, recovery: recoveryPlanForHealth(health) };
+  const recovery = !normalized.retryable && health.state === "degraded"
+    ? { action: "reconfigure" as const, automatic: false, userActionRequired: true }
+    : recoveryPlanForHealth(health);
+  return { normalized, health, recovery };
 }
