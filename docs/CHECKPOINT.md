@@ -3,17 +3,17 @@
 ## Estado actual
 
 - Último bloque integrado en `main`: **Fase 5.5 — Tests y fixtures** (`8ea4356`).
-- PR #27 integrado correctamente mediante squash.
-- Próximo bloque exacto: **Fase 6.1 — Discovery Open Finance y acceso como tercero para Nequi + Daviplata**.
+- Bloque completado en esta rama: **Fase 6.1 — Discovery Open Finance y acceso como tercero para Nequi + DaviPlata**.
+- Próximo bloque exacto tras CI verde e integración: **Fase 6.2 — Nequi adapter**.
 
-## 5.5 integrado
+## 6.1 completado
 
-- Fixture Davivienda completamente sintético para accounts/balances/transactions; todos los endpoints usan `sandbox.example.invalid`.
-- El fixture declara explícitamente que no contiene clientes, cuentas, tokens, scopes, credenciales, certificados ni datos financieros reales.
-- Regresión verifica capabilities read-only, revocación fail-closed y decisiones de recuperación para auth, consent, rate-limit, upstream, invalid-response y configuration.
-- La regresión queda incluida en el comando normal `npm test`/CI.
-- ROADMAP mantiene 5.1–5.5 cerrados.
+- Discovery oficial documentado para Nequi y DaviPlata.
+- Las superficies públicas verificadas permanecen orientadas principalmente a pagos/negocios y no se tratan como acceso de account-information del consumidor.
+- La arquitectura permanece fail-closed: no se inventan endpoints, scopes, certificados ni parámetros de Open Finance.
+- No se usa screen scraping ni se reutilizan APIs de pagos como sustituto de agregación autorizada.
+- 6.2 y 6.3 deben permanecer `unavailable` por defecto hasta verificar una ruta oficial aplicable de account-information.
 
 ## Gate siguiente
 
-Fase 5 está cerrada. El siguiente bloque permitido es únicamente **6.1 — Discovery Open Finance y acceso como tercero para Nequi + Daviplata**. Mantener enfoque fail-closed: no inventar endpoints/scopes/certificados; no usar screen scraping; no habilitar producción, pagos, transferencias, trading, retiros, credenciales bancarias ni datos financieros reales.
+No iniciar 6.2 hasta que esta rama pase CI y 6.1 se integre en `main`. Mantener producción, pagos, transferencias, trading, retiros, credenciales bancarias y datos financieros reales fuera de alcance.
