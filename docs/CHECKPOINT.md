@@ -3,17 +3,18 @@
 ## Estado actual
 
 - Último bloque integrado en `main`: **Fase 6.1 — Discovery Open Finance y acceso como tercero para Nequi + DaviPlata** (`640c961`).
-- Fase 6.1 integrada correctamente mediante PR #29 con CI verde.
-- Próximo bloque exacto: **Fase 6.2 — Nequi adapter**.
+- Bloque completado en esta rama: **Fase 6.2 — Nequi adapter**.
+- Próximo bloque exacto tras CI verde e integración: **Fase 6.3 — DaviPlata adapter**.
 
-## 6.1 integrado
+## 6.2 completado
 
-- Discovery oficial documentado para Nequi y DaviPlata.
-- Las superficies públicas verificadas permanecen orientadas principalmente a pagos/negocios y no se tratan como acceso de account-information del consumidor.
-- La arquitectura permanece fail-closed: no se inventan endpoints, scopes, certificados ni parámetros de Open Finance.
-- No se usa screen scraping ni se reutilizan APIs de pagos como sustituto de agregación autorizada.
-- 6.2 y 6.3 deben permanecer `unavailable` por defecto hasta verificar una ruta oficial aplicable de account-information.
+- Adapter Nequi de Account Information implementado con comportamiento read-only y fail-closed.
+- Requiere `officialRouteVerified === true`, consentimiento verificado, capabilities explícitas y endpoint HTTPS para cada capability concedida.
+- Si falta una ruta oficial verificable, consentimiento, capability o endpoint, el adapter rechaza la configuración.
+- La revocación del consentimiento corta inmediatamente accounts/balances/transactions.
+- Las pruebas usan exclusivamente `sandbox.example.invalid`; no contienen credenciales, datos financieros reales ni endpoints productivos.
+- La regresión de Nequi está incluida en el comando normal `npm test`/CI.
 
 ## Gate siguiente
 
-Fase 6.1 está cerrada. El siguiente bloque permitido es únicamente **6.2 — Nequi adapter**. Mantener producción, pagos, transferencias, trading, retiros, credenciales bancarias y datos financieros reales fuera de alcance.
+No iniciar 6.3 hasta que esta rama pase CI y 6.2 se integre en `main`. Mantener Nequi fail-closed hasta verificar una ruta oficial aplicable de account-information. No habilitar producción, pagos, transferencias, trading, retiros, credenciales bancarias ni datos financieros reales.
