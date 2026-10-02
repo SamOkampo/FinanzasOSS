@@ -49,7 +49,7 @@
 - [x] 6.1 Discovery Open Finance y acceso como tercero
 - [x] 6.2 Nequi adapter
 - [x] 6.3 Daviplata adapter
-- [ ] 6.4 Reconciliación PSE/transferencias internas
+- [x] 6.4 Reconciliación PSE/transferencias internas
 - [ ] 6.5 Tests
 
 ## Fase 7 — Cobertura bancaria Colombia
