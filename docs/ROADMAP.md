@@ -50,7 +50,7 @@
 - [x] 6.2 Nequi adapter
 - [x] 6.3 Daviplata adapter
 - [x] 6.4 Reconciliación PSE/transferencias internas
-- [ ] 6.5 Tests
+- [x] 6.5 Tests
 
 ## Fase 7 — Cobertura bancaria Colombia
 - [ ] 7.1 Matriz API oficial/agregador/import por institución
