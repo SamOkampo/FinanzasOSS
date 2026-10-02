@@ -900,6 +900,7 @@ export type OwnTransferConfidence = "high" | "medium" | "low" | "none";
 
 export interface OwnTransferMatchOptions {
   dateToleranceDays?: number;
+  pseReferences?: Readonly<Record<string, string>>;
 }
 
 export interface OwnTransferMatch {
@@ -909,7 +910,58 @@ export interface OwnTransferMatch {
   sourceTransactionId?: string;
   destinationTransactionId?: string;
   transferGroupId?: string;
+  pseReference?: string;
   reasons: readonly string[];
+}
+
+interface PseTransferSignal {
+  score: number;
+  explicitSignals: number;
+  conflicting: boolean;
+  reference?: string;
+  reasons: string[];
+}
+
+function normalizePseReference(value: string | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return normalized.length >= 6 ? normalized : null;
+}
+
+function pseTransferSignalScore(
+  a: FinancialTransaction,
+  b: FinancialTransaction,
+  references: Readonly<Record<string, string>> | undefined,
+): PseTransferSignal {
+  const refA = normalizePseReference(references?.[a.id]);
+  const refB = normalizePseReference(references?.[b.id]);
+
+  if (!refA && !refB) {
+    return { score: 0, explicitSignals: 0, conflicting: false, reasons: [] };
+  }
+  if (!refA || !refB) {
+    return {
+      score: 0,
+      explicitSignals: 0,
+      conflicting: false,
+      reasons: ["PSE reference is present on only one side"],
+    };
+  }
+  if (refA !== refB) {
+    return {
+      score: 0,
+      explicitSignals: 0,
+      conflicting: true,
+      reasons: ["PSE references differ"],
+    };
+  }
+  return {
+    score: 15,
+    explicitSignals: 1,
+    conflicting: false,
+    reference: refA,
+    reasons: ["matching PSE reference"],
+  };
 }
 
 function ownTransferSignalScore(transaction: FinancialTransaction): { score: number; explicitSignals: number; reasons: string[] } {
@@ -971,6 +1023,11 @@ export function evaluateOwnAccountTransfer(
     return { confidence: "none", autoLink: false, score: 0, reasons: ["amount or currency differ"] };
   }
 
+  const pseSignal = pseTransferSignalScore(a, b, options.pseReferences);
+  if (pseSignal.conflicting) {
+    return { confidence: "none", autoLink: false, score: 0, reasons: pseSignal.reasons };
+  }
+
   const source = a.direction === "debit" ? a : b;
   const destination = a.direction === "credit" ? a : b;
   const tolerance = Math.max(0, options.dateToleranceDays ?? 2);
@@ -996,13 +1053,13 @@ export function evaluateOwnAccountTransfer(
 
   const signalA = ownTransferSignalScore(a);
   const signalB = ownTransferSignalScore(b);
-  score += signalA.score + signalB.score;
-  reasons.push(...signalA.reasons, ...signalB.reasons);
+  score += signalA.score + signalB.score + pseSignal.score;
+  reasons.push(...signalA.reasons, ...signalB.reasons, ...pseSignal.reasons);
 
   score = Math.min(99, score);
   const confidence: OwnTransferConfidence =
     score >= 85 ? "high" : score >= 70 ? "medium" : score >= 60 ? "low" : "none";
-  const explicitSignals = signalA.explicitSignals + signalB.explicitSignals;
+  const explicitSignals = signalA.explicitSignals + signalB.explicitSignals + pseSignal.explicitSignals;
   const autoLink = confidence === "high" && explicitSignals >= 2;
   const transferGroupId = confidence === "none" ? undefined : buildTransferGroupId(source, destination);
 
@@ -1013,6 +1070,7 @@ export function evaluateOwnAccountTransfer(
     sourceTransactionId: source.id,
     destinationTransactionId: destination.id,
     ...(transferGroupId ? { transferGroupId } : {}),
+    ...(pseSignal.reference ? { pseReference: pseSignal.reference } : {}),
     reasons,
   };
 }
