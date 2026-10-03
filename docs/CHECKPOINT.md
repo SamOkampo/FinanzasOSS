@@ -2,12 +2,12 @@
 
 ## Estado actual
 
-- Último bloque preparado para integración: **Fase 7.1 — Matriz API oficial/agregador/import por institución**.
+- Último bloque integrado en `main`: **Fase 7.1 — Matriz API oficial/agregador/import por institución** (`62504f7`, PR #38).
 - **Fase 6 — Nequi + DaviPlata: cerrada e integrada con CI verde.**
-- **Fase 7.1:** matriz de cobertura Colombia completada con clasificación conservadora por institución y gate fail-closed.
-- Próximo bloque permitido tras integrar 7.1 con CI verde: **Fase 7.2 — Lulo Bank**.
+- **Fase 7.1 — Cobertura bancaria Colombia: cerrada e integrada con CI verde.**
+- Próximo bloque exacto: **Fase 7.2 — Lulo Bank**.
 
-## Fase 7.1
+## Fase 7.1 integrada
 
 - La matriz vive en `docs/connectors/colombia-coverage-matrix.md`.
 - `official_account_info_route` distingue `verified`, `enterprise_only` y `not_verified`; una marca Open Finance por sí sola no habilita una ruta.
@@ -17,7 +17,8 @@
 - Lulo, Pibank, RappiPay, Nu, Banco de Bogotá/Aval, Scotiabank Colpatria, Caja Social y Falabella conservan fallbacks de importación documentados cuando existe evidencia oficial.
 - Itaú conserva únicamente evidencia de importación empresarial; no se extrapola a consumidor.
 - No se codifican endpoints, scopes, certificados, credenciales ni acceso productivo; no hay screen scraping.
+- Cierre validado mediante PR #38 con CI verde sobre el head final antes del merge.
 
 ## Gate siguiente
 
-Integrar Fase 7.1 únicamente con CI verde. Después, el siguiente bloque exacto es **7.2 — Lulo Bank**. Mantener consentimiento primero, read-only/fail-closed y fuentes oficiales. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
+El siguiente bloque permitido es únicamente **7.2 — Lulo Bank**. Verificar fuentes oficiales actuales antes de habilitar cualquier ruta; mantener consentimiento primero y `fail_closed` cuando no exista Account Information aplicable verificable. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
