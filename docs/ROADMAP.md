@@ -53,7 +53,7 @@
 - [x] 6.5 Tests
 
 ## Fase 7 — Cobertura bancaria Colombia
-- [ ] 7.1 Matriz API oficial/agregador/import por institución
+- [x] 7.1 Matriz API oficial/agregador/import por institución
 - [ ] 7.2 Lulo Bank
 - [ ] 7.3 Pibank
 - [ ] 7.4 RappiPay/RappiCard según acceso disponible
