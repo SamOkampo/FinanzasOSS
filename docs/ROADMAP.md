@@ -58,9 +58,9 @@
 - [x] 7.3 Pibank
 - [x] 7.4 RappiPay/RappiCard según acceso disponible
 - [x] 7.5 Nu Colombia
-- [ ] 7.6 BBVA Colombia
-- [ ] 7.7 Banco de Bogotá / Grupo Aval
-- [ ] 7.8 Scotiabank Colpatria / Itaú / Caja Social / Falabella y cobertura extendida
+- [x] 7.6 BBVA Colombia
+- [x] 7.7 Banco de Bogotá / Grupo Aval
+- [x] 7.8 Scotiabank Colpatria / Itaú / Caja Social / Falabella y cobertura extendida
 
 ## Fase 8 — Universal Import Engine
 - [ ] 8.1 CSV/XLSX/OFX
