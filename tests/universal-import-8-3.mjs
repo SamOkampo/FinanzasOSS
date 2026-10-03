@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { detectImportFormat, detectInstitution, ImportDetectionError } from "../dist/packages/import-engine/src/detection.js";
+import { detectImportFormat, ImportDetectionError } from "../dist/packages/import-engine/src/detection.js";
+import { detectInstitution } from "../dist/packages/import-engine/src/institution-detection.js";
 
 assert.equal(detectImportFormat({ fileName: "a.pdf", leadingBytes: [0x25,0x50,0x44,0x46] }).confidence, "signature_verified");
 assert.equal(detectImportFormat({ fileName: "a.xlsx", leadingBytes: [0x50,0x4b,0x03,0x04] }).confidence, "signature_verified");
