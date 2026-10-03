@@ -2,29 +2,21 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 7.5 — Nu Colombia** (`c6dd81d`, PR #46).
-- **Fase 7.1 — Matriz API oficial/agregador/import por institución: cerrada e integrada con CI verde.**
-- **Fase 7.2 — Lulo Bank: cerrada e integrada con CI verde.**
-- **Fase 7.3 — Pibank: cerrada e integrada con CI verde.**
-- **Fase 7.4 — RappiPay/RappiCard: cerrada e integrada con CI verde.**
-- **Fase 7.5 — Nu Colombia: cerrada e integrada con CI verde.**
-- Próximo bloque exacto: **Fase 7.6 — BBVA Colombia**.
+- **Fase 7 — Cobertura bancaria Colombia: CERRADA e integrada.**
+- 7.1–7.8 están integradas con regresión CI verde.
+- Fase 7.6 BBVA Colombia: PR #48, CI #111 verde, merge `8e51ecd`.
+- Fase 7.7 Banco de Bogotá / Grupo Aval: PR #49, CI #113 verde, merge `5f10019`.
+- Fase 7.8 cobertura extendida: PR #50, CI #115 verde, merge `43522e8`.
+- Próximo bloque exacto permitido: **Fase 8.1 — CSV/XLSX/OFX**.
 
-## Fase 7.5 integrada
+## Cierre Fase 7
 
-- El alcance es **Cuenta de ahorros Nu / Cuenta Nu** bajo **Nu Colombia Compañía de Financiamiento S.A.**.
-- Evidencia oficial revalidada el 2026-10-02 confirma que el cliente solicita el extracto desde App Nu y lo recibe por correo en **PDF**.
-- No se verificó una ruta de Account Information personal consumible por terceros; `official_account_info_route` permanece `not_verified`.
-- El contenido educativo oficial de Open Finance no se interpreta como autorización ni como evidencia de una API utilizable.
-- `aggregator_route` permanece `not_verified`.
-- El modo recomendado queda `statement_import` en entorno `local_import`.
-- `statementFormat = pdf` queda verificado oficialmente y `parserAvailable = false` hasta Fase 8.
-- `packages/connector-sdk/src/nu-colombia.ts` registra el perfil y un gate fail-closed.
-- El gate exige ruta oficial verificada + consentimiento + capabilities + endpoints HTTPS; sin esas pruebas falla cerrado.
-- Parser PDF aislado, decryption/password handling, preview, provenance e idempotencia pertenecen a Fase 8 y no se adelantan aquí.
-- No hay endpoints, scopes, certificados, credenciales, datos reales, screen scraping ni acceso productivo.
-- Cierre validado mediante PR #46 con CI #107 verde sobre el head final antes del merge.
+La cobertura bancaria conserva un modelo consentimiento-primero y fail-closed. Ninguna página de banca digital, evidencia empresarial/tesorería o material educativo se promueve automáticamente a una ruta personal de Account Information para terceros.
+
+BBVA mantiene evidencia empresarial privada separada del consumidor. Banco de Bogotá mantiene fallback local de extractos sin inferir API personal. En cobertura extendida, Banco Caja Social y Banco Falabella tienen evidencia oficial de extractos de consumidor; evidencia Corporate de Itaú queda enterprise-only y Scotiabank Colpatria permanece not_verified donde no se obtuvo evidencia oficial actual suficiente.
+
+No se inventaron endpoints, scopes, OAuth, certificados ni soporte de agregador. No se implementó screen scraping ni se almacenan contraseñas de documentos. Los documentos son input no confiable. Parsing universal, detección de formato, preview, provenance e idempotencia comienzan en Fase 8.
 
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **7.6 — BBVA Colombia**. Revalidar API Market y canales oficiales; mantener `enterprise_only` para rutas privadas/tesorería y no promover evidencia empresarial a Account Information personal. Mantener consentimiento primero y `fail_closed` cuando no exista una ruta aplicable verificable. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
+El siguiente bloque permitido es únicamente **8.1 — CSV/XLSX/OFX**. No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
