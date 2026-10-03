@@ -57,7 +57,7 @@
 - [x] 7.2 Lulo Bank
 - [x] 7.3 Pibank
 - [x] 7.4 RappiPay/RappiCard según acceso disponible
-- [ ] 7.5 Nu Colombia
+- [x] 7.5 Nu Colombia
 - [ ] 7.6 BBVA Colombia
 - [ ] 7.7 Banco de Bogotá / Grupo Aval
 - [ ] 7.8 Scotiabank Colpatria / Itaú / Caja Social / Falabella y cobertura extendida
