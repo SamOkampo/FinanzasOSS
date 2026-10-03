@@ -2,26 +2,24 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 7.3 — Pibank** (`e44d9ce`, PR #42).
-- **Fase 7.1 — Matriz API oficial/agregador/import por institución: cerrada e integrada con CI verde.**
-- **Fase 7.2 — Lulo Bank: cerrada e integrada con CI verde.**
-- **Fase 7.3 — Pibank: cerrada e integrada con CI verde.**
-- Próximo bloque exacto: **Fase 7.4 — RappiPay/RappiCard según acceso disponible**.
+- Último bloque integrado en `main` antes de este PR: **Fase 7.3 — Pibank** (`e44d9ce`, PR #42), con reconciliación documental posterior en `b90d50a` (PR #43).
+- **Fase 7.4 — RappiPay/RappiCard:** implementación preparada en esta rama; cerrar únicamente al integrar este PR con CI verde.
+- Próximo bloque exacto después del merge verde de 7.4: **Fase 7.5 — Nu Colombia**.
 
-## Fase 7.3 integrada
+## Fase 7.4 — RappiPay / RappiCard
 
-- Pibank se trata como marca digital de Banco Pichincha S.A.; el alcance de este bloque es únicamente **Cuenta Pibank**.
-- El reglamento oficial revalidado el 2026-10-02 confirma extractos mensuales y acceso por canales oficiales.
-- No se verificó una ruta de Account Information personal consumible por terceros; `official_account_info_route` permanece `not_verified`.
-- `aggregator_route` permanece `not_verified`; no se infiere soporte institucional.
-- El modo recomendado queda `statement_import` en entorno `local_import`.
-- El formato exacto del extracto queda `not_verified`; no se asume PDF/CSV/XLSX/OFX.
-- `packages/connector-sdk/src/pibank.ts` registra el perfil y mantiene `parserAvailable = false` hasta Fase 8.
-- El gate de Account Information exige ruta oficial verificada + consentimiento + capabilities + endpoints HTTPS; sin esas pruebas falla cerrado.
+- **RappiCuenta** se modela bajo **RappiPay Compañía de Financiamiento S.A.**.
+- **RappiCard** se modela por separado como tarjeta de crédito emitida por **Banco Davivienda S.A.**.
+- Evidencia oficial revalidada el 2026-10-02 confirma estados de cuenta/extractos mensuales para ambos productos mediante sus canales oficiales.
+- No se verificó una ruta de Account Information personal consumible por terceros para ninguno; ambos mantienen `official_account_info_route = not_verified`.
+- `aggregator_route` permanece `not_verified` para ambos; no se infiere soporte institucional.
+- El modo recomendado para ambos queda `statement_import` en entorno `local_import`.
+- El formato exacto del archivo queda `not_verified`; no se asume PDF/CSV/XLSX/OFX.
+- `packages/connector-sdk/src/rappipay.ts` registra perfiles separados y un gate consciente del producto.
+- El gate exige ruta oficial verificada + consentimiento + capabilities + endpoints HTTPS; sin esas pruebas falla cerrado.
 - Parser universal, detección de formato, preview, provenance e idempotencia pertenecen a Fase 8 y no se adelantan aquí.
 - No hay endpoints, scopes, certificados, credenciales, datos reales, screen scraping ni acceso productivo.
-- Cierre validado mediante PR #42 con CI #99 verde sobre el head final antes del merge.
 
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **7.4 — RappiPay/RappiCard según acceso disponible**. Verificar fuentes oficiales actuales antes de habilitar cualquier ruta; mantener consentimiento primero y `fail_closed` cuando no exista Account Information aplicable verificable. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
+Integrar 7.4 únicamente con CI verde. Después el siguiente bloque permitido es **7.5 — Nu Colombia**. Mantener consentimiento primero, read-only/fail-closed y fuentes oficiales. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
