@@ -2,22 +2,22 @@
 
 ## Estado actual
 
-- Último bloque integrado en `main`: **Fase 6.5 — Tests y auditoría de cierre de Fase 6** (`1ea139f`).
+- Último bloque preparado para integración: **Fase 7.1 — Matriz API oficial/agregador/import por institución**.
 - **Fase 6 — Nequi + DaviPlata: cerrada e integrada con CI verde.**
-- Próximo bloque exacto: **Fase 7.1 — Matriz API oficial/agregador/import por institución**.
+- **Fase 7.1:** matriz de cobertura Colombia completada con clasificación conservadora por institución y gate fail-closed.
+- Próximo bloque permitido tras integrar 7.1 con CI verde: **Fase 7.2 — Lulo Bank**.
 
-## Fase 6 integrada
+## Fase 7.1
 
-- 6.1 Discovery Open Finance y acceso como tercero: cerrado con decisión fail-closed donde no existe ruta oficial verificable de Account Information.
-- 6.2 Nequi adapter: read-only, consentimiento primero y sin endpoints/scopes inventados.
-- 6.3 DaviPlata adapter: read-only, consentimiento primero y sin endpoints/scopes inventados.
-- 6.4 Reconciliación PSE/transferencias internas: reutiliza el matcher de cuentas propias, PSE no auto-enlaza por sí solo y referencias contradictorias fallan cerrado.
-- 6.5 Tests y auditoría: regresiones individuales + auditoría transversal Nequi/DaviPlata/PSE incluidas en `npm test`/CI.
-- La revocación de consentimiento corta inmediatamente accounts/balances/transactions en ambos adapters.
-- `investment_transfer` permanece separado de gasto y del reconciliador PSE/interno.
-- Todos los endpoints usados por pruebas son sintéticos bajo `sandbox.example.invalid`; no hay credenciales, datos reales, screen scraping ni producción bancaria.
-- Cierre validado mediante PR #36 con CI #86 verde.
+- La matriz vive en `docs/connectors/colombia-coverage-matrix.md`.
+- `official_account_info_route` distingue `verified`, `enterprise_only` y `not_verified`; una marca Open Finance por sí sola no habilita una ruta.
+- Las rutas de agregadores permanecen `not_verified` salvo evidencia institucional y consentimiento aplicable.
+- Cuando no existe Account Information aplicable verificada, se prefiere importación de extractos oficiales; si tampoco existe evidencia suficiente, el acceso falla cerrado.
+- BBVA Colombia se mantiene `enterprise_only` para la evidencia API empresarial/tesorería disponible; no se promueve a agregación personal.
+- Lulo, Pibank, RappiPay, Nu, Banco de Bogotá/Aval, Scotiabank Colpatria, Caja Social y Falabella conservan fallbacks de importación documentados cuando existe evidencia oficial.
+- Itaú conserva únicamente evidencia de importación empresarial; no se extrapola a consumidor.
+- No se codifican endpoints, scopes, certificados, credenciales ni acceso productivo; no hay screen scraping.
 
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **7.1 — Matriz API oficial/agregador/import por institución**. Las rutas reales de Nequi/DaviPlata permanecen fail-closed hasta verificación oficial. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys ni datos financieros reales.
+Integrar Fase 7.1 únicamente con CI verde. Después, el siguiente bloque exacto es **7.2 — Lulo Bank**. Mantener consentimiento primero, read-only/fail-closed y fuentes oficiales. No habilitar producción, pagos reales, transferencias reales, trading, retiros, secretos, private keys, datos financieros reales ni costes sin autorización explícita.
