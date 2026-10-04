@@ -63,10 +63,10 @@
 - [x] 7.8 Scotiabank Colpatria / Itaú / Caja Social / Falabella y cobertura extendida
 
 ## Fase 8 — Universal Import Engine
-- [ ] 8.1 CSV/XLSX/OFX
-- [ ] 8.2 PDF en parser aislado
-- [ ] 8.3 Detección de institución/formato
-- [ ] 8.4 Mapeo y preview antes de persistir
+- [x] 8.1 CSV/XLSX/OFX
+- [x] 8.2 PDF en parser aislado
+- [x] 8.3 Detección de institución/formato
+- [x] 8.4 Mapeo y preview antes de persistir
 - [ ] 8.5 Imports incrementales e idempotentes
 - [ ] 8.6 Reconciliación con API/Gmail sin duplicados
 
