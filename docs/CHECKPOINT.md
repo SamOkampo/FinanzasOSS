@@ -3,20 +3,28 @@
 ## Estado actual
 
 - **Fase 7 — Cobertura bancaria Colombia: CERRADA e integrada.**
-- 7.1–7.8 están integradas con regresión CI verde.
-- Fase 7.6 BBVA Colombia: PR #48, CI #111 verde, merge `8e51ecd`.
-- Fase 7.7 Banco de Bogotá / Grupo Aval: PR #49, CI #113 verde, merge `5f10019`.
-- Fase 7.8 cobertura extendida: PR #50, CI #115 verde, merge `43522e8`.
-- Próximo bloque exacto permitido: **Fase 8.1 — CSV/XLSX/OFX**.
+- **Fase 8 — Universal Import Engine: 8.1–8.4 cerradas e integradas con CI verde.**
+- 8.1 CSV/XLSX/OFX: PR #52, CI #119 verde, merge `f380080`.
+- 8.2 PDF en parser aislado: PR #53, CI #121 verde, merge `2b4616b`.
+- 8.3 detección de institución/formato: PR #54, CI #124 verde, merge `7aae95d`.
+- 8.4 mapeo + preview antes de persistir: PR #55, CI #126 verde, merge `3abd811`.
+- Próximo bloque exacto permitido: **Fase 8.5 — imports incrementales e idempotentes**.
 
-## Cierre Fase 7
+## Fase 8.1–8.4 integrada
 
-La cobertura bancaria conserva un modelo consentimiento-primero y fail-closed. Ninguna página de banca digital, evidencia empresarial/tesorería o material educativo se promueve automáticamente a una ruta personal de Account Information para terceros.
+El Universal Import Engine ya dispone de frontera segura para CSV/XLSX/OFX, PDF aislado, detección conservadora de formato/institución y mapeo con preview previo a persistencia.
 
-BBVA mantiene evidencia empresarial privada separada del consumidor. Banco de Bogotá mantiene fallback local de extractos sin inferir API personal. En cobertura extendida, Banco Caja Social y Banco Falabella tienen evidencia oficial de extractos de consumidor; evidencia Corporate de Itaú queda enterprise-only y Scotiabank Colpatria permanece not_verified donde no se obtuvo evidencia oficial actual suficiente.
-
-No se inventaron endpoints, scopes, OAuth, certificados ni soporte de agregador. No se implementó screen scraping ni se almacenan contraseñas de documentos. Los documentos son input no confiable. Parsing universal, detección de formato, preview, provenance e idempotencia comienzan en Fase 8.
+Reglas vigentes:
+- todos los archivos importados se tratan como input no confiable;
+- PDF se procesa bajo contrato aislado sin red, active content ni persistencia de contraseña;
+- PDF/XLSX/OFX fallan cerrados cuando la firma contradice la extensión;
+- la detección institucional es conservadora y documentos ambiguos no se adjudican a una entidad;
+- el preview de 8.4 mantiene `persistenceAllowed=false` y `requiresUserConfirmation=true`;
+- no se evalúan fórmulas/macros ni contenido activo;
+- no se crean todavía transacciones persistentes desde el preview.
 
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **8.1 — CSV/XLSX/OFX**. No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
+El siguiente bloque permitido es únicamente **8.5 — imports incrementales e idempotentes**. La persistencia debe conservar provenance, evitar duplicados y ser idempotente. 8.6 reconciliación con API/Gmail no debe adelantarse antes de cerrar 8.5.
+
+No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
