@@ -67,8 +67,8 @@
 - [x] 8.2 PDF en parser aislado
 - [x] 8.3 Detección de institución/formato
 - [x] 8.4 Mapeo y preview antes de persistir
-- [ ] 8.5 Imports incrementales e idempotentes
-- [ ] 8.6 Reconciliación con API/Gmail sin duplicados
+- [x] 8.5 Imports incrementales e idempotentes
+- [x] 8.6 Reconciliación con API/Gmail sin duplicados
 
 ## Fase 9 — Portafolios, brokers, exchanges y wallets
 - [ ] 9.1 UX Portafolios + modelos de agregación patrimonial
