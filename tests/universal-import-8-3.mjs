@@ -6,7 +6,10 @@ assert.equal(detectImportFormat({ fileName: "a.pdf", leadingBytes: [0x25,0x50,0x
 assert.equal(detectImportFormat({ fileName: "a.xlsx", leadingBytes: [0x50,0x4b,0x03,0x04] }).confidence, "signature_verified");
 assert.equal(detectImportFormat({ fileName: "a.ofx", leadingBytes: [...Buffer.from("OFXHEADER:100\n<OFX>")] }).confidence, "signature_verified");
 assert.equal(detectImportFormat({ fileName: "a.csv" }).confidence, "extension_only");
-assert.equal(detectImportFormat({ fileName: "fake.pdf", leadingBytes: [1,2,3,4] }).confidence, "extension_only");
+
+assert.throws(() => detectImportFormat({ fileName: "fake.pdf", leadingBytes: [1,2,3,4] }), ImportDetectionError);
+assert.throws(() => detectImportFormat({ fileName: "fake.xlsx", leadingBytes: [1,2,3,4] }), ImportDetectionError);
+assert.throws(() => detectImportFormat({ fileName: "fake.ofx", leadingBytes: [...Buffer.from("NOT-OFX")] }), ImportDetectionError);
 assert.throws(() => detectImportFormat({ fileName: "a.exe" }), ImportDetectionError);
 
 assert.deepEqual(detectInstitution("Extracto Lulo Bank"), { institutionId: "lulo-bank", institutionConfidence: "unique_marker" });
