@@ -20,6 +20,9 @@ const MARKERS = Object.freeze([
 export function detectInstitution(text: string): InstitutionDetectionResult {
   const normalized = text.normalize("NFKC").toUpperCase();
   const matches = MARKERS.filter(([, markers]) => markers.some((marker) => normalized.includes(marker)));
-  if (matches.length !== 1) return Object.freeze({ institutionId: null, institutionConfidence: "not_detected" as const });
-  return Object.freeze({ institutionId: matches[0][0], institutionConfidence: "unique_marker" as const });
+  if (matches.length !== 1) {
+    return Object.freeze({ institutionId: null, institutionConfidence: "not_detected" as const });
+  }
+  const [institutionId] = matches[0]!;
+  return Object.freeze({ institutionId, institutionConfidence: "unique_marker" as const });
 }
