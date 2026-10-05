@@ -92,7 +92,7 @@
 - [x] 10.7 Alertas de aporte mensual faltante, duplicado o no conciliado
 - [x] 10.8 Alertas de conexión/sync/import incompleto
 - [x] 10.9 Concentración y drift vs asignación objetivo definida por el usuario
-- [ ] 10.10 Resumen mensual patrimonio + consumo + inversión
+- [x] 10.10 Resumen mensual patrimonio + consumo + inversión
 
 ## Fase 11 — Dashboard patrimonial
 - [ ] 11.1 Patrimonio total: efectivo + crédito + inversiones
