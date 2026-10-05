@@ -80,7 +80,9 @@ Reglas vigentes:
 
 **11.1 — Patrimonio total: efectivo + crédito + inversiones: CERRADA e integrada.** PR #101, CI #224 verde, merge `1a85870`.
 
-El siguiente bloque permitido es únicamente **11.2 — Cash flow y presupuesto**.
+**11.2 — Cash flow y presupuesto: CERRADA e integrada.** PR #103, CI #228 verde, merge `3b7f067`.
+
+El siguiente bloque permitido es únicamente **11.3 — Portafolios separados por proveedor y consolidados**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -144,3 +146,8 @@ Fase 10 quedó auditada de 10.1 a 10.10 con regresiones incluidas en la suite gl
 ## Fase 11.1 integrada
 
 El dashboard patrimonial agrega efectivo, pasivos de crédito explícitos e inversiones read-only en una moneda de reporte. Los límites de crédito no se cuentan como activos, los desajustes de moneda quedan excluidos y el resultado propaga completitud del portafolio.
+
+
+## Fase 11.2 integrada
+
+El dashboard de cash flow/presupuesto quedó integrado con flujo económico = ingresos - gasto de consumo, presupuestos por categoría y aportes de inversión separados explícitamente del gasto. Las categorías sin presupuesto se muestran como `unbudgeted` y la vista es read-only.
