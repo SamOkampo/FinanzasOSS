@@ -84,7 +84,9 @@ Reglas vigentes:
 
 **11.3 — Portafolios separados por proveedor y consolidados: CERRADA e integrada.** PR #105, CI #232 verde, merge `e9466c3`.
 
-El siguiente bloque permitido es únicamente **11.4 — Calendario financiero/aportes recurrentes**.
+**11.4 — Calendario financiero/aportes recurrentes: CERRADA e integrada.** PR #107, CI #236 verde, merge `37216ac`.
+
+El siguiente bloque permitido es únicamente **11.5 — Metas y progreso**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -158,3 +160,8 @@ El dashboard de cash flow/presupuesto quedó integrado con flujo económico = in
 ## Fase 11.3 integrada
 
 El dashboard de portafolios separa inversiones por proveedor únicamente mediante asignaciones explícitas y conserva el consolidado validado existente. No inventa relaciones proveedor↔portafolio ni conversiones FX; portafolios incluidos sin proveedor quedan como `unassignedPortfolioIds`, y la vista permanece read-only.
+
+
+## Fase 11.4 integrada
+
+El calendario financiero mensual integra ingresos, obligaciones, suscripciones y aportes recurrentes definidos explícitamente. Los aportes se separan del gasto y preservan semántica `investment_transfer`; fechas inexistentes se ajustan a fin de mes de forma visible y la vista no ejecuta pagos ni movimientos.
