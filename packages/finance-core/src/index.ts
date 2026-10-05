@@ -1361,3 +1361,5 @@ export * from "./provider-portfolio-dashboard.js";
 export * from "./financial-calendar-dashboard.js";
 
 export * from "./goal-progress-dashboard.js";
+
+export * from "./net-worth-history-dashboard.js";
