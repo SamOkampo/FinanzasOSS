@@ -16,7 +16,8 @@
 - 9.3 Interactive Brokers read-only boundary: PR #65, CI #147 verde, merge `45d6b83`.
 - 9.4 Hapi statement adapter boundary: PR #67, CI #151 verde, merge `8d6d22b`.
 - 9.5 Wallets on-chain por dirección pública: PR #69, CI #155 verde, merge `01808c3`.
-- Próximo bloque exacto permitido: **Fase 9.6 — otros brokers/exchanges mediante adapters oficiales/autorizados**.
+- 9.6 Otros brokers/exchanges mediante adapters oficiales/autorizados: PR #71, CI #159 verde, merge `32576ec`.
+- Próximo bloque exacto permitido: **Fase 9.7 — contribution matcher mensual banco ↔ inversión**.
 
 ## Cierre Fase 8
 
