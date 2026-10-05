@@ -1337,3 +1337,5 @@ export * from "./merchant-normalization.js";
 export * from "./transaction-usage-context.js";
 
 export * from "./subscription-detector.js";
+
+export * from "./spending-intelligence.js";
