@@ -70,7 +70,9 @@ Reglas vigentes:
 
 **10.7 — Alertas de aporte mensual: CERRADA e integrada.** PR #93, CI #208 verde, merge `b0dd2bc`.
 
-El siguiente bloque permitido es únicamente **10.8 — Alertas de conexión/sync/import incompleto**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.8 — Alertas de conexión/sync/import incompleto: CERRADA e integrada.** PR #95, CI #212 verde, merge `5f97c02`.
+
+El siguiente bloque permitido es únicamente **10.9 — Concentración y drift vs asignación objetivo definida por el usuario**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -110,3 +112,8 @@ Contribution Planner quedó integrado como estimación acotada por safe-to-spend
 ## Fase 10.7 integrada
 
 Las alertas mensuales de aportes distinguen faltantes, duplicados por identidad de transferencia y movimientos no conciliados. Los duplicados se cuentan una sola vez frente al objetivo y los no conciliados no satisfacen silenciosamente la meta.
+
+
+## Fase 10.8 integrada
+
+Las alertas de salud de datos cubren estados de conexión, sync fallido/parcial/obsoleto e imports incompletos de forma provider-neutral. Son señales read-only y no modifican consentimiento, credenciales ni ejecutan reconexiones automáticas.
