@@ -64,7 +64,9 @@ Reglas vigentes:
 
 **10.4 — Spending anomalies y cash-flow forecast: CERRADA e integrada.** PR #87, CI #196 verde, merge `3ea73c0`.
 
-El siguiente bloque permitido es únicamente **10.5 — Safe-to-spend con reservas/obligaciones**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.5 — Safe-to-spend con reservas/obligaciones: CERRADA e integrada.** PR #89, CI #200 verde, merge `c76207c`.
+
+El siguiente bloque permitido es únicamente **10.6 — Contribution Planner**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -89,3 +91,8 @@ El detector de suscripciones quedó integrado con recurrencia conservadora por m
 ## Fase 10.4 integrada
 
 Las anomalías de gasto y el forecast mensual quedaron integrados de forma conservadora: solo usan movimientos económicos aplicables, excluyen transferencias/inversiones, fallan cerrado en multi-moneda y presentan estimaciones revisables, nunca garantías.
+
+
+## Fase 10.5 integrada
+
+Safe-to-spend quedó integrado como estimación conservadora basada en efectivo disponible menos reservas, obligaciones, buffer y forecast negativo. No usa activos de inversión, límites de crédito ni ganancias no realizadas como efectivo; el resultado nunca es una garantía de liquidez.
