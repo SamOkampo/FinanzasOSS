@@ -74,7 +74,7 @@
 - [x] 9.1 UX Portafolios + modelos de agregación patrimonial
 - [x] 9.2 Binance read-only: balances/trades/depósitos-retiros según API oficial
 - [x] 9.3 Interactive Brokers Web API read-only: accounts/positions/activity
-- [ ] 9.4 Hapi statement adapter: PDFs oficiales + confirmaciones/reportes
+- [x] 9.4 Hapi statement adapter: PDFs oficiales + confirmaciones/reportes
 - [ ] 9.5 Wallets on-chain por dirección pública; jamás seed/private key
 - [ ] 9.6 Otros brokers/exchanges mediante adapters (solo fuentes oficiales/autorizadas)
 - [ ] 9.7 Contribution matcher mensual banco ↔ inversión
