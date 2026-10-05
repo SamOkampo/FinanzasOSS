@@ -60,7 +60,9 @@ Reglas vigentes:
 
 **10.2 — Personal vs negocio: CERRADA e integrada.** PR #83, CI #186 verde, merge `2914235`.
 
-El siguiente bloque permitido es únicamente **10.3 — Subscription detector**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.3 — Subscription detector: CERRADA e integrada.** PR #85, CI #192 verde, merge `8e4ee0a`.
+
+El siguiente bloque permitido es únicamente **10.4 — Spending anomalies y cash-flow forecast**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -75,3 +77,8 @@ Merchant normalization y categorización quedó integrada con reglas determinist
 ## Fase 10.2 integrada
 
 La clasificación personal/negocio quedó integrada con precedencia explícita del usuario, contexto de cuenta y reglas conservadoras. Transferencias e inversiones permanecen fuera de la clasificación de gasto; señales inferidas de negocio requieren revisión y los casos ambiguos quedan como `unknown`.
+
+
+## Fase 10.3 integrada
+
+El detector de suscripciones quedó integrado con recurrencia conservadora por merchant/currency, umbral mínimo de observaciones, bandas de cadencia y confianza revisable. Transferencias e inversiones están excluidas; `nextExpectedAt` es solo una estimación y nunca una garantía.
