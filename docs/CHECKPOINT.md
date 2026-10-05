@@ -72,7 +72,9 @@ Reglas vigentes:
 
 **10.8 — Alertas de conexión/sync/import incompleto: CERRADA e integrada.** PR #95, CI #212 verde, merge `5f97c02`.
 
-El siguiente bloque permitido es únicamente **10.9 — Concentración y drift vs asignación objetivo definida por el usuario**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.9 — Concentración y drift: CERRADA e integrada.** PR #97, CI #216 verde, merge `363ce96`.
+
+El siguiente bloque permitido es únicamente **10.10 — Resumen mensual patrimonio + consumo + inversión**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -117,3 +119,8 @@ Las alertas mensuales de aportes distinguen faltantes, duplicados por identidad 
 ## Fase 10.8 integrada
 
 Las alertas de salud de datos cubren estados de conexión, sync fallido/parcial/obsoleto e imports incompletos de forma provider-neutral. Son señales read-only y no modifican consentimiento, credenciales ni ejecutan reconexiones automáticas.
+
+
+## Fase 10.9 integrada
+
+El reporte de concentración/drift quedó integrado como analítica read-only frente a una asignación objetivo definida por el usuario. No inventa límites universales de concentración, falla cerrado en multi-moneda y no recomienda ni ejecuta rebalanceos.
