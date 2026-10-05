@@ -1341,3 +1341,5 @@ export * from "./subscription-detector.js";
 export * from "./spending-intelligence.js";
 
 export * from "./safe-to-spend.js";
+
+export * from "./contribution-planner.js";
