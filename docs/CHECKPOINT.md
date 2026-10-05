@@ -13,7 +13,8 @@
 - El roadmap no define un subpunto 8.7; **Fase 8 termina en 8.6**.
 - 9.1 UX Portafolios + modelos de agregación patrimonial: PR #61, CI #137 verde, merge `c46fddf`.
 - 9.2 Binance read-only boundary: PR #63, CI #143 verde, merge `afe797c`.
-- Próximo bloque exacto permitido: **Fase 9.3 — Interactive Brokers Web API read-only**.
+- 9.3 Interactive Brokers read-only boundary: PR #65, CI #147 verde, merge `45d6b83`.
+- Próximo bloque exacto permitido: **Fase 9.4 — Hapi statement adapter**.
 
 ## Cierre Fase 8
 
