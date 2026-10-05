@@ -60,7 +60,7 @@ export function matchMonthlyInvestmentContributions(
         cashAccount,
         investmentTransaction,
         investmentAccount,
-        { dateToleranceDays: request.dateToleranceDays },
+        request.dateToleranceDays === undefined ? {} : { dateToleranceDays: request.dateToleranceDays },
       );
       if (match.confidence === "none" || match.direction !== "contribution") continue;
       candidates.push({
