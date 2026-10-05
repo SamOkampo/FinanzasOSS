@@ -58,16 +58,20 @@ Reglas vigentes:
 
 **10.1 — Merchant normalization y categorización: CERRADA e integrada.** PR #81, CI #182 verde, merge `08c29fe`.
 
-El siguiente bloque permitido es únicamente **10.2 — Personal vs negocio**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.2 — Personal vs negocio: CERRADA e integrada.** PR #83, CI #186 verde, merge `2914235`.
+
+El siguiente bloque permitido es únicamente **10.3 — Subscription detector**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
-
 
 ## Fase 9.1 integrada
 
 La vista Portafolios dispone de agregación patrimonial read-only y un view-model con privacidad. El agregado no inventa conversiones entre monedas: valores incompatibles quedan fuera del total y se señalan para revisión. Este bloque forma parte de la Fase 9 ya cerrada.
 
-
 ## Fase 10.1 integrada
 
 Merchant normalization y categorización quedó integrada con reglas deterministas y conservadoras. `investment_transfer`, `internal_transfer` y `transfer` están protegidos frente a reclasificación como gasto. Las categorías inferidas sin merchant explícito permanecen revisables y no se aceptan silenciosamente.
+
+## Fase 10.2 integrada
+
+La clasificación personal/negocio quedó integrada con precedencia explícita del usuario, contexto de cuenta y reglas conservadoras. Transferencias e inversiones permanecen fuera de la clasificación de gasto; señales inferidas de negocio requieren revisión y los casos ambiguos quedan como `unknown`.
