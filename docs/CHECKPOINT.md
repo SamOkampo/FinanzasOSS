@@ -19,7 +19,8 @@
 - 9.6 Otros brokers/exchanges mediante adapters oficiales/autorizados: PR #71, CI #159 verde, merge `32576ec`.
 - 9.7 Contribution matcher mensual banco ↔ inversión: PR #73, CI #164 verde, merge `1e9aa9a`.
 - 9.8 Portfolio snapshots e historial: PR #75, CI #169 verde, merge `11d86ff`.
-- Próximo bloque exacto permitido: **Fase 9.9 — cost basis/P&L/dividendos/fees/impuestos cuando la fuente lo permita**.
+- 9.9 Cost basis/P&L/dividendos/fees/impuestos: PR #77, CI #173 verde, merge `70baa59`.
+- Próximo bloque exacto permitido: **Fase 9.10 — TWR/XIRR y separación estricta de rendimiento vs aportes**.
 
 ## Cierre Fase 8
 

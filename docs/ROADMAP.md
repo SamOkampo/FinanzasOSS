@@ -79,7 +79,7 @@
 - [x] 9.6 Otros brokers/exchanges mediante adapters (solo fuentes oficiales/autorizadas)
 - [x] 9.7 Contribution matcher mensual banco ↔ inversión
 - [x] 9.8 Portfolio snapshots e historial
-- [ ] 9.9 Cost basis/P&L/dividendos/fees/impuestos cuando la fuente lo permita
+- [x] 9.9 Cost basis/P&L/dividendos/fees/impuestos cuando la fuente lo permita
 - [ ] 9.10 TWR/XIRR y separación estricta de rendimiento vs aportes
 
 ## Fase 10 — Inteligencia financiera y asistente
