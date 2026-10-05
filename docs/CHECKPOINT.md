@@ -82,7 +82,9 @@ Reglas vigentes:
 
 **11.2 — Cash flow y presupuesto: CERRADA e integrada.** PR #103, CI #228 verde, merge `3b7f067`.
 
-El siguiente bloque permitido es únicamente **11.3 — Portafolios separados por proveedor y consolidados**.
+**11.3 — Portafolios separados por proveedor y consolidados: CERRADA e integrada.** PR #105, CI #232 verde, merge `e9466c3`.
+
+El siguiente bloque permitido es únicamente **11.4 — Calendario financiero/aportes recurrentes**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -151,3 +153,8 @@ El dashboard patrimonial agrega efectivo, pasivos de crédito explícitos e inve
 ## Fase 11.2 integrada
 
 El dashboard de cash flow/presupuesto quedó integrado con flujo económico = ingresos - gasto de consumo, presupuestos por categoría y aportes de inversión separados explícitamente del gasto. Las categorías sin presupuesto se muestran como `unbudgeted` y la vista es read-only.
+
+
+## Fase 11.3 integrada
+
+El dashboard de portafolios separa inversiones por proveedor únicamente mediante asignaciones explícitas y conserva el consolidado validado existente. No inventa relaciones proveedor↔portafolio ni conversiones FX; portafolios incluidos sin proveedor quedan como `unassignedPortfolioIds`, y la vista permanece read-only.
