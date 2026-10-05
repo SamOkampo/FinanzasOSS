@@ -100,7 +100,7 @@
 - [x] 11.3 Portafolios separados por proveedor y consolidados
 - [x] 11.4 Calendario financiero/aportes recurrentes
 - [x] 11.5 Metas y progreso
-- [ ] 11.6 Historial de patrimonio y fuentes de cambio
+- [x] 11.6 Historial de patrimonio y fuentes de cambio
 
 ## Fase 12 — Experiencia premium
 - [ ] 12.1 Auditoría design system anti-plantilla IA
