@@ -62,7 +62,9 @@ Reglas vigentes:
 
 **10.3 — Subscription detector: CERRADA e integrada.** PR #85, CI #192 verde, merge `8e4ee0a`.
 
-El siguiente bloque permitido es únicamente **10.4 — Spending anomalies y cash-flow forecast**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.4 — Spending anomalies y cash-flow forecast: CERRADA e integrada.** PR #87, CI #196 verde, merge `3ea73c0`.
+
+El siguiente bloque permitido es únicamente **10.5 — Safe-to-spend con reservas/obligaciones**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -82,3 +84,8 @@ La clasificación personal/negocio quedó integrada con precedencia explícita d
 ## Fase 10.3 integrada
 
 El detector de suscripciones quedó integrado con recurrencia conservadora por merchant/currency, umbral mínimo de observaciones, bandas de cadencia y confianza revisable. Transferencias e inversiones están excluidas; `nextExpectedAt` es solo una estimación y nunca una garantía.
+
+
+## Fase 10.4 integrada
+
+Las anomalías de gasto y el forecast mensual quedaron integrados de forma conservadora: solo usan movimientos económicos aplicables, excluyen transferencias/inversiones, fallan cerrado en multi-moneda y presentan estimaciones revisables, nunca garantías.
