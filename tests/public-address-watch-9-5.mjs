@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { validatePublicAddressWatch } from "../dist/packages/connector-sdk/src/public-address-watch.js";
+const value = validatePublicAddressWatch({ network: " Testnet ", address: "PUBLIC-IDENTIFIER-12345" });
+assert.equal(value.network, "testnet");
+assert.equal(value.address, "PUBLIC-IDENTIFIER-12345");
+assert.equal(Object.isFrozen(value), true);
+assert.throws(() => validatePublicAddressWatch({ network: "", address: "PUBLIC-IDENTIFIER-12345" }));
+assert.throws(() => validatePublicAddressWatch({ network: "testnet", address: "short" }));
+assert.throws(() => validatePublicAddressWatch({ network: "testnet", address: "PUBLIC ID 12345" }));
+console.log("Phase 9.5 public-address watch regression passed");
