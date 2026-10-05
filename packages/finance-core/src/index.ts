@@ -1339,3 +1339,5 @@ export * from "./transaction-usage-context.js";
 export * from "./subscription-detector.js";
 
 export * from "./spending-intelligence.js";
+
+export * from "./safe-to-spend.js";
