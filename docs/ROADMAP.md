@@ -83,7 +83,7 @@
 - [x] 9.10 TWR/XIRR y separación estricta de rendimiento vs aportes
 
 ## Fase 10 — Inteligencia financiera y asistente
-- [ ] 10.1 Merchant normalization y categorización
+- [x] 10.1 Merchant normalization y categorización
 - [ ] 10.2 Personal vs negocio
 - [ ] 10.3 Subscription detector
 - [ ] 10.4 Spending anomalies y cash-flow forecast
