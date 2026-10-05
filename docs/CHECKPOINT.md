@@ -11,7 +11,8 @@
 - 8.5 imports incrementales e idempotentes: PR #57, CI #130 verde, merge `a6c5dd4`.
 - 8.6 reconciliación API/extractos/Gmail auxiliar sin duplicados: PR #58, CI #132 verde, merge `dd7e9c1`.
 - El roadmap no define un subpunto 8.7; **Fase 8 termina en 8.6**.
-- Próximo bloque exacto permitido: **Fase 9.1 — UX Portafolios + modelos de agregación patrimonial**.
+- 9.1 UX Portafolios + modelos de agregación patrimonial: PR #61, CI #137 verde, merge `c46fddf`.
+- Próximo bloque exacto permitido: **Fase 9.2**.
 
 ## Cierre Fase 8
 
@@ -34,3 +35,8 @@ Reglas vigentes:
 El siguiente bloque permitido es únicamente **9.1 — UX Portafolios + modelos de agregación patrimonial**. No adelantar 9.2.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
+
+
+## Fase 9.1 integrada
+
+La vista Portafolios ya dispone de agregación patrimonial read-only y un view-model con privacidad. El agregado no inventa conversiones entre monedas: valores incompatibles quedan fuera del total y se señalan para revisión. El siguiente bloque es 9.2 según ROADMAP.md.
