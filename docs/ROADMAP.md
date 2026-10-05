@@ -71,7 +71,7 @@
 - [x] 8.6 Reconciliación con API/Gmail sin duplicados
 
 ## Fase 9 — Portafolios, brokers, exchanges y wallets
-- [ ] 9.1 UX Portafolios + modelos de agregación patrimonial
+- [x] 9.1 UX Portafolios + modelos de agregación patrimonial
 - [ ] 9.2 Binance read-only: balances/trades/depósitos-retiros según API oficial
 - [ ] 9.3 Interactive Brokers Web API read-only: accounts/positions/activity
 - [ ] 9.4 Hapi statement adapter: PDFs oficiales + confirmaciones/reportes
