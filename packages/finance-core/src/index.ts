@@ -1349,3 +1349,5 @@ export * from "./contribution-alerts.js";
 export * from "./data-health-alerts.js";
 
 export * from "./portfolio-drift.js";
+
+export * from "./monthly-financial-summary.js";
