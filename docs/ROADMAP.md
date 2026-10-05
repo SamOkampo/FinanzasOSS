@@ -96,7 +96,7 @@
 
 ## Fase 11 — Dashboard patrimonial
 - [x] 11.1 Patrimonio total: efectivo + crédito + inversiones
-- [ ] 11.2 Cash flow y presupuesto
+- [x] 11.2 Cash flow y presupuesto
 - [ ] 11.3 Portafolios separados por proveedor y consolidados
 - [ ] 11.4 Calendario financiero/aportes recurrentes
 - [ ] 11.5 Metas y progreso
