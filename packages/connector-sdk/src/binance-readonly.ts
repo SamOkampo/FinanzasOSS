@@ -8,7 +8,7 @@ export const BINANCE_READONLY_DESCRIPTOR: ConnectorDescriptor = Object.freeze({
   version: "0.1.0",
   environment: "sandbox",
   accessMode: "api",
-  capabilities: Object.freeze(["accounts", "balances", "investment_activities"]),
+  capabilities: Object.freeze(["accounts", "balances", "investment_activities"] as const),
   dataAccess: "read_only",
 });
 
