@@ -39,11 +39,18 @@ function dayNumber(value: string): number {
 }
 
 function median(values: readonly number[]): number {
+  if (values.length === 0) throw new Error("Median requires at least one value");
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
+  if (sorted.length % 2 === 0) {
+    const left = sorted[middle - 1];
+    const right = sorted[middle];
+    if (left === undefined || right === undefined) throw new Error("Median bounds are invalid");
+    return (left + right) / 2;
+  }
+  const value = sorted[middle];
+  if (value === undefined) throw new Error("Median value is missing");
+  return value;
 }
 
 function cadenceFor(intervalDays: number): SubscriptionCadence {
@@ -72,8 +79,10 @@ export function detectSubscription(
 
   if (eligible.length < 3) return null;
 
-  const merchantKey = eligible[0].merchantKey.trim();
-  const currency = eligible[0].currency.trim().toUpperCase();
+  const first = eligible[0];
+  if (!first) return null;
+  const merchantKey = first.merchantKey.trim();
+  const currency = first.currency.trim().toUpperCase();
   if (!merchantKey || !currency) throw new Error("Subscription observations require merchant and currency");
 
   if (eligible.some((item) => item.merchantKey.trim() !== merchantKey)) return null;
@@ -91,9 +100,11 @@ export function detectSubscription(
   }, 0n);
   const amountVariationBps = Number((maxDeviation * 10_000n) / averageAmountMinor);
 
-  const intervals = eligible.slice(1).map((item, index) =>
-    dayNumber(item.postedAt) - dayNumber(eligible[index].postedAt),
-  );
+  const intervals = eligible.slice(1).map((item, index) => {
+    const previous = eligible[index];
+    if (!previous) throw new Error("Subscription observation sequence is invalid");
+    return dayNumber(item.postedAt) - dayNumber(previous.postedAt);
+  });
   if (intervals.some((value) => value <= 0)) return null;
 
   const medianInterval = median(intervals);
@@ -130,7 +141,9 @@ export function detectSubscription(
         : "low";
 
   const expectedDays = cadence === "weekly" ? 7 : cadence === "monthly" ? Math.round(medianInterval) : 365;
-  const nextExpectedAt = addDaysIso(eligible[eligible.length - 1].postedAt, expectedDays);
+  const last = eligible[eligible.length - 1];
+  if (!last) return null;
+  const nextExpectedAt = addDaysIso(last.postedAt, expectedDays);
 
   return {
     merchantKey,
