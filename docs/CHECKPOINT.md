@@ -88,7 +88,11 @@ Reglas vigentes:
 
 **11.5 — Metas y progreso: CERRADA e integrada.** PR #109, CI #240 verde, merge `84fcd6b`.
 
-El siguiente bloque permitido es únicamente **11.6 — Historial de patrimonio y fuentes de cambio**.
+**11.6 — Historial de patrimonio y fuentes de cambio: CERRADA e integrada.** PR #111, CI #244 verde, merge `3dfe45c`.
+
+**Fase 11 — Dashboard patrimonial: CERRADA Y AUDITADA.**
+
+El siguiente bloque del ROADMAP es **12.1 — Auditoría design system anti-plantilla IA**; no se inicia en este cierre de Fase 11.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -172,3 +176,12 @@ El calendario financiero mensual integra ingresos, obligaciones, suscripciones y
 ## Fase 11.5 integrada
 
 Las metas financieras usan baseline, valor actual y objetivo definidos explícitamente por el usuario. El progreso admite objetivos crecientes y decrecientes, muestra movimiento en dirección contraria sin porcentajes engañosos y no emite pronósticos on-track/off-track ni recomendaciones automáticas.
+
+
+## Fase 11.6 integrada
+
+El historial patrimonial deriva net worth de efectivo + inversiones - pasivos y reconcilia cada cambio contra fuentes explícitas. Las diferencias no explicadas permanecen visibles; `investment_transfer` exige impacto patrimonial cero y ningún origen de cambio se inventa.
+
+## Cierre Fase 11
+
+Fase 11 quedó cerrada de 11.1 a 11.6 con dashboard de patrimonio total, cash flow/presupuesto, portafolios por proveedor y consolidados, calendario financiero, metas/progreso e historial patrimonial. Todas las superficies son read-only, no inventan FX ni relaciones proveedor↔portafolio y preservan aportes banco↔inversión como `investment_transfer`, nunca como gasto.
