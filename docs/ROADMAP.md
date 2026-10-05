@@ -91,7 +91,7 @@
 - [x] 10.6 Contribution Planner: monto disponible para aportar sin tratarlo como garantía
 - [x] 10.7 Alertas de aporte mensual faltante, duplicado o no conciliado
 - [x] 10.8 Alertas de conexión/sync/import incompleto
-- [ ] 10.9 Concentración y drift vs asignación objetivo definida por el usuario
+- [x] 10.9 Concentración y drift vs asignación objetivo definida por el usuario
 - [ ] 10.10 Resumen mensual patrimonio + consumo + inversión
 
 ## Fase 11 — Dashboard patrimonial
