@@ -1351,3 +1351,5 @@ export * from "./data-health-alerts.js";
 export * from "./portfolio-drift.js";
 
 export * from "./monthly-financial-summary.js";
+
+export * from "./net-worth-dashboard.js";
