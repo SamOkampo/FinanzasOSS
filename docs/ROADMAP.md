@@ -85,7 +85,7 @@
 ## Fase 10 — Inteligencia financiera y asistente
 - [x] 10.1 Merchant normalization y categorización
 - [x] 10.2 Personal vs negocio
-- [ ] 10.3 Subscription detector
+- [x] 10.3 Subscription detector
 - [ ] 10.4 Spending anomalies y cash-flow forecast
 - [ ] 10.5 Safe-to-spend con reservas/obligaciones
 - [ ] 10.6 Contribution Planner: monto disponible para aportar sin tratarlo como garantía
