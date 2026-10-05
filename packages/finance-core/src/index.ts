@@ -1331,3 +1331,5 @@ export function applyInvestmentTransferMatch(
 }
 
 export * from "./portfolio-aggregation.js";
+
+export * from "./merchant-normalization.js";
