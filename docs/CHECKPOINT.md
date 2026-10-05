@@ -78,7 +78,9 @@ Reglas vigentes:
 
 **Fase 10 — Inteligencia financiera y asistente: CERRADA Y AUDITADA.**
 
-El siguiente bloque permitido es únicamente **11.1 — Patrimonio total: efectivo + crédito + inversiones**.
+**11.1 — Patrimonio total: efectivo + crédito + inversiones: CERRADA e integrada.** PR #101, CI #224 verde, merge `1a85870`.
+
+El siguiente bloque permitido es únicamente **11.2 — Cash flow y presupuesto**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -137,3 +139,8 @@ El resumen mensual patrimonial quedó integrado separando explícitamente consum
 ## Cierre Fase 10
 
 Fase 10 quedó auditada de 10.1 a 10.10 con regresiones incluidas en la suite global y CI #220 verde. Se preservan las reglas de seguridad: inteligencia read-only/estimativa; sin producción bancaria, secretos, trading, retiros, movimiento de dinero ni clasificación de aportes como consumo. Próximo bloque: 11.1.
+
+
+## Fase 11.1 integrada
+
+El dashboard patrimonial agrega efectivo, pasivos de crédito explícitos e inversiones read-only en una moneda de reporte. Los límites de crédito no se cuentan como activos, los desajustes de moneda quedan excluidos y el resultado propaga completitud del portafolio.

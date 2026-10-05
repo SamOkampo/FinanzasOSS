@@ -95,7 +95,7 @@
 - [x] 10.10 Resumen mensual patrimonio + consumo + inversión
 
 ## Fase 11 — Dashboard patrimonial
-- [ ] 11.1 Patrimonio total: efectivo + crédito + inversiones
+- [x] 11.1 Patrimonio total: efectivo + crédito + inversiones
 - [ ] 11.2 Cash flow y presupuesto
 - [ ] 11.3 Portafolios separados por proveedor y consolidados
 - [ ] 11.4 Calendario financiero/aportes recurrentes
