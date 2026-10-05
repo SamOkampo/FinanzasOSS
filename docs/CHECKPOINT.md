@@ -86,7 +86,9 @@ Reglas vigentes:
 
 **11.4 — Calendario financiero/aportes recurrentes: CERRADA e integrada.** PR #107, CI #236 verde, merge `37216ac`.
 
-El siguiente bloque permitido es únicamente **11.5 — Metas y progreso**.
+**11.5 — Metas y progreso: CERRADA e integrada.** PR #109, CI #240 verde, merge `84fcd6b`.
+
+El siguiente bloque permitido es únicamente **11.6 — Historial de patrimonio y fuentes de cambio**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -165,3 +167,8 @@ El dashboard de portafolios separa inversiones por proveedor únicamente mediant
 ## Fase 11.4 integrada
 
 El calendario financiero mensual integra ingresos, obligaciones, suscripciones y aportes recurrentes definidos explícitamente. Los aportes se separan del gasto y preservan semántica `investment_transfer`; fechas inexistentes se ajustan a fin de mes de forma visible y la vista no ejecuta pagos ni movimientos.
+
+
+## Fase 11.5 integrada
+
+Las metas financieras usan baseline, valor actual y objetivo definidos explícitamente por el usuario. El progreso admite objetivos crecientes y decrecientes, muestra movimiento en dirección contraria sin porcentajes engañosos y no emite pronósticos on-track/off-track ni recomendaciones automáticas.
