@@ -1353,3 +1353,5 @@ export * from "./portfolio-drift.js";
 export * from "./monthly-financial-summary.js";
 
 export * from "./net-worth-dashboard.js";
+
+export * from "./cash-flow-budget-dashboard.js";
