@@ -64,16 +64,13 @@ El siguiente bloque permitido es únicamente **10.3 — Subscription detector**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
-
 ## Fase 9.1 integrada
 
 La vista Portafolios dispone de agregación patrimonial read-only y un view-model con privacidad. El agregado no inventa conversiones entre monedas: valores incompatibles quedan fuera del total y se señalan para revisión. Este bloque forma parte de la Fase 9 ya cerrada.
 
-
 ## Fase 10.1 integrada
 
 Merchant normalization y categorización quedó integrada con reglas deterministas y conservadoras. `investment_transfer`, `internal_transfer` y `transfer` están protegidos frente a reclasificación como gasto. Las categorías inferidas sin merchant explícito permanecen revisables y no se aceptan silenciosamente.
-
 
 ## Fase 10.2 integrada
 
