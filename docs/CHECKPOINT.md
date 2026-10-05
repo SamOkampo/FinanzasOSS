@@ -12,7 +12,8 @@
 - 8.6 reconciliación API/extractos/Gmail auxiliar sin duplicados: PR #58, CI #132 verde, merge `dd7e9c1`.
 - El roadmap no define un subpunto 8.7; **Fase 8 termina en 8.6**.
 - 9.1 UX Portafolios + modelos de agregación patrimonial: PR #61, CI #137 verde, merge `c46fddf`.
-- Próximo bloque exacto permitido: **Fase 9.2**.
+- 9.2 Binance read-only boundary: PR #63, CI #143 verde, merge `afe797c`.
+- Próximo bloque exacto permitido: **Fase 9.3 — Interactive Brokers Web API read-only**.
 
 ## Cierre Fase 8
 
@@ -32,7 +33,7 @@ Reglas vigentes:
 
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **9.1 — UX Portafolios + modelos de agregación patrimonial**. No adelantar 9.2.
+El siguiente bloque permitido es únicamente **9.3 — Interactive Brokers Web API read-only: accounts/positions/activity**. No adelantar 9.4 antes de integrar 9.3 con CI verde.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
