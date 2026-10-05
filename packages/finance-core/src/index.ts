@@ -1335,3 +1335,5 @@ export * from "./portfolio-aggregation.js";
 export * from "./merchant-normalization.js";
 
 export * from "./transaction-usage-context.js";
+
+export * from "./subscription-detector.js";
