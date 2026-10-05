@@ -14,7 +14,8 @@
 - 9.1 UX Portafolios + modelos de agregación patrimonial: PR #61, CI #137 verde, merge `c46fddf`.
 - 9.2 Binance read-only boundary: PR #63, CI #143 verde, merge `afe797c`.
 - 9.3 Interactive Brokers read-only boundary: PR #65, CI #147 verde, merge `45d6b83`.
-- Próximo bloque exacto permitido: **Fase 9.4 — Hapi statement adapter**.
+- 9.4 Hapi statement adapter boundary: PR #67, CI #151 verde, merge `8d6d22b`.
+- Próximo bloque exacto permitido: **Fase 9.5 — wallets on-chain por dirección pública**.
 
 ## Cierre Fase 8
 
