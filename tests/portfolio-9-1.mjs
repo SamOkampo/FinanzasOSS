@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildPortfolioDashboardModel } from "../dist/ui/src/portfolio-dashboard.js";
+import { buildPortfolioDashboardModel } from "../dist/packages/ui/src/portfolio-dashboard.js";
 
 const tenantId = "tenant-1";
 const portfolio = { id:"portfolio-1", tenantId, name:"Long term", baseCurrency:"COP", status:"active", accountIds:["broker-1"] };
