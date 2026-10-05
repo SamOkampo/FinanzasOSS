@@ -76,7 +76,7 @@
 - [x] 9.3 Interactive Brokers Web API read-only: accounts/positions/activity
 - [x] 9.4 Hapi statement adapter: PDFs oficiales + confirmaciones/reportes
 - [x] 9.5 Wallets on-chain por dirección pública; jamás seed/private key
-- [ ] 9.6 Otros brokers/exchanges mediante adapters (solo fuentes oficiales/autorizadas)
+- [x] 9.6 Otros brokers/exchanges mediante adapters (solo fuentes oficiales/autorizadas)
 - [ ] 9.7 Contribution matcher mensual banco ↔ inversión
 - [ ] 9.8 Portfolio snapshots e historial
 - [ ] 9.9 Cost basis/P&L/dividendos/fees/impuestos cuando la fuente lo permita
