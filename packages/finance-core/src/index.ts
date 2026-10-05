@@ -1357,3 +1357,5 @@ export * from "./net-worth-dashboard.js";
 export * from "./cash-flow-budget-dashboard.js";
 
 export * from "./provider-portfolio-dashboard.js";
+
+export * from "./financial-calendar-dashboard.js";
