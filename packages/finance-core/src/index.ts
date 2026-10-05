@@ -1329,3 +1329,5 @@ export function applyInvestmentTransferMatch(
 
   return [update(a), update(b)];
 }
+
+export * from "./portfolio-aggregation.js";
