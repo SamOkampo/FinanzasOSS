@@ -1345,3 +1345,5 @@ export * from "./safe-to-spend.js";
 export * from "./contribution-planner.js";
 
 export * from "./contribution-alerts.js";
+
+export * from "./data-health-alerts.js";
