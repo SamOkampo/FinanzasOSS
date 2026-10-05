@@ -66,7 +66,9 @@ Reglas vigentes:
 
 **10.5 — Safe-to-spend con reservas/obligaciones: CERRADA e integrada.** PR #89, CI #200 verde, merge `c76207c`.
 
-El siguiente bloque permitido es únicamente **10.6 — Contribution Planner**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.6 — Contribution Planner: CERRADA e integrada.** PR #91, CI #204 verde, merge `4b758f6`.
+
+El siguiente bloque permitido es únicamente **10.7 — Alertas de aporte mensual faltante, duplicado o no conciliado**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -96,3 +98,8 @@ Las anomalías de gasto y el forecast mensual quedaron integrados de forma conse
 ## Fase 10.5 integrada
 
 Safe-to-spend quedó integrado como estimación conservadora basada en efectivo disponible menos reservas, obligaciones, buffer y forecast negativo. No usa activos de inversión, límites de crédito ni ganancias no realizadas como efectivo; el resultado nunca es una garantía de liquidez.
+
+
+## Fase 10.6 integrada
+
+Contribution Planner quedó integrado como estimación acotada por safe-to-spend, objetivo restante y cap opcional del usuario. No ejecuta movimiento de dinero y cualquier futura ejecución autorizada banco→inversión debe conservar `investment_transfer`.
