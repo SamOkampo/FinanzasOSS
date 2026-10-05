@@ -68,7 +68,9 @@ Reglas vigentes:
 
 **10.6 — Contribution Planner: CERRADA e integrada.** PR #91, CI #204 verde, merge `4b758f6`.
 
-El siguiente bloque permitido es únicamente **10.7 — Alertas de aporte mensual faltante, duplicado o no conciliado**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.7 — Alertas de aporte mensual: CERRADA e integrada.** PR #93, CI #208 verde, merge `b0dd2bc`.
+
+El siguiente bloque permitido es únicamente **10.8 — Alertas de conexión/sync/import incompleto**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -103,3 +105,8 @@ Safe-to-spend quedó integrado como estimación conservadora basada en efectivo 
 ## Fase 10.6 integrada
 
 Contribution Planner quedó integrado como estimación acotada por safe-to-spend, objetivo restante y cap opcional del usuario. No ejecuta movimiento de dinero y cualquier futura ejecución autorizada banco→inversión debe conservar `investment_transfer`.
+
+
+## Fase 10.7 integrada
+
+Las alertas mensuales de aportes distinguen faltantes, duplicados por identidad de transferencia y movimientos no conciliados. Los duplicados se cuentan una sola vez frente al objetivo y los no conciliados no satisfacen silenciosamente la meta.
