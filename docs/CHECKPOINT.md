@@ -74,7 +74,11 @@ Reglas vigentes:
 
 **10.9 — Concentración y drift: CERRADA e integrada.** PR #97, CI #216 verde, merge `363ce96`.
 
-El siguiente bloque permitido es únicamente **10.10 — Resumen mensual patrimonio + consumo + inversión**. Fase 9 permanece cerrada; no reabrirla salvo regresión verificable.
+**10.10 — Resumen mensual patrimonio + consumo + inversión: CERRADA e integrada.** PR #99, CI #220 verde, merge `79396d7`.
+
+**Fase 10 — Inteligencia financiera y asistente: CERRADA Y AUDITADA.**
+
+El siguiente bloque permitido es únicamente **11.1 — Patrimonio total: efectivo + crédito + inversiones**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -124,3 +128,12 @@ Las alertas de salud de datos cubren estados de conexión, sync fallido/parcial/
 ## Fase 10.9 integrada
 
 El reporte de concentración/drift quedó integrado como analítica read-only frente a una asignación objetivo definida por el usuario. No inventa límites universales de concentración, falla cerrado en multi-moneda y no recomienda ni ejecuta rebalanceos.
+
+
+## Fase 10.10 integrada
+
+El resumen mensual patrimonial quedó integrado separando explícitamente consumo, aportes/retiros de inversión y rendimiento. Los `investment_transfer` no se cuentan como gasto y el rendimiento ausente se reporta como no disponible, nunca como cero inventado.
+
+## Cierre Fase 10
+
+Fase 10 quedó auditada de 10.1 a 10.10 con regresiones incluidas en la suite global y CI #220 verde. Se preservan las reglas de seguridad: inteligencia read-only/estimativa; sin producción bancaria, secretos, trading, retiros, movimiento de dinero ni clasificación de aportes como consumo. Próximo bloque: 11.1.
