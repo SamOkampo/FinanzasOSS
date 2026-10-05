@@ -68,5 +68,5 @@ export function appendPortfolioSnapshot(
 export function latestPortfolioSnapshot(
   history: PortfolioSnapshotHistory,
 ): PortfolioSnapshot | null {
-  return history.snapshots.length ? history.snapshots[history.snapshots.length - 1] : null;
+  return history.snapshots.length ? (history.snapshots[history.snapshots.length - 1] ?? null) : null;
 }
