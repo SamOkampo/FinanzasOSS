@@ -32,7 +32,7 @@ function clean(value: string): string {
 }
 
 export function normalizeMerchant(input: MerchantNormalizationInput): MerchantNormalizationResult {
-  const txType = clean(input.transactionType ?? "").toLowerCase();
+  const txType = (input.transactionType ?? "").trim().toLowerCase();
   if (txType === "investment_transfer" || txType === "internal_transfer" || txType === "transfer") {
     return { merchant: null, category: txType === "investment_transfer" ? "investment" : "transfer", confidence: "high", source: "protected_type", needsReview: false };
   }
