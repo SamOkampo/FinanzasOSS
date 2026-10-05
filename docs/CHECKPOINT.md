@@ -4,6 +4,7 @@
 
 - **Fase 7 — Cobertura bancaria Colombia: CERRADA e integrada.**
 - **Fase 8 — Universal Import Engine: CERRADA e integrada.**
+- **Fase 9 — Portafolios, brokers, exchanges y wallets: CERRADA e integrada.**
 - 8.1 CSV/XLSX/OFX: PR #52, CI #119 verde, merge `f380080`.
 - 8.2 PDF en parser aislado: PR #53, CI #121 verde, merge `2b4616b`.
 - 8.3 detección de institución/formato: PR #54, CI #124 verde, merge `7aae95d`.
@@ -20,7 +21,8 @@
 - 9.7 Contribution matcher mensual banco ↔ inversión: PR #73, CI #164 verde, merge `1e9aa9a`.
 - 9.8 Portfolio snapshots e historial: PR #75, CI #169 verde, merge `11d86ff`.
 - 9.9 Cost basis/P&L/dividendos/fees/impuestos: PR #77, CI #173 verde, merge `70baa59`.
-- Próximo bloque exacto permitido: **Fase 9.10 — TWR/XIRR y separación estricta de rendimiento vs aportes**.
+- 9.10 TWR/XIRR y separación estricta de rendimiento vs aportes: PR #79, CI #177 verde, merge `42824fd`.
+- Próximo bloque exacto permitido: **Fase 10.1 — Merchant normalization y categorización**.
 
 ## Cierre Fase 8
 
@@ -38,13 +40,27 @@ Reglas vigentes:
 - duplicados exactos se suprimen o reemplazan por una fuente de mayor autoridad;
 - coincidencias likely/possible quedan en revisión y no se insertan automáticamente.
 
+## Cierre Fase 9
+
+La capa de inversiones quedó cerrada para el MVP con portafolios read-only, fronteras seguras para brokers/exchanges/wallets, aportes bancarios tratados como `investment_transfer`, snapshots históricos, contabilidad de portafolio conservadora y retornos que separan explícitamente aportes de rendimiento.
+
+Reglas vigentes:
+- brokers, exchanges y wallets permanecen read-only; no trading, retiros ni transferencias;
+- wallets observan únicamente identificadores públicos y jamás requieren seed phrase/private key;
+- adapters adicionales exigen fuente oficial o agregador autorizado y una referencia de verificación;
+- aportes banco ↔ inversión se concilian de forma determinista y nunca se clasifican como gasto;
+- snapshots se validan por tenant, portfolio, timestamp y moneda;
+- cost basis/P&L/dividendos/fees/impuestos ausentes se reportan como no disponibles, no como cero inventado;
+- TWR elimina flujos externos por intervalo y XIRR usa aportes/retiros como cash flows separados;
+- no se habilitaron datos reales, secretos, producción financiera ni movimiento de dinero.
+
 ## Gate siguiente
 
-El siguiente bloque permitido es únicamente **9.3 — Interactive Brokers Web API read-only: accounts/positions/activity**. No adelantar 9.4 antes de integrar 9.3 con CI verde.
+El siguiente bloque permitido es únicamente **10.1 — Merchant normalization y categorización**. Fase 9 está cerrada; no reabrirla salvo regresión verificable.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
 
 ## Fase 9.1 integrada
 
-La vista Portafolios ya dispone de agregación patrimonial read-only y un view-model con privacidad. El agregado no inventa conversiones entre monedas: valores incompatibles quedan fuera del total y se señalan para revisión. El siguiente bloque es 9.2 según ROADMAP.md.
+La vista Portafolios dispone de agregación patrimonial read-only y un view-model con privacidad. El agregado no inventa conversiones entre monedas: valores incompatibles quedan fuera del total y se señalan para revisión. Este bloque forma parte de la Fase 9 ya cerrada.
