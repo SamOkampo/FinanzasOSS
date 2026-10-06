@@ -2,6 +2,7 @@ export * from "./portfolio-overview.js";
 export * from "./navigation.js";
 export * from "./surfaces.js";
 export * from "./accessibility.js";
+export * from "./mobile-experience.js";
 
 export interface DashboardShellModel {
   title: string;
