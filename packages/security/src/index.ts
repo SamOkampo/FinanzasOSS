@@ -321,7 +321,6 @@ export class HardenedTokenVault implements TokenVault {
       envelope: Object.freeze({ ...envelope }),
       version: current.version + 1,
       rotatedAt: now,
-      revokedAt: undefined,
     });
 
     if (!replaced) throw new Error("Vault rotation conflict");
