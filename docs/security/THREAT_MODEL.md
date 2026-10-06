@@ -86,7 +86,7 @@ Mitigaciones: preferir OAuth; API keys solo read-only; nunca seed phrase/private
 - [x] Secret scanning dedicado de alta confianza en CI; protección de secretos de plataforma sigue recomendada.
 - [x] Dependency scanning en CI + Dependabot.
 - [x] Observabilidad allowlisted con rechazo de payloads financieros crudos, account numbers y secret-like fields.
-- [ ] Data retention/delete flow.
+- [x] Data export/delete planning tenant-scoped; ejecución destructiva con datos reales sigue gated por política/aprobación productiva.
 - [ ] Revisión jurídica y requisitos de tercero receptor.
 - [x] Validación read-only para brokers/exchanges y binding de credenciales sin permisos de trading/retiro/transfer.
 - [ ] Pentest antes de producción.

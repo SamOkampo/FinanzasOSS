@@ -128,11 +128,11 @@
 - [x] 14.5 Administración/soporte seguro
 
 ## Fase 15 — Producción fintech (requiere autorización explícita)
-- [ ] 15.1 Accesos productivos/acuerdos/certificados
-- [ ] 15.2 Revisión jurídica y tratamiento de datos
-- [ ] 15.3 Infra productiva y observabilidad
-- [ ] 15.4 Pentest externo y readiness
-- [ ] 15.5 Go-live gradual por connector
+- [ ] 15.1 Accesos productivos/acuerdos/certificados — readiness interno integrado; evidencia externa pendiente
+- [ ] 15.2 Revisión jurídica y tratamiento de datos — readiness interno integrado; aprobación humana pendiente
+- [ ] 15.3 Infra productiva y observabilidad — hardening/readiness integrado; infraestructura real pendiente
+- [ ] 15.4 Pentest externo y readiness — gate integrado; pentest independiente real pendiente
+- [ ] 15.5 Go-live gradual por connector — gate integrado; canary/go-live real pendiente
 
 ## Fase 16 — Auditoría final
 - [ ] 16.1 Backend/API/DB/security

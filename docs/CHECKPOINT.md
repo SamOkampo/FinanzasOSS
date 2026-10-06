@@ -336,3 +336,18 @@ Administración/soporte usa grants tenant-bound, explícitamente autorizados, co
 Fase 14 quedó cerrada de 14.1 a 14.5 con onboarding tenant-scoped, guards de aislamiento cross-tenant, múltiples conexiones/portafolios derivados solo de relaciones explícitas, gestión de consentimiento provider-neutral, billing preparado sin activación/cobro y soporte administrativo temporal de mínimo privilegio. Se preservan todas las fronteras fintech: no producción bancaria, no credenciales reales, no screen scraping, no scopes/endpoints inventados, no trading/retiros, no movimiento de dinero y portafolios read-only.
 
 Fase 15 permanece bloqueada hasta autorización explícita para trabajo productivo, acuerdos/certificados, revisión legal/privacidad, infraestructura, pentest externo y go-live.
+
+
+## Fase 15 — Readiness interno integrado, gates externos pendientes
+
+Autorización para iniciar Fase 15 recibida. Se completó e integró todo el trabajo de software/readiness que puede ejecutarse sin fabricar evidencias externas:
+
+- 15.1 production access evidence gate: PR #138, CI #303 verde, merge `234cb70`.
+- 15.2 legal/data review evidence gate: PR #139, CI #305 verde, merge `a826a93`.
+- 15.3 production infrastructure/observability readiness: PR #140, CI #311 verde, merge `2af389d`.
+- 15.4 external pentest readiness gate: PR #141, CI #313 verde, merge `987805d`.
+- 15.5 gradual connector go-live gate: PR #142, CI #315 verde, merge `d400881`.
+
+El software falla cerrado: no considera listo un conector sin evidencia real de acuerdo/acceso productivo, revisión jurídica/privacidad, infraestructura controlada, pentest externo sin hallazgos críticos/altos abiertos y plan de canary/rollback aprobado. No existe activación automática ni capacidades financieras de escritura.
+
+Fase 15 NO se declara cerrada todavía porque faltan hechos externos verificables que el repositorio no puede autocertificar: acuerdos/credenciales/certificados reales de proveedor, aprobación jurídica humana, KMS/RLS/monitoring/backups productivos, pentest independiente y al menos un canary/go-live real aprobado. Hasta entonces Fase 16 no debe iniciarse automáticamente.
