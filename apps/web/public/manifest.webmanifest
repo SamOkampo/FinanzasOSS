@@ -1,0 +1,11 @@
+{
+  "name": "FinanzasOS",
+  "short_name": "FinanzasOS",
+  "description": "Panel personal de patrimonio y finanzas en modo seguro y read-only.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "es-CO",
+  "categories": ["finance", "productivity"]
+}
