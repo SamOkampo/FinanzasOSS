@@ -355,3 +355,5 @@ export const hardenedVaultPolicy = Object.freeze({
   secretReferencesRemainOpaque: true,
   productionKmsProviderRequiredBeforeRealSecrets: true,
 });
+
+export * from "./audit-consent.js";
