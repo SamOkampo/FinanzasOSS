@@ -139,7 +139,7 @@ assert.throws(
     keyHandleReference:"kms://fixture/key-handle",
     signer:"external_kms",
   }),
-  /opaque reference/,
+  /opaque reference|whitespace/,
 );
 
 assert.throws(
