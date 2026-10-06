@@ -3,9 +3,11 @@
   --fos-radius-card: 24px;
   --fos-radius-panel: 30px;
   --fos-target-min: 44px;
+  --fos-motion-instant: 120ms;
   --fos-motion-quick: 180ms;
   --fos-motion-standard: 280ms;
   --fos-motion-expressive: 420ms;
+  --fos-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --fos-glass-blur: 20px;
 
   --fos-space-1: 4px;
@@ -39,12 +41,42 @@
   min-height: var(--fos-target-min);
   border-radius: var(--fos-radius-control);
   transition:
-    transform var(--fos-motion-quick) ease,
-    box-shadow var(--fos-motion-quick) ease;
+    transform var(--fos-motion-quick) var(--fos-motion-ease),
+    box-shadow var(--fos-motion-quick) var(--fos-motion-ease);
 }
 
 [data-finanzasos-control="capsule"]:active {
   transform: scale(0.98);
+}
+
+[data-finanzasos-motion="navigation"],
+[data-finanzasos-motion="transfer-reconciliation"],
+[data-finanzasos-motion="investment-contribution"] {
+  transition:
+    transform var(--fos-motion-standard) var(--fos-motion-ease),
+    opacity var(--fos-motion-standard) var(--fos-motion-ease);
+}
+
+[data-finanzasos-motion="disclosure"],
+[data-finanzasos-motion="privacy"] {
+  transition:
+    transform var(--fos-motion-quick) var(--fos-motion-ease),
+    opacity var(--fos-motion-quick) var(--fos-motion-ease);
+}
+
+[data-finanzasos-motion="data-refresh"] {
+  transition: opacity var(--fos-motion-standard) var(--fos-motion-ease);
+}
+
+[data-finanzasos-motion="modal"] {
+  transition:
+    transform var(--fos-motion-standard) var(--fos-motion-ease),
+    opacity var(--fos-motion-standard) var(--fos-motion-ease);
+  transform-origin: center;
+}
+
+[data-finanzasos-privacy-state="masked"] [data-finanzasos-money] {
+  opacity: 0.72;
 }
 
 [data-finanzasos-primary-nav] {
@@ -69,12 +101,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --fos-motion-quick: 80ms;
+    --fos-motion-instant: 80ms;
+    --fos-motion-quick: 120ms;
     --fos-motion-standard: 120ms;
     --fos-motion-expressive: 120ms;
   }
 
-  [data-finanzasos-control="capsule"]:active {
+  [data-finanzasos-control="capsule"]:active,
+  [data-finanzasos-motion] {
     transform: none;
+  }
+
+  [data-finanzasos-motion] {
+    transition-property: opacity;
+    transition-duration: var(--fos-motion-quick);
   }
 }
