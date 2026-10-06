@@ -130,7 +130,9 @@ Reglas vigentes:
 
 **14.3 — Consent management: CERRADA al integrar PR #134 con CI verde.**
 
-El siguiente bloque exacto tras el merge es **14.4 — Billing/planes preparado, sin activación automática**.
+**14.4 — Billing/planes preparado, sin activación automática: CERRADA al integrar PR #135 con CI verde.**
+
+El siguiente bloque exacto tras el merge es **14.5 — Administración/soporte seguro**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -313,3 +315,8 @@ La workspace multiusuario admite múltiples conexiones y portafolios por tenant 
 ## Fase 14.3 lista para integración
 
 La gestión de consentimiento queda tenant+connection scoped, deriva expiry sin mutar silenciosamente el registro, habilita solo acciones válidas por estado y conserva las capacidades existentes. Revocación es explícita; renew/reauthorize requieren un nuevo flujo de consentimiento del proveedor. Cualquier cambio de capacidades exige consentimiento fresco. La capa no ejecuta llamadas al proveedor ni inventa endpoints, scopes, certificados o credenciales.
+
+
+## Fase 14.4 lista para integración
+
+Billing queda preparado mediante catálogo validado y asignaciones tenant-scoped en estado `pending_activation`. No se inventan precios ni condiciones comerciales, no se aplican entitlements automáticamente y no existe llamada a procesador, cobro, renovación ni activación productiva. Cualquier billing real permanece sujeto a autorización explícita posterior.
