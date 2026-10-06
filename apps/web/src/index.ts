@@ -3,6 +3,7 @@ export * from "./navigation.js";
 export * from "./surfaces.js";
 export * from "./accessibility.js";
 export * from "./mobile-experience.js";
+export * from "./financial-view-state.js";
 
 export interface DashboardShellModel {
   title: string;

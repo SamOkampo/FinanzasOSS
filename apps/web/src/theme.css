@@ -173,3 +173,25 @@
   transition-property: opacity;
   transition-duration: var(--fos-motion-quick);
 }
+
+
+[data-finanzasos-state="loading"] {
+  cursor: progress;
+}
+
+[data-finanzasos-state="loading"] [data-finanzasos-sensitive] {
+  visibility: hidden;
+}
+
+[data-finanzasos-state="loading"] [data-finanzasos-skeleton] {
+  opacity: 0.56;
+}
+
+[data-finanzasos-state="empty"],
+[data-finanzasos-state="error"] {
+  min-block-size: 8rem;
+}
+
+[data-finanzasos-state="error"] [data-finanzasos-raw-error] {
+  display: none;
+}
