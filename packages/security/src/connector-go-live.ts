@@ -62,6 +62,11 @@ export function assessConnectorGoLive(input: {
 
   const connectorId = input.rollout.connectorId?.trim() ?? "";
   if (!connectorId) reasons.push("rollout:connectorId");
+
+  const accessProviderId = input.access.providerId?.trim() ?? "";
+  if (connectorId && accessProviderId && connectorId !== accessProviderId) {
+    reasons.push("rollout:connectorId does not match access:providerId");
+  }
   if (!hasText(input.rollout.canaryPlanReference)) reasons.push("rollout:canaryPlanReference");
   if (!hasText(input.rollout.rollbackPlanReference)) reasons.push("rollout:rollbackPlanReference");
   if (!hasText(input.rollout.initialAudienceReference)) {
