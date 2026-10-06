@@ -112,7 +112,7 @@
 - [x] 12.7 Rendimiento y accesibilidad
 
 ## Fase 13 — Hardening seguridad fintech
-- [ ] 13.1 Encryption/token vault/secret rotation
+- [x] 13.1 Encryption/token vault/secret rotation
 - [ ] 13.2 OAuth/state/PKCE/mTLS según proveedor
 - [ ] 13.3 Rate limits/CSRF/XSS/SSRF
 - [ ] 13.4 Audit log/consent ledger
