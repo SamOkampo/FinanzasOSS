@@ -121,7 +121,7 @@
 - [x] 13.7 Enforcement: ninguna credencial con permiso de trading/retiro en adapters read-only
 
 ## Fase 14 — Multiusuario
-- [ ] 14.1 Onboarding y aislamiento por tenant
+- [x] 14.1 Onboarding y aislamiento por tenant
 - [ ] 14.2 Multiple connections/portfolios
 - [ ] 14.3 Consent management
 - [ ] 14.4 Billing/planes preparado, sin activación automática
