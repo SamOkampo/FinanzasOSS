@@ -132,7 +132,9 @@ Reglas vigentes:
 
 **14.4 — Billing/planes preparado, sin activación automática: CERRADA al integrar PR #135 con CI verde.**
 
-El siguiente bloque exacto tras el merge es **14.5 — Administración/soporte seguro**.
+**14.5 — Administración/soporte seguro: CERRADA al integrar PR #136 con CI verde.**
+
+Tras el merge corresponde **auditar y cerrar la Fase 14 completa** antes de iniciar 15.1.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -320,3 +322,8 @@ La gestión de consentimiento queda tenant+connection scoped, deriva expiry sin 
 ## Fase 14.4 lista para integración
 
 Billing queda preparado mediante catálogo validado y asignaciones tenant-scoped en estado `pending_activation`. No se inventan precios ni condiciones comerciales, no se aplican entitlements automáticamente y no existe llamada a procesador, cobro, renovación ni activación productiva. Cualquier billing real permanece sujeto a autorización explícita posterior.
+
+
+## Fase 14.5 lista para integración
+
+Administración/soporte usa grants tenant-bound, explícitamente autorizados, con case reference, scopes allowlisted y expiración máxima de una hora. Soporte no accede a saldos, transacciones, posiciones, secretos o credenciales; tampoco puede impersonar usuarios, mutar consentimientos ni mover dinero. Los accesos deben auditarse mediante metadata segura.
