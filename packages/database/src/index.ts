@@ -90,3 +90,5 @@ export interface SyncCheckpoint {
   cursor?: string;
   updatedAt: string;
 }
+
+export * from "./data-lifecycle.js";
