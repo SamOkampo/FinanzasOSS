@@ -108,3 +108,251 @@ function redactValue(value: unknown): unknown {
 export function redactForLog(input: Record<string, unknown>): Record<string, unknown> {
   return redactValue(input) as Record<string, unknown>;
 }
+
+
+export interface VaultCiphertextEnvelope {
+  algorithm: "AEAD";
+  keyId: string;
+  nonce: string;
+  ciphertext: string;
+  authTag: string;
+}
+
+export interface VaultCryptoProvider {
+  currentKeyId(): Promise<string>;
+  encrypt(input: {
+    plaintext: string;
+    additionalAuthenticatedData: string;
+    keyId: string;
+  }): Promise<VaultCiphertextEnvelope>;
+  decrypt(input: {
+    envelope: VaultCiphertextEnvelope;
+    additionalAuthenticatedData: string;
+  }): Promise<string>;
+}
+
+export interface EncryptedSecretRecord {
+  reference: SecretReference;
+  scope: VaultScope;
+  envelope: VaultCiphertextEnvelope;
+  version: number;
+  createdAt: string;
+  rotatedAt?: string;
+  revokedAt?: string;
+}
+
+export interface EncryptedSecretStore {
+  insert(record: EncryptedSecretRecord): Promise<void>;
+  get(scope: VaultScope, reference: SecretReference): Promise<EncryptedSecretRecord | null>;
+  replace(
+    scope: VaultScope,
+    reference: SecretReference,
+    expectedVersion: number,
+    record: EncryptedSecretRecord,
+  ): Promise<boolean>;
+}
+
+export interface SecretReferenceFactory {
+  create(scope: VaultScope): SecretReference;
+}
+
+export interface VaultClock {
+  now(): string;
+}
+
+const VAULT_ENVELOPE_KEYS = new Set(["algorithm", "keyId", "nonce", "ciphertext", "authTag"]);
+
+export function assertVaultCiphertextEnvelope(envelope: VaultCiphertextEnvelope): void {
+  const raw = envelope as unknown as Record<string, unknown>;
+  for (const key of Object.keys(raw)) {
+    if (!VAULT_ENVELOPE_KEYS.has(key)) {
+      throw new Error(`Unexpected vault envelope field: ${key}`);
+    }
+  }
+
+  if (envelope.algorithm !== "AEAD") throw new Error("Vault encryption must use authenticated encryption");
+  if (!envelope.keyId.trim()) throw new Error("Vault envelope keyId is required");
+  if (!envelope.nonce.trim()) throw new Error("Vault envelope nonce is required");
+  if (!envelope.ciphertext.trim()) throw new Error("Vault envelope ciphertext is required");
+  if (!envelope.authTag.trim()) throw new Error("Vault envelope authTag is required");
+}
+
+export function vaultAdditionalAuthenticatedData(
+  scope: VaultScope,
+  reference: SecretReference,
+): string {
+  assertVaultScope(scope);
+  return [
+    "finanzasoss:vault:v1",
+    `tenant=${encodeURIComponent(scope.tenantId)}`,
+    `connection=${encodeURIComponent(scope.connectionId)}`,
+    `reference=${encodeURIComponent(reference)}`,
+  ].join("|");
+}
+
+function assertIsoTimestamp(value: string, label: string): void {
+  if (Number.isNaN(Date.parse(value))) throw new Error(`${label} must be a valid date`);
+}
+
+function assertEncryptedSecretRecord(
+  record: EncryptedSecretRecord,
+  scope: VaultScope,
+  reference: SecretReference,
+): void {
+  if (record.reference !== reference) throw new Error("Vault record reference mismatch");
+  if (record.scope.tenantId !== scope.tenantId || record.scope.connectionId !== scope.connectionId) {
+    throw new Error("Vault record scope mismatch");
+  }
+  if (!Number.isInteger(record.version) || record.version < 1) {
+    throw new Error("Vault record version must be a positive integer");
+  }
+  assertIsoTimestamp(record.createdAt, "Vault record createdAt");
+  if (record.rotatedAt !== undefined) assertIsoTimestamp(record.rotatedAt, "Vault record rotatedAt");
+  if (record.revokedAt !== undefined) assertIsoTimestamp(record.revokedAt, "Vault record revokedAt");
+  assertVaultCiphertextEnvelope(record.envelope);
+}
+
+function serializeConnectorSecret(secret: ConnectorSecretMaterial): string {
+  assertConnectorSecretMaterial(secret);
+  return JSON.stringify(secret);
+}
+
+function deserializeConnectorSecret(serialized: string): ConnectorSecretMaterial {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    throw new Error("Vault plaintext payload is not valid JSON");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Vault plaintext payload must be an object");
+  }
+
+  const secret = parsed as ConnectorSecretMaterial;
+  assertConnectorSecretMaterial(secret);
+  return secret;
+}
+
+export class HardenedTokenVault implements TokenVault {
+  constructor(
+    private readonly crypto: VaultCryptoProvider,
+    private readonly store: EncryptedSecretStore,
+    private readonly references: SecretReferenceFactory,
+    private readonly clock: VaultClock,
+  ) {}
+
+  async put(scope: VaultScope, secret: ConnectorSecretMaterial): Promise<SecretReference> {
+    assertVaultScope(scope);
+    assertConnectorSecretMaterial(secret);
+
+    const reference = this.references.create(scope);
+    const keyId = (await this.crypto.currentKeyId()).trim();
+    if (!keyId) throw new Error("Vault crypto provider returned an empty keyId");
+
+    const envelope = await this.crypto.encrypt({
+      plaintext: serializeConnectorSecret(secret),
+      additionalAuthenticatedData: vaultAdditionalAuthenticatedData(scope, reference),
+      keyId,
+    });
+    assertVaultCiphertextEnvelope(envelope);
+    if (envelope.keyId !== keyId) throw new Error("Vault envelope keyId mismatch");
+
+    const now = this.clock.now();
+    assertIsoTimestamp(now, "Vault clock");
+
+    await this.store.insert(
+      Object.freeze({
+        reference,
+        scope: Object.freeze({ ...scope }),
+        envelope: Object.freeze({ ...envelope }),
+        version: 1,
+        createdAt: now,
+      }),
+    );
+
+    return reference;
+  }
+
+  async get(scope: VaultScope, reference: SecretReference): Promise<ConnectorSecretMaterial> {
+    assertVaultScope(scope);
+    const record = await this.store.get(scope, reference);
+    if (!record) throw new Error("Vault secret not found");
+    assertEncryptedSecretRecord(record, scope, reference);
+    if (record.revokedAt !== undefined) throw new Error("Vault secret is revoked");
+
+    const plaintext = await this.crypto.decrypt({
+      envelope: record.envelope,
+      additionalAuthenticatedData: vaultAdditionalAuthenticatedData(scope, reference),
+    });
+
+    return deserializeConnectorSecret(plaintext);
+  }
+
+  async rotate(
+    scope: VaultScope,
+    reference: SecretReference,
+    secret: ConnectorSecretMaterial,
+  ): Promise<void> {
+    assertVaultScope(scope);
+    assertConnectorSecretMaterial(secret);
+
+    const current = await this.store.get(scope, reference);
+    if (!current) throw new Error("Vault secret not found");
+    assertEncryptedSecretRecord(current, scope, reference);
+    if (current.revokedAt !== undefined) throw new Error("Cannot rotate a revoked vault secret");
+
+    const keyId = (await this.crypto.currentKeyId()).trim();
+    if (!keyId) throw new Error("Vault crypto provider returned an empty keyId");
+
+    const envelope = await this.crypto.encrypt({
+      plaintext: serializeConnectorSecret(secret),
+      additionalAuthenticatedData: vaultAdditionalAuthenticatedData(scope, reference),
+      keyId,
+    });
+    assertVaultCiphertextEnvelope(envelope);
+    if (envelope.keyId !== keyId) throw new Error("Vault envelope keyId mismatch");
+
+    const now = this.clock.now();
+    assertIsoTimestamp(now, "Vault clock");
+
+    const replaced = await this.store.replace(scope, reference, current.version, {
+      ...current,
+      envelope: Object.freeze({ ...envelope }),
+      version: current.version + 1,
+      rotatedAt: now,
+      revokedAt: undefined,
+    });
+
+    if (!replaced) throw new Error("Vault rotation conflict");
+  }
+
+  async revoke(scope: VaultScope, reference: SecretReference): Promise<void> {
+    assertVaultScope(scope);
+
+    const current = await this.store.get(scope, reference);
+    if (!current) throw new Error("Vault secret not found");
+    assertEncryptedSecretRecord(current, scope, reference);
+    if (current.revokedAt !== undefined) return;
+
+    const now = this.clock.now();
+    assertIsoTimestamp(now, "Vault clock");
+
+    const replaced = await this.store.replace(scope, reference, current.version, {
+      ...current,
+      version: current.version + 1,
+      revokedAt: now,
+    });
+
+    if (!replaced) throw new Error("Vault revocation conflict");
+  }
+}
+
+export const hardenedVaultPolicy = Object.freeze({
+  plaintextPersistenceAllowed: false,
+  authenticatedEncryptionRequired: true,
+  tenantAndConnectionBoundAsAad: true,
+  optimisticConcurrencyRequiredForRotation: true,
+  secretReferencesRemainOpaque: true,
+  productionKmsProviderRequiredBeforeRealSecrets: true,
+});
