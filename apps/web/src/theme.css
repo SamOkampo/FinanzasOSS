@@ -195,3 +195,35 @@
 [data-finanzasos-state="error"] [data-finanzasos-raw-error] {
   display: none;
 }
+
+
+[data-finanzasos-skip-link] {
+  position: fixed;
+  inset-inline-start: var(--fos-space-3);
+  inset-block-start: var(--fos-space-3);
+  z-index: var(--fos-z-modal);
+  transform: translateY(-200%);
+}
+
+[data-finanzasos-skip-link]:focus-visible {
+  transform: translateY(0);
+}
+
+[data-finanzasos-status-region] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-finanzasos-deferred-section="secondary"] {
+  content-visibility: auto;
+  contain-intrinsic-block-size: 320px;
+}
+
+[data-finanzasos-deferred-section="primary-net-worth"] {
+  content-visibility: visible;
+  contain: none;
+}
