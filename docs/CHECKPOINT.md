@@ -108,9 +108,11 @@ Reglas vigentes:
 
 **Fase 12 — Experiencia premium: CERRADA Y AUDITADA.**
 
-**13.1 — Encryption/token vault/secret rotation: CERRADA al integrar este bloque con CI verde.**
+**13.1 — Encryption/token vault/secret rotation: CERRADA e integrada.** PR #121, CI #264 verde, merge `ffbf3b7`.
 
-El siguiente bloque permitido es únicamente **13.2 — OAuth/state/PKCE/mTLS según proveedor**.
+**13.2 — OAuth/state/PKCE/mTLS según proveedor: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **13.3 — Rate limits/CSRF/XSS/SSRF**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -247,3 +249,8 @@ Fase 12 quedó cerrada de 12.1 a 12.7 con design system anti-plantilla IA, motio
 ## Fase 13.1 integrada
 
 El TokenVault endurecido persiste únicamente envelopes AEAD, liga tenant/conexión/referencia como AAD, exige versionado para rotación/revocación atómica y falla cerrado ante conflictos o registros revocados. Los secretos reales siguen prohibidos hasta aprobar un KMS/secret manager productivo e IAM correspondiente.
+
+
+## Fase 13.2 integrada
+
+OAuth queda endurecido con state obligatorio, intents single-use/expirables, PKCE S256 cuando el perfil verificado lo requiere, redirect/provider binding, nonce condicional y mTLS fail-closed mediante referencias opacas a certificado y key handles de KMS/HSM. No se inventan endpoints, scopes, certificados ni requisitos de proveedor.
