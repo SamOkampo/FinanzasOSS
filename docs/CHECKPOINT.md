@@ -124,7 +124,9 @@ Reglas vigentes:
 
 **Fase 13 — Hardening seguridad fintech: CERRADA Y AUDITADA.**
 
-El siguiente bloque del roadmap es **14.1 — Onboarding y aislamiento por tenant**. No se inició en este cierre.
+**14.1 — Onboarding y aislamiento por tenant: CERRADA e integrada.** PR #130, CI #283 verde, merge `c68b86b`.
+
+El siguiente bloque exacto es **14.2 — Multiple connections/portfolios**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -292,3 +294,8 @@ Las credenciales de brokers/exchanges solo pueden vincularse a adapters read-onl
 ## Cierre Fase 13
 
 Fase 13 quedó cerrada de 13.1 a 13.7 con vault cifrado y rotación, OAuth/PKCE/mTLS provider-neutral, hardening request-side, audit/consent append-only, data lifecycle tenant-scoped, dependency scanning + pentest checklist y enforcement explícito de credenciales read-only. Permanecen fuera de este cierre los gates productivos: KMS/IAM reales, aislamiento multiusuario completo, secret scanning dedicado, webhook verification donde aplique, ejecución destructiva con datos reales, pentest externo y cualquier acceso financiero productivo.
+
+
+## Fase 14.1 integrada
+
+El onboarding multiusuario crea únicamente metadata de tenancy de aplicación, exige actor=owner para la creación inicial y entrega un TenantContext explícito. Los guards de ownership aceptan recursos del mismo tenant y rechazan cross-tenant antes de persistencia o disclosure. No existe tenant implícito/fallback y onboarding no concede acceso a datos financieros ni crea credenciales, secretos o consentimiento de proveedor.
