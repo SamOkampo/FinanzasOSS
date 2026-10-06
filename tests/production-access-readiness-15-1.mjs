@@ -11,7 +11,7 @@ const incomplete = assessProductionAccessEvidence({
   readOnly: true,
 });
 assert.equal(incomplete.ready, false);
-assert.deepEqual(incomplete.missing.sort(), [
+assert.deepEqual([...incomplete.missing].sort(), [
   "agreementReference",
   "credentialReference",
   "verifiedAt",
