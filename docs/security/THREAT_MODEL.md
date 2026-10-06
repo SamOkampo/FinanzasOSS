@@ -81,7 +81,7 @@ Mitigaciones: preferir OAuth; API keys solo read-only; nunca seed phrase/private
 ## Security gates antes de datos reales
 - [x] OAuth/consent flows con pruebas de state/PKCE.
 - [ ] Token Vault productivo con KMS/secret manager.
-- [ ] Tenant isolation tests.
+- [x] Tenant isolation tests de aplicación; RLS/segunda barrera productiva sigue pendiente.
 - [ ] Webhook verification/replay tests.
 - [ ] Secret scanning dedicado.
 - [x] Dependency scanning en CI + Dependabot.
