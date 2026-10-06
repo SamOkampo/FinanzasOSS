@@ -104,9 +104,11 @@ Reglas vigentes:
 
 **12.6 — Loading/empty/error states propios: CERRADA e integrada.** PR #118, CI #258 verde, merge `b9b9368`.
 
-**12.7 — Rendimiento y accesibilidad: CERRADA al integrar este bloque con CI verde.**
+**12.7 — Rendimiento y accesibilidad: CERRADA e integrada.** PR #119, CI #260 verde, merge `acc4a1d`.
 
-Después de integrar 12.7 corresponde cerrar y auditar formalmente la **Fase 12 — Experiencia premium**.
+**Fase 12 — Experiencia premium: CERRADA Y AUDITADA.**
+
+El siguiente bloque permitido del MVP es **13.1 — Encryption/token vault/secret rotation**. No se inicia en este cierre de Fase 12.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -233,3 +235,8 @@ Los estados loading/empty/error/ready quedaron normalizados para superficies fin
 ## Fase 12.7 integrada
 
 La experiencia premium incorpora presupuestos verificables de rendimiento, targets táctiles mínimos, nombres accesibles, navegación por teclado, focus visible, anuncios asíncronos sin montos sensibles y deferred rendering limitado a secciones secundarias; el resumen patrimonial primario nunca se difiere.
+
+
+## Cierre Fase 12
+
+Fase 12 quedó cerrada de 12.1 a 12.7 con design system anti-plantilla IA, motion semántico, materiales con privacidad, mobile/PWA segura, temas y reduced-motion, estados loading/empty/error propios y gates de rendimiento/accesibilidad. La experiencia premium preserva todas las fronteras fintech: no inventa datos, no habilita acciones monetarias, no expone secretos y mantiene inversiones read-only.
