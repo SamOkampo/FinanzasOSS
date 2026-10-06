@@ -128,13 +128,15 @@ Reglas vigentes:
 
 **14.2 — Multiple connections/portfolios: CERRADA e integrada.** PR #132, CI #287 verde, merge `307815d`.
 
-**14.3 — Consent management: CERRADA al integrar PR #134 con CI verde.**
+**14.3 — Consent management: CERRADA e integrada.** PR #134, CI #292 verde, merge `60744f5`.
 
-**14.4 — Billing/planes preparado, sin activación automática: CERRADA al integrar PR #135 con CI verde.**
+**14.4 — Billing/planes preparado, sin activación automática: CERRADA e integrada.** PR #135, CI #295 verde, merge `91baab9`.
 
-**14.5 — Administración/soporte seguro: CERRADA al integrar PR #136 con CI verde.**
+**14.5 — Administración/soporte seguro: CERRADA e integrada.** PR #136, CI #298 verde, merge `aef1fe2`.
 
-Tras el merge corresponde **auditar y cerrar la Fase 14 completa** antes de iniciar 15.1.
+**Fase 14 — Multiusuario: CERRADA Y AUDITADA.**
+
+El siguiente bloque del roadmap es **15.1 — Accesos productivos/acuerdos/certificados**, pero Fase 15 requiere autorización explícita antes de cualquier trabajo productivo.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -314,16 +316,23 @@ El onboarding multiusuario crea únicamente metadata de tenancy de aplicación, 
 La workspace multiusuario admite múltiples conexiones y portafolios por tenant sin agregación implícita cross-tenant. Las relaciones portafolio↔conexión se derivan únicamente de cuentas explícitas; cuentas/conexiones desconocidas fallan cerrado, no se inventa FX y los portafolios conservan semántica read-only.
 
 
-## Fase 14.3 lista para integración
+## Fase 14.3 integrada
 
 La gestión de consentimiento queda tenant+connection scoped, deriva expiry sin mutar silenciosamente el registro, habilita solo acciones válidas por estado y conserva las capacidades existentes. Revocación es explícita; renew/reauthorize requieren un nuevo flujo de consentimiento del proveedor. Cualquier cambio de capacidades exige consentimiento fresco. La capa no ejecuta llamadas al proveedor ni inventa endpoints, scopes, certificados o credenciales.
 
 
-## Fase 14.4 lista para integración
+## Fase 14.4 integrada
 
 Billing queda preparado mediante catálogo validado y asignaciones tenant-scoped en estado `pending_activation`. No se inventan precios ni condiciones comerciales, no se aplican entitlements automáticamente y no existe llamada a procesador, cobro, renovación ni activación productiva. Cualquier billing real permanece sujeto a autorización explícita posterior.
 
 
-## Fase 14.5 lista para integración
+## Fase 14.5 integrada
 
 Administración/soporte usa grants tenant-bound, explícitamente autorizados, con case reference, scopes allowlisted y expiración máxima de una hora. Soporte no accede a saldos, transacciones, posiciones, secretos o credenciales; tampoco puede impersonar usuarios, mutar consentimientos ni mover dinero. Los accesos deben auditarse mediante metadata segura.
+
+
+## Cierre Fase 14
+
+Fase 14 quedó cerrada de 14.1 a 14.5 con onboarding tenant-scoped, guards de aislamiento cross-tenant, múltiples conexiones/portafolios derivados solo de relaciones explícitas, gestión de consentimiento provider-neutral, billing preparado sin activación/cobro y soporte administrativo temporal de mínimo privilegio. Se preservan todas las fronteras fintech: no producción bancaria, no credenciales reales, no screen scraping, no scopes/endpoints inventados, no trading/retiros, no movimiento de dinero y portafolios read-only.
+
+Fase 15 permanece bloqueada hasta autorización explícita para trabajo productivo, acuerdos/certificados, revisión legal/privacidad, infraestructura, pentest externo y go-live.
