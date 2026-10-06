@@ -8,7 +8,9 @@
   --fos-motion-standard: 280ms;
   --fos-motion-expressive: 420ms;
   --fos-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --fos-glass-blur: 20px;
+  --fos-glass-navigation-blur: 24px;
+  --fos-glass-floating-blur: 20px;
+  --fos-glass-overlay-blur: 28px;
 
   --fos-space-1: 4px;
   --fos-space-2: 8px;
@@ -27,10 +29,23 @@
   isolation: isolate;
 }
 
-[data-finanzasos-surface="floating"],
 [data-finanzasos-surface="glass"] {
-  backdrop-filter: blur(var(--fos-glass-blur));
-  -webkit-backdrop-filter: blur(var(--fos-glass-blur));
+  backdrop-filter: blur(var(--fos-glass-navigation-blur));
+  -webkit-backdrop-filter: blur(var(--fos-glass-navigation-blur));
+}
+
+[data-finanzasos-surface="floating"] {
+  backdrop-filter: blur(var(--fos-glass-floating-blur));
+  -webkit-backdrop-filter: blur(var(--fos-glass-floating-blur));
+}
+
+[data-finanzasos-surface="privacy"] {
+  backdrop-filter: blur(var(--fos-glass-overlay-blur));
+  -webkit-backdrop-filter: blur(var(--fos-glass-overlay-blur));
+}
+
+[data-finanzasos-surface="privacy"][data-finanzasos-privacy-state="revealed"] {
+  visibility: hidden;
 }
 
 [data-finanzasos-money] {
