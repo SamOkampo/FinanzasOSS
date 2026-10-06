@@ -103,8 +103,8 @@
 - [x] 11.6 Historial de patrimonio y fuentes de cambio
 
 ## Fase 12 — Experiencia premium
-- [ ] 12.1 Auditoría design system anti-plantilla IA
-- [ ] 12.2 Motion/morphing/microinteracciones
+- [x] 12.1 Auditoría design system anti-plantilla IA
+- [x] 12.2 Motion/morphing/microinteracciones
 - [ ] 12.3 Glass/material system con privacidad de saldos
 - [ ] 12.4 Mobile gestures y PWA
 - [ ] 12.5 Dark/light/system + reduced motion
