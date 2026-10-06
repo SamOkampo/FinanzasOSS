@@ -79,6 +79,18 @@ assert.equal(blocked.eligibleForManualCanary, false);
 assert.ok(blocked.reasons.includes("access:agreementReference"));
 assert.ok(blocked.reasons.includes("pentest:high findings remain open"));
 
+const crossProviderEvidence = assessConnectorGoLive({
+  access,
+  legal,
+  infrastructure,
+  pentest,
+  rollout: { ...rollout, connectorId: "provider-b" },
+});
+assert.equal(crossProviderEvidence.eligibleForManualCanary, false);
+assert.ok(
+  crossProviderEvidence.reasons.includes("rollout:connectorId does not match access:providerId"),
+);
+
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
 assert.equal(gradualGoLivePolicy.manualCanaryApprovalRequired, true);
