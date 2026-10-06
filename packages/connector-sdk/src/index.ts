@@ -663,3 +663,5 @@ export class ConnectorSyncEngine {
     }
   }
 }
+
+export * from "./oauth-security.js";
