@@ -369,3 +369,5 @@ export * from "./legal-data-readiness.js";
 export * from "./production-infrastructure-readiness.js";
 
 export * from "./safe-observability.js";
+
+export * from "./pentest-readiness.js";
