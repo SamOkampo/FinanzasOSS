@@ -92,7 +92,11 @@ Reglas vigentes:
 
 **Fase 11 — Dashboard patrimonial: CERRADA Y AUDITADA.**
 
-El siguiente bloque del ROADMAP es **12.1 — Auditoría design system anti-plantilla IA**; no se inicia en este cierre de Fase 11.
+**12.1 — Auditoría design system anti-plantilla IA: CERRADA e integrada.** PR #113, CI #248 verde, merge `4274aa5`.
+
+**12.2 — Motion/morphing/microinteracciones: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **12.3 — Glass/material system con privacidad de saldos**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -185,3 +189,12 @@ El historial patrimonial deriva net worth de efectivo + inversiones - pasivos y 
 ## Cierre Fase 11
 
 Fase 11 quedó cerrada de 11.1 a 11.6 con dashboard de patrimonio total, cash flow/presupuesto, portafolios por proveedor y consolidados, calendario financiero, metas/progreso e historial patrimonial. Todas las superficies son read-only, no inventan FX ni relaciones proveedor↔portafolio y preservan aportes banco↔inversión como `investment_transfer`, nunca como gasto.
+
+
+## Fase 12.1 integrada
+
+La auditoría anti-plantilla IA consolidó jerarquía financiera, materiales con propósito, números como primera clase, motion causal, mobile estructural y accesibilidad como restricciones del diseño premium.
+
+## Fase 12.2 integrada
+
+El motion premium usa intenciones semánticas ligadas a estados financieros reales. Reduced motion elimina transforms y conserva significado con transiciones cortas de opacidad; no hay loops decorativos, count-up de saldos ni affordances exclusivas de hover.
