@@ -135,3 +135,17 @@ export const safeSupportPolicy = Object.freeze({
   moneyMovementAllowed: false,
   supportAccessMustBeAudited: true,
 });
+
+export function buildSupportAccessAuditMetadata(
+  grant: SupportAccessGrant,
+): Readonly<Record<string, unknown>> {
+  return Object.freeze({
+    grantId: grant.grantId,
+    operatorId: grant.operatorId,
+    role: grant.role,
+    caseReference: grant.caseReference,
+    scopes: Object.freeze([...grant.scopes]),
+    expiresAt: grant.expiresAt,
+  });
+}
+
