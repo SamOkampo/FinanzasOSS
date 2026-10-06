@@ -100,9 +100,11 @@ Reglas vigentes:
 
 **12.4 — Mobile gestures y PWA: CERRADA e integrada.** PR #116, CI #254 verde, merge `3ac24df`.
 
-**12.5 — Dark/light/system + reduced motion: CERRADA al integrar este bloque con CI verde.**
+**12.5 — Dark/light/system + reduced motion: CERRADA e integrada.** PR #117, CI #256 verde, merge `6ae505d`.
 
-El siguiente bloque permitido es únicamente **12.6 — Loading/empty/error states propios**.
+**12.6 — Loading/empty/error states propios: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **12.7 — Rendimiento y accesibilidad**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -219,3 +221,8 @@ La experiencia móvil restringe swipes a navegación primaria deliberada y nunca
 ## Fase 12.5 integrada
 
 La preferencia visual separa light/dark/system del estado financiero y mantiene reduced motion como restricción de accesibilidad. Si el sistema solicita reducción de movimiento, la app no puede forzar full motion; las preferencias no almacenan datos financieros ni credenciales.
+
+
+## Fase 12.6 integrada
+
+Los estados loading/empty/error/ready quedaron normalizados para superficies financieras. Loading no muestra cifras ficticias ni sensibles, empty no inventa actividad y error nunca renderiza mensajes crudos del proveedor o secretos; autorización, sync y soporte se comunican con acciones seguras específicas.
