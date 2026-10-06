@@ -110,9 +110,11 @@ Reglas vigentes:
 
 **13.1 — Encryption/token vault/secret rotation: CERRADA e integrada.** PR #121, CI #264 verde, merge `ffbf3b7`.
 
-**13.2 — OAuth/state/PKCE/mTLS según proveedor: CERRADA al integrar este bloque con CI verde.**
+**13.2 — OAuth/state/PKCE/mTLS según proveedor: CERRADA e integrada.** PR #122, CI #267 verde, merge `e6bebdb`.
 
-El siguiente bloque permitido es únicamente **13.3 — Rate limits/CSRF/XSS/SSRF**.
+**13.3 — Rate limits/CSRF/XSS/SSRF: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **13.4 — Audit log/consent ledger**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -254,3 +256,8 @@ El TokenVault endurecido persiste únicamente envelopes AEAD, liga tenant/conexi
 ## Fase 13.2 integrada
 
 OAuth queda endurecido con state obligatorio, intents single-use/expirables, PKCE S256 cuando el perfil verificado lo requiere, redirect/provider binding, nonce condicional y mTLS fail-closed mediante referencias opacas a certificado y key handles de KMS/HSM. No se inventan endpoints, scopes, certificados ni requisitos de proveedor.
+
+
+## Fase 13.3 integrada
+
+El borde API incorpora rate-limit determinista, CSRF ligado a sesión+Origin, escaping de texto no confiable/CSP y un gate SSRF por HTTPS + allowlist exacta + bloqueo local/privado. Los redirects deben revalidarse y producción seguirá requiriendo DNS/egress enforcement y rate limiting distribuido.

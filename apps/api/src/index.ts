@@ -7,3 +7,5 @@ export interface HealthResponse {
 export function health(version = "0.0.0"): HealthResponse {
   return { status: "ok", service: "finanzasos-api", version };
 }
+
+export * from "./request-security.js";
