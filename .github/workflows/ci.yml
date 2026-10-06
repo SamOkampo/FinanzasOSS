@@ -20,4 +20,5 @@ jobs:
       - run: npm install -g typescript@5.8.3
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm run security:deps
       - run: npm test
