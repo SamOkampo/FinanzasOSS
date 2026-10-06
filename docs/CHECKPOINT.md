@@ -96,9 +96,11 @@ Reglas vigentes:
 
 **12.2 — Motion/morphing/microinteracciones: CERRADA e integrada.** PR #114, CI #250 verde, merge `0fd0f1c`.
 
-**12.3 — Glass/material system con privacidad de saldos: CERRADA al integrar este bloque con CI verde.**
+**12.3 — Glass/material system con privacidad de saldos: CERRADA e integrada.** PR #115, CI #252 verde, merge `2c9790d`.
 
-El siguiente bloque permitido es únicamente **12.4 — Mobile gestures y PWA**.
+**12.4 — Mobile gestures y PWA: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **12.5 — Dark/light/system + reduced motion**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -205,3 +207,8 @@ El motion premium usa intenciones semánticas ligadas a estados financieros real
 ## Fase 12.3 integrada
 
 Los materiales premium quedaron separados por función: lectura financiera sólida, glass de navegación, glass flotante y overlay de privacidad. Las cifras sensibles solo se permiten en superficies sólidas; los overlays de privacidad exigen valores enmascarados y el glass no se usa como decoración genérica.
+
+
+## Fase 12.4 integrada
+
+La experiencia móvil restringe swipes a navegación primaria deliberada y nunca dispara acciones financieras o destructivas. La PWA queda preparada para modo standalone con safe areas, pero prohíbe cachear API financiera, datos sensibles, secretos o credenciales y no permite acciones monetarias offline.
