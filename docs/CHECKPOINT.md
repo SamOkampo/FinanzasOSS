@@ -94,9 +94,11 @@ Reglas vigentes:
 
 **12.1 — Auditoría design system anti-plantilla IA: CERRADA e integrada.** PR #113, CI #248 verde, merge `4274aa5`.
 
-**12.2 — Motion/morphing/microinteracciones: CERRADA al integrar este bloque con CI verde.**
+**12.2 — Motion/morphing/microinteracciones: CERRADA e integrada.** PR #114, CI #250 verde, merge `0fd0f1c`.
 
-El siguiente bloque permitido es únicamente **12.3 — Glass/material system con privacidad de saldos**.
+**12.3 — Glass/material system con privacidad de saldos: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **12.4 — Mobile gestures y PWA**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -198,3 +200,8 @@ La auditoría anti-plantilla IA consolidó jerarquía financiera, materiales con
 ## Fase 12.2 integrada
 
 El motion premium usa intenciones semánticas ligadas a estados financieros reales. Reduced motion elimina transforms y conserva significado con transiciones cortas de opacidad; no hay loops decorativos, count-up de saldos ni affordances exclusivas de hover.
+
+
+## Fase 12.3 integrada
+
+Los materiales premium quedaron separados por función: lectura financiera sólida, glass de navegación, glass flotante y overlay de privacidad. Las cifras sensibles solo se permiten en superficies sólidas; los overlays de privacidad exigen valores enmascarados y el glass no se usa como decoración genérica.
