@@ -150,3 +150,26 @@
     bottom: max(12px, env(safe-area-inset-bottom));
   }
 }
+
+
+[data-finanzasos-theme="light"] {
+  color-scheme: light;
+}
+
+[data-finanzasos-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-finanzasos-theme="system"] {
+  color-scheme: light dark;
+}
+
+[data-finanzasos-motion-preference="reduced"] [data-finanzasos-motion],
+[data-finanzasos-motion-preference="reduced"] [data-finanzasos-control="capsule"]:active {
+  transform: none;
+}
+
+[data-finanzasos-motion-preference="reduced"] [data-finanzasos-motion] {
+  transition-property: opacity;
+  transition-duration: var(--fos-motion-quick);
+}

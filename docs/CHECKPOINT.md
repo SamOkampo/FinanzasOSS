@@ -98,9 +98,11 @@ Reglas vigentes:
 
 **12.3 — Glass/material system con privacidad de saldos: CERRADA e integrada.** PR #115, CI #252 verde, merge `2c9790d`.
 
-**12.4 — Mobile gestures y PWA: CERRADA al integrar este bloque con CI verde.**
+**12.4 — Mobile gestures y PWA: CERRADA e integrada.** PR #116, CI #254 verde, merge `3ac24df`.
 
-El siguiente bloque permitido es únicamente **12.5 — Dark/light/system + reduced motion**.
+**12.5 — Dark/light/system + reduced motion: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **12.6 — Loading/empty/error states propios**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -212,3 +214,8 @@ Los materiales premium quedaron separados por función: lectura financiera sóli
 ## Fase 12.4 integrada
 
 La experiencia móvil restringe swipes a navegación primaria deliberada y nunca dispara acciones financieras o destructivas. La PWA queda preparada para modo standalone con safe areas, pero prohíbe cachear API financiera, datos sensibles, secretos o credenciales y no permite acciones monetarias offline.
+
+
+## Fase 12.5 integrada
+
+La preferencia visual separa light/dark/system del estado financiero y mantiene reduced motion como restricción de accesibilidad. Si el sistema solicita reducción de movimiento, la app no puede forzar full motion; las preferencias no almacenan datos financieros ni credenciales.
