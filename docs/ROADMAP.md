@@ -125,7 +125,7 @@
 - [x] 14.2 Multiple connections/portfolios
 - [x] 14.3 Consent management
 - [x] 14.4 Billing/planes preparado, sin activación automática
-- [ ] 14.5 Administración/soporte seguro
+- [x] 14.5 Administración/soporte seguro
 
 ## Fase 15 — Producción fintech (requiere autorización explícita)
 - [ ] 15.1 Accesos productivos/acuerdos/certificados
