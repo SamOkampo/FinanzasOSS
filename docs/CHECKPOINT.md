@@ -112,7 +112,7 @@ Reglas vigentes:
 
 **13.2 — OAuth/state/PKCE/mTLS según proveedor: CERRADA e integrada.** PR #122, CI #267 verde, merge `e6bebdb`.
 
-**13.3 — Rate limits/CSRF/XSS/SSRF: CERRADA al integrar este bloque con CI verde.**
+**13.3 — Rate limits/CSRF/XSS/SSRF: CERRADA e integrada.** PR #123, CI #269 verde, merge `c4e8db0`.
 
 El siguiente bloque permitido es únicamente **13.4 — Audit log/consent ledger**.
 
