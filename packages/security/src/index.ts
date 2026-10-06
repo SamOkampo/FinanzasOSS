@@ -371,3 +371,5 @@ export * from "./production-infrastructure-readiness.js";
 export * from "./safe-observability.js";
 
 export * from "./pentest-readiness.js";
+
+export * from "./connector-go-live.js";
