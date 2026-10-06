@@ -115,10 +115,10 @@
 - [x] 13.1 Encryption/token vault/secret rotation
 - [x] 13.2 OAuth/state/PKCE/mTLS según proveedor
 - [x] 13.3 Rate limits/CSRF/XSS/SSRF
-- [ ] 13.4 Audit log/consent ledger
-- [ ] 13.5 Data export/delete
-- [ ] 13.6 Pentest checklist y dependency scanning
-- [ ] 13.7 Enforcement: ninguna credencial con permiso de trading/retiro en adapters read-only
+- [x] 13.4 Audit log/consent ledger
+- [x] 13.5 Data export/delete
+- [x] 13.6 Pentest checklist y dependency scanning
+- [x] 13.7 Enforcement: ninguna credencial con permiso de trading/retiro en adapters read-only
 
 ## Fase 14 — Multiusuario
 - [ ] 14.1 Onboarding y aislamiento por tenant

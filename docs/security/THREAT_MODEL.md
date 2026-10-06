@@ -66,7 +66,7 @@ Mitigaciones: logging estructurado con allowlist, redacción de tokens/cuentas, 
 ### T10 — Supply-chain
 **Impacto:** alto.
 
-Mitigaciones: lockfile, Dependabot/actualizaciones controladas, mínimo número de dependencias, pinning de Actions y revisión de scripts postinstall.
+Mitigaciones: Dependabot/actualizaciones controladas, auditoría de dependencias en CI con lock efímero y lifecycle scripts deshabilitados, mínimo número de dependencias. El pinning de Actions por SHA queda como hardening pendiente antes de producción.
 
 ### T11 — Acción financiera no autorizada
 **Impacto:** crítico.
@@ -83,9 +83,10 @@ Mitigaciones: preferir OAuth; API keys solo read-only; nunca seed phrase/private
 - [ ] Token Vault productivo con KMS/secret manager.
 - [ ] Tenant isolation tests.
 - [ ] Webhook verification/replay tests.
-- [ ] Secret scanning + dependency scanning.
+- [ ] Secret scanning dedicado.
+- [x] Dependency scanning en CI + Dependabot.
 - [ ] Logs revisados para PII/secrets.
 - [ ] Data retention/delete flow.
 - [ ] Revisión jurídica y requisitos de tercero receptor.
-- [ ] Validación read-only para brokers/exchanges.
+- [x] Validación read-only para brokers/exchanges y binding de credenciales sin permisos de trading/retiro/transfer.
 - [ ] Pentest antes de producción.

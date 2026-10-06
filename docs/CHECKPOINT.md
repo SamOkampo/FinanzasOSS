@@ -114,7 +114,17 @@ Reglas vigentes:
 
 **13.3 — Rate limits/CSRF/XSS/SSRF: CERRADA e integrada.** PR #123, CI #269 verde, merge `c4e8db0`.
 
-El siguiente bloque permitido es únicamente **13.4 — Audit log/consent ledger**.
+**13.4 — Audit log/consent ledger: CERRADA e integrada.** PR #125, CI #273 verde, merge `3eccd5d`.
+
+**13.5 — Data export/delete: CERRADA e integrada.** PR #126, CI #275 verde, merge `a10ef11`.
+
+**13.6 — Pentest checklist y dependency scanning: CERRADA e integrada.** PR #127, CI #277 verde, merge `d006138`.
+
+**13.7 — Read-only credential permission enforcement: CERRADA e integrada.** PR #128, CI #279 verde, merge `d2acf68`.
+
+**Fase 13 — Hardening seguridad fintech: CERRADA Y AUDITADA.**
+
+El siguiente bloque del roadmap es **14.1 — Onboarding y aislamiento por tenant**. No se inició en este cierre.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -261,3 +271,24 @@ OAuth queda endurecido con state obligatorio, intents single-use/expirables, PKC
 ## Fase 13.3 integrada
 
 El borde API incorpora rate-limit determinista, CSRF ligado a sesión+Origin, escaping de texto no confiable/CSP y un gate SSRF por HTTPS + allowlist exacta + bloqueo local/privado. Los redirects deben revalidarse y producción seguirá requiriendo DNS/egress enforcement y rate limiting distribuido.
+
+
+## Fase 13.4 integrada
+
+El audit log quedó definido como append-only, tenant-bound y hash-chained, con timestamps monotónicos y rechazo de metadata con claves secret-like. El consent ledger conserva grants y transiciones revocation/expiry como historial inmutable; un consentimiento terminal no se reactiva silenciosamente.
+
+## Fase 13.5 integrada
+
+El flujo de exportación es tenant-scoped, falla cerrado ante registros cross-tenant y excluye campos secret-like. La eliminación se representa como un plan dependency-aware con ejecución productiva destructiva deshabilitada; cualquier excepción de retención exige una referencia de política aprobada y el código no inventa obligaciones legales.
+
+## Fase 13.6 integrada
+
+CI incorpora un gate de auditoría de dependencias de severidad alta/crítica con lifecycle scripts deshabilitados durante la preparación del lock efímero. Dependabot quedó configurado semanalmente y existe checklist de pentest que separa controles internos ya probados de gates productivos pendientes. No se afirma haber realizado pentest externo.
+
+## Fase 13.7 integrada
+
+Las credenciales de brokers/exchanges solo pueden vincularse a adapters read-only tras una attestation provider-bound de permisos efectivos. Trading, withdrawal o transfer=true fallan cerrado; la capa común no inventa nombres de scopes/permisos del proveedor y exige referencia de verificación oficial/proveedor.
+
+## Cierre Fase 13
+
+Fase 13 quedó cerrada de 13.1 a 13.7 con vault cifrado y rotación, OAuth/PKCE/mTLS provider-neutral, hardening request-side, audit/consent append-only, data lifecycle tenant-scoped, dependency scanning + pentest checklist y enforcement explícito de credenciales read-only. Permanecen fuera de este cierre los gates productivos: KMS/IAM reales, aislamiento multiusuario completo, secret scanning dedicado, webhook verification donde aplique, ejecución destructiva con datos reales, pentest externo y cualquier acceso financiero productivo.
