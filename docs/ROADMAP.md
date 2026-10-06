@@ -124,7 +124,7 @@
 - [x] 14.1 Onboarding y aislamiento por tenant
 - [x] 14.2 Multiple connections/portfolios
 - [x] 14.3 Consent management
-- [ ] 14.4 Billing/planes preparado, sin activación automática
+- [x] 14.4 Billing/planes preparado, sin activación automática
 - [ ] 14.5 Administración/soporte seguro
 
 ## Fase 15 — Producción fintech (requiere autorización explícita)
