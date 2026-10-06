@@ -1,5 +1,6 @@
 export * from "./motion.js";
 export * from "./materials.js";
+export * from "./theme-preferences.js";
 
 export const typographyTokens = Object.freeze({
   moneyNumericVariant: "tabular-nums",
