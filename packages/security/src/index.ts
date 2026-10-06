@@ -357,3 +357,5 @@ export const hardenedVaultPolicy = Object.freeze({
 });
 
 export * from "./audit-consent.js";
+
+export * from "./consent-management.js";
