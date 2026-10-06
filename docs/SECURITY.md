@@ -18,3 +18,11 @@
 - Sandbox por defecto.
 - Sin datos financieros reales hasta autorización explícita.
 - Sin cargos/servicios pagos sin autorización explícita.
+
+
+## Phase 13.3 request hardening
+- Rate limits fail closed with server-derived keys.
+- State-changing requests require session-bound CSRF + exact allowed Origin.
+- Provider content is treated as escaped text; raw provider HTML is prohibited.
+- Outbound connector URLs require HTTPS + exact verified-origin allowlist and reject local/private targets.
+- Redirects require revalidation; production DNS/egress enforcement remains mandatory.
