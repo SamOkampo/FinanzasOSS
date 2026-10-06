@@ -108,7 +108,9 @@ Reglas vigentes:
 
 **Fase 12 — Experiencia premium: CERRADA Y AUDITADA.**
 
-El siguiente bloque permitido del MVP es **13.1 — Encryption/token vault/secret rotation**. No se inicia en este cierre de Fase 12.
+**13.1 — Encryption/token vault/secret rotation: CERRADA al integrar este bloque con CI verde.**
+
+El siguiente bloque permitido es únicamente **13.2 — OAuth/state/PKCE/mTLS según proveedor**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -240,3 +242,8 @@ La experiencia premium incorpora presupuestos verificables de rendimiento, targe
 ## Cierre Fase 12
 
 Fase 12 quedó cerrada de 12.1 a 12.7 con design system anti-plantilla IA, motion semántico, materiales con privacidad, mobile/PWA segura, temas y reduced-motion, estados loading/empty/error propios y gates de rendimiento/accesibilidad. La experiencia premium preserva todas las fronteras fintech: no inventa datos, no habilita acciones monetarias, no expone secretos y mantiene inversiones read-only.
+
+
+## Fase 13.1 integrada
+
+El TokenVault endurecido persiste únicamente envelopes AEAD, liga tenant/conexión/referencia como AAD, exige versionado para rotación/revocación atómica y falla cerrado ante conflictos o registros revocados. Los secretos reales siguen prohibidos hasta aprobar un KMS/secret manager productivo e IAM correspondiente.
