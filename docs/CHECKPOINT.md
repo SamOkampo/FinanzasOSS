@@ -128,7 +128,9 @@ Reglas vigentes:
 
 **14.2 — Multiple connections/portfolios: CERRADA e integrada.** PR #132, CI #287 verde, merge `307815d`.
 
-El siguiente bloque exacto es **14.3 — Consent management**.
+**14.3 — Consent management: CERRADA al integrar PR #134 con CI verde.**
+
+El siguiente bloque exacto tras el merge es **14.4 — Billing/planes preparado, sin activación automática**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -306,3 +308,8 @@ El onboarding multiusuario crea únicamente metadata de tenancy de aplicación, 
 ## Fase 14.2 integrada
 
 La workspace multiusuario admite múltiples conexiones y portafolios por tenant sin agregación implícita cross-tenant. Las relaciones portafolio↔conexión se derivan únicamente de cuentas explícitas; cuentas/conexiones desconocidas fallan cerrado, no se inventa FX y los portafolios conservan semántica read-only.
+
+
+## Fase 14.3 lista para integración
+
+La gestión de consentimiento queda tenant+connection scoped, deriva expiry sin mutar silenciosamente el registro, habilita solo acciones válidas por estado y conserva las capacidades existentes. Revocación es explícita; renew/reauthorize requieren un nuevo flujo de consentimiento del proveedor. Cualquier cambio de capacidades exige consentimiento fresco. La capa no ejecuta llamadas al proveedor ni inventa endpoints, scopes, certificados o credenciales.

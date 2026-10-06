@@ -123,7 +123,7 @@
 ## Fase 14 — Multiusuario
 - [x] 14.1 Onboarding y aislamiento por tenant
 - [x] 14.2 Multiple connections/portfolios
-- [ ] 14.3 Consent management
+- [x] 14.3 Consent management
 - [ ] 14.4 Billing/planes preparado, sin activación automática
 - [ ] 14.5 Administración/soporte seguro
 
