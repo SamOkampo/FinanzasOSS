@@ -109,7 +109,7 @@
 - [x] 12.4 Mobile gestures y PWA
 - [x] 12.5 Dark/light/system + reduced motion
 - [x] 12.6 Loading/empty/error states propios
-- [ ] 12.7 Rendimiento y accesibilidad
+- [x] 12.7 Rendimiento y accesibilidad
 
 ## Fase 13 — Hardening seguridad fintech
 - [ ] 13.1 Encryption/token vault/secret rotation
