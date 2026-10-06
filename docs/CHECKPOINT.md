@@ -102,9 +102,11 @@ Reglas vigentes:
 
 **12.5 — Dark/light/system + reduced motion: CERRADA e integrada.** PR #117, CI #256 verde, merge `6ae505d`.
 
-**12.6 — Loading/empty/error states propios: CERRADA al integrar este bloque con CI verde.**
+**12.6 — Loading/empty/error states propios: CERRADA e integrada.** PR #118, CI #258 verde, merge `b9b9368`.
 
-El siguiente bloque permitido es únicamente **12.7 — Rendimiento y accesibilidad**.
+**12.7 — Rendimiento y accesibilidad: CERRADA al integrar este bloque con CI verde.**
+
+Después de integrar 12.7 corresponde cerrar y auditar formalmente la **Fase 12 — Experiencia premium**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -226,3 +228,8 @@ La preferencia visual separa light/dark/system del estado financiero y mantiene 
 ## Fase 12.6 integrada
 
 Los estados loading/empty/error/ready quedaron normalizados para superficies financieras. Loading no muestra cifras ficticias ni sensibles, empty no inventa actividad y error nunca renderiza mensajes crudos del proveedor o secretos; autorización, sync y soporte se comunican con acciones seguras específicas.
+
+
+## Fase 12.7 integrada
+
+La experiencia premium incorpora presupuestos verificables de rendimiento, targets táctiles mínimos, nombres accesibles, navegación por teclado, focus visible, anuncios asíncronos sin montos sensibles y deferred rendering limitado a secciones secundarias; el resumen patrimonial primario nunca se difiere.
