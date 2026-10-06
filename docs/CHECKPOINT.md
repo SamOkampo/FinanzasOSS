@@ -126,7 +126,9 @@ Reglas vigentes:
 
 **14.1 — Onboarding y aislamiento por tenant: CERRADA e integrada.** PR #130, CI #283 verde, merge `c68b86b`.
 
-El siguiente bloque exacto es **14.2 — Multiple connections/portfolios**.
+**14.2 — Multiple connections/portfolios: CERRADA e integrada.** PR #132, CI #287 verde, merge `307815d`.
+
+El siguiente bloque exacto es **14.3 — Consent management**.
 
 No habilitar producción bancaria, datos financieros reales, pagos/transferencias, trading, retiros, secretos, private keys ni costes sin autorización explícita.
 
@@ -299,3 +301,8 @@ Fase 13 quedó cerrada de 13.1 a 13.7 con vault cifrado y rotación, OAuth/PKCE/
 ## Fase 14.1 integrada
 
 El onboarding multiusuario crea únicamente metadata de tenancy de aplicación, exige actor=owner para la creación inicial y entrega un TenantContext explícito. Los guards de ownership aceptan recursos del mismo tenant y rechazan cross-tenant antes de persistencia o disclosure. No existe tenant implícito/fallback y onboarding no concede acceso a datos financieros ni crea credenciales, secretos o consentimiento de proveedor.
+
+
+## Fase 14.2 integrada
+
+La workspace multiusuario admite múltiples conexiones y portafolios por tenant sin agregación implícita cross-tenant. Las relaciones portafolio↔conexión se derivan únicamente de cuentas explícitas; cuentas/conexiones desconocidas fallan cerrado, no se inventa FX y los portafolios conservan semántica read-only.
