@@ -44,3 +44,7 @@ Do not start Phase 16 as though Phase 15 were closed. First collect and verify t
 ## Phase 15.1 validation hardening (after initial gate)
 
 PR #147, CI #326 (green), squash merge `0956970` corrected an internal fail-closed discrepancy: `assessProductionAccessEvidence()` and `assertProductionAccessEvidence()` now consistently reject whitespace-bearing agreement/credential references and invalid optional certificate references. Regression tests cover malformed references, invalid date, wrong environment and missing read-only attestation. The external provider agreement/access/certificate remains **unverified**, and all Phase 15 external gates remain open.
+
+## Phase 15.1 UTC evidence hardening merged
+
+PR #149, CI #330 successful, merge `3fb4dd4` adds canonical UTC date checks (including impossible/future dates), stricter opaque references, malformed-input fail-closed behavior and regressions. This is repository-side validation only: no provider approval, production infrastructure, external pentest or canary execution is asserted. All external 15.1–15.5 gates remain open.

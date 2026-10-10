@@ -373,3 +373,7 @@ El PR #147 (CI #326 verde, merge `0956970`) corrigió la divergencia entre la ev
 ## Fase 15.1 — Observación adicional de auditoría de timestamps
 
 Se documentó en `docs/phase-15-1-external-evidence-handoff.md` una observación verificable: `Date.parse` permite normalización de fechas imposibles y no rechaza una revisión fechada en el futuro. La corrección de código y sus regresiones están preparadas en esta rama para validación por PR y CI, pero no deben considerarse integradas hasta merge con CI verde. Este hardening no satisface el gate externo 15.1 ni habilita 15.2/16. Mantener Fase 15 abierta y conexiones financieras productivas deshabilitadas.
+
+## Fase 15.1 — Validación UTC integrada
+
+PR #149, CI #330 verde, squash merge `3fb4dd4`: se integró el hardening de timestamps UTC canónicos, rechazo de fechas imposibles/futuras, referencias opacas estrictas y manejo fail-closed de evidencia malformada, con regresiones en `tests/production-access-readiness-15-1.mjs`. La observación previa sobre integración pendiente queda superada por este merge. **Fase 15 sigue abierta** por evidencias externas verificables 15.1–15.5 (acuerdos y acceso oficial, aprobación jurídica, infraestructura real, pentest independiente, canary autorizado). No iniciar Fase 16 ni activar conectores productivos.
