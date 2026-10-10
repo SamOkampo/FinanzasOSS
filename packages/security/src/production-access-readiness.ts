@@ -24,6 +24,10 @@ function required(value: string | undefined, label: string): string {
   return normalized;
 }
 
+function isOpaqueReference(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0 && !/\s/.test(value.trim());
+}
+
 function assertIso(value: string, label: string): void {
   if (Number.isNaN(Date.parse(value))) throw new Error(`${label} must be a valid date`);
 }
@@ -35,8 +39,11 @@ export function assessProductionAccessEvidence(
   const providerId = evidence.providerId?.trim() ?? "";
 
   if (!providerId) missing.push("providerId");
-  if (!evidence.agreementReference?.trim()) missing.push("agreementReference");
-  if (!evidence.credentialReference?.trim()) missing.push("credentialReference");
+  if (!isOpaqueReference(evidence.agreementReference)) missing.push("agreementReference");
+  if (!isOpaqueReference(evidence.credentialReference)) missing.push("credentialReference");
+  if (evidence.certificateReference !== undefined && !isOpaqueReference(evidence.certificateReference)) {
+    missing.push("certificateReference");
+  }
   if (!evidence.verifiedBy?.trim()) missing.push("verifiedBy");
   if (!evidence.verifiedAt || Number.isNaN(Date.parse(evidence.verifiedAt))) missing.push("verifiedAt");
   if (evidence.environment !== "production") missing.push("environment=production");
