@@ -359,3 +359,9 @@ La app de desarrollador de Bancolombia puede existir sin que el producto AISP/co
 Se integro el modelo UX `buildSourceOnboarding` para guiar primero a la importacion manual con vista previa/confirmacion (CSV/XLSX/OFX/PDF), sin mostrar bancos conectados o sync disponible por haber creado una cuenta de portal. No se habilita ningun conector financiero ni se declara pantalla visual desplegada; la evidencia de Fase 15.1 sigue pendiente.
 
 Cobertura: `tests/import-first-onboarding-15-1.mjs` dentro de `npm test`. Documento: `docs/experience/PHASE_15_1_IMPORT_FIRST.md`. Fases 15.2-15.5 conservan sus gates externos; Fase 16 no inicia hasta cierre formal de 15.
+
+## Fase 15.1 — Vista previa visual de incorporación
+
+Se añadió una vista previa HTML/CSS/JS de incorporación de fuentes en `apps/web/public/index.html`, móvil y accesible. Permite explorar las secciones Resumen, Importar y Conexiones sin usar datos financieros reales. CSP sin red (`connect-src 'none'`) ni formularios; no existe selector de archivos, upload, petición API, conexión bancaria o despliegue reclamado. Los textos explican que el parser y las integraciones reales no están conectados a esta vista.
+
+Regresión `tests/onboarding-preview-15-1.mjs` incorporada a `npm test`; detalles en `docs/experience/PHASE_15_1_IMPORT_FIRST.md`. Esto no cierra los gates externos de Fase 15 ni autoriza empezar Fase 16.
