@@ -32,6 +32,28 @@ const evidence = {
 assert.doesNotThrow(() => assertProductionAccessEvidence(evidence));
 assert.equal(assessProductionAccessEvidence(evidence).ready, true);
 
+for (const [field, value] of [
+  ["agreementReference", "agreement ref"],
+  ["credentialReference", "vault\tref"],
+  ["certificateReference", "cert ref"],
+  ["certificateReference", "   "],
+]) {
+  const malformed = { ...evidence, [field]: value };
+  assert.equal(assessProductionAccessEvidence(malformed).ready, false, `${field} must fail closed`);
+  assert.ok(assessProductionAccessEvidence(malformed).missing.includes(field));
+  assert.throws(() => assertProductionAccessEvidence(malformed), /reference/i);
+}
+
+for (const malformed of [
+  { ...evidence, providerId: "" },
+  { ...evidence, verifiedAt: "not-a-date" },
+  { ...evidence, environment: "sandbox" },
+  { ...evidence, readOnly: false },
+]) {
+  assert.equal(assessProductionAccessEvidence(malformed).ready, false);
+  assert.throws(() => assertProductionAccessEvidence(malformed));
+}
+
 assert.throws(
   () => assertProductionAccessEvidence({ ...evidence, readOnly: false }),
   /must remain read-only/,
