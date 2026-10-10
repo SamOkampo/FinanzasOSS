@@ -351,3 +351,11 @@ Autorización para iniciar Fase 15 recibida. Se completó e integró todo el tra
 El software falla cerrado: no considera listo un conector sin evidencia real de acuerdo/acceso productivo, revisión jurídica/privacidad, infraestructura controlada, pentest externo sin hallazgos críticos/altos abiertos y plan de canary/rollback aprobado. No existe activación automática ni capacidades financieras de escritura.
 
 Fase 15 NO se declara cerrada todavía porque faltan hechos externos verificables que el repositorio no puede autocertificar: acuerdos/credenciales/certificados reales de proveedor, aprobación jurídica humana, KMS/RLS/monitoring/backups productivos, pentest independiente y al menos un canary/go-live real aprobado. Hasta entonces Fase 16 no debe iniciarse automáticamente.
+
+## Fase 15.1 — Mejoras de producto mientras se espera acceso oficial
+
+La app de desarrollador de Bancolombia puede existir sin que el producto AISP/consulta de cuentas este habilitado: registrar un portal no es evidencia de autorizacion de APIs, acuerdo, credenciales productivas ni consentimiento. La via de proveedor/alianza requiere confirmacion externa y sigue bloqueada.
+
+Se integro el modelo UX `buildSourceOnboarding` para guiar primero a la importacion manual con vista previa/confirmacion (CSV/XLSX/OFX/PDF), sin mostrar bancos conectados o sync disponible por haber creado una cuenta de portal. No se habilita ningun conector financiero ni se declara pantalla visual desplegada; la evidencia de Fase 15.1 sigue pendiente.
+
+Cobertura: `tests/import-first-onboarding-15-1.mjs` dentro de `npm test`. Documento: `docs/experience/PHASE_15_1_IMPORT_FIRST.md`. Fases 15.2-15.5 conservan sus gates externos; Fase 16 no inicia hasta cierre formal de 15.

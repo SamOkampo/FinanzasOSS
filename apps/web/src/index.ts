@@ -5,6 +5,7 @@ export * from "./accessibility.js";
 export * from "./mobile-experience.js";
 export * from "./financial-view-state.js";
 export * from "./experience-quality.js";
+export * from "./source-onboarding.js";
 
 export interface DashboardShellModel {
   title: string;
@@ -13,5 +14,5 @@ export interface DashboardShellModel {
 }
 
 export function createDashboardShellModel(): DashboardShellModel {
-  return { title: "FinanzasOS", privacyMode: true, connectedInstitutions: 0 };
+  return { title: "FinanzasOSS", privacyMode: true, connectedInstitutions: 0 };
 }
