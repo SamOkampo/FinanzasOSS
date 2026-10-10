@@ -18,9 +18,9 @@ For each connector, an authorized human reviewer must collect and verify:
 
 ## Internal audit observation
 
-The 15.1 readiness assessor and assertion should use identical validation rules. Currently, the assessor checks whether agreement/credential references are nonempty, while the assertion additionally rejects whitespace in those references. A malformed reference can therefore appear ready to downstream callers that only use the assessor. An optional certificate reference is also not checked by the assessor when present. This is a testable fail-closed hardening gap; it must be fixed and covered by regression before any production decision.
+The 15.1 readiness assessor and assertion now reject the same malformed opaque references (including optional certificate references when supplied). This resolves the internal validation-parity defect without implying that any real agreement, certificate, credential, or provider access has been obtained. Both functions are covered by the `production-access-readiness-15-1.mjs` regression.
 
-Recommended regression cases: blank provider, whitespace-containing reference, malformed optional certificate reference, non-production environment, readOnly=false, invalid review timestamp, and a valid opaque-reference control case. Do not use actual secrets or provider credentials in tests.
+Regression cases: blank provider, whitespace-containing reference, malformed optional certificate reference, non-production environment, readOnly=false, invalid review timestamp, and a valid opaque-reference control case. Do not use actual secrets or provider credentials in tests.
 
 ## Release boundary
 
