@@ -128,7 +128,7 @@
 - [x] 14.5 Administración/soporte seguro
 
 ## Fase 15 — Producción fintech (requiere autorización explícita)
-- [ ] 15.1 Accesos productivos/acuerdos/certificados — readiness interno integrado; evidencia externa pendiente (UX import-first segura implementada sin habilitar API ni sincronización)
+- [ ] 15.1 Accesos productivos/acuerdos/certificados — readiness interno integrado; evidencia externa pendiente (UX import-first y vista previa visual segura implementadas sin habilitar API ni sincronización)
 - [ ] 15.2 Revisión jurídica y tratamiento de datos — readiness interno integrado; aprobación humana pendiente
 - [ ] 15.3 Infra productiva y observabilidad — hardening/readiness integrado; infraestructura real pendiente
 - [ ] 15.4 Pentest externo y readiness — gate integrado; pentest independiente real pendiente
