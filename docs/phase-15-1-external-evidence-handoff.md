@@ -25,3 +25,7 @@ Regression cases: blank provider, whitespace-containing reference, malformed opt
 ## Release boundary
 
 Keep 15.1–15.5 unchecked until genuine external evidence is independently verified. Do not start Phase 16 or enable production banking, trading, withdrawals, transfers, or paid infrastructure on the strength of this checklist.
+
+## Review timestamp validation follow-up
+
+The Phase 15.1 assessor and assertion now require canonical UTC timestamps that round-trip without date normalization and cannot be in the future. Regression cases cover impossible calendar dates, future attestations, timezone offsets, invalid precision and valid historical timestamps. This is internal validation hardening, **not evidence of production approval**.

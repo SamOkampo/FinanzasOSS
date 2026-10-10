@@ -369,3 +369,7 @@ Regresión `tests/onboarding-preview-15-1.mjs` incorporada a `npm test`; detalle
 ## Fase 15.1 — Cierre del hallazgo de validación (sin cierre del gate externo)
 
 El PR #147 (CI #326 verde, merge `0956970`) corrigió la divergencia entre la evaluación de readiness y la validación estricta de referencias opacas de acuerdo, credencial administrada y certificado opcional. Incluye regresiones negativas y checklist de evidencias por proveedor en `docs/phase-15-1-external-evidence-handoff.md`. Los controles internos 15.1–15.5 permanecen integrados, pero Fase 15 está **abierta** por acuerdos/accesos/certificados reales, revisión jurídica, infraestructura productiva, pentest externo y canary aprobado. **No empezar Fase 16** sin cierre verificable de dichos gates. No se activó ninguna capacidad financiera productiva.
+
+## Fase 15.1 — Observación adicional de auditoría de timestamps
+
+Se documentó en `docs/phase-15-1-external-evidence-handoff.md` una observación verificable: `Date.parse` permite normalización de fechas imposibles y no rechaza una revisión fechada en el futuro. La corrección de código y sus regresiones están preparadas en esta rama para validación por PR y CI, pero no deben considerarse integradas hasta merge con CI verde. Este hardening no satisface el gate externo 15.1 ni habilita 15.2/16. Mantener Fase 15 abierta y conexiones financieras productivas deshabilitadas.
