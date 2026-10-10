@@ -25,3 +25,7 @@ Regression cases: blank provider, whitespace-containing reference, malformed opt
 ## Release boundary
 
 Keep 15.1–15.5 unchecked until genuine external evidence is independently verified. Do not start Phase 16 or enable production banking, trading, withdrawals, transfers, or paid infrastructure on the strength of this checklist.
+
+## Review timestamp validation follow-up
+
+A remaining internal hardening issue is that the Phase 15.1 review timestamp currently uses JavaScript date parsing, which can normalize impossible calendar dates and accept a future review date. The production-access assessor and assertion both use this check. Before any external go-live decision, require a canonical UTC timestamp that round-trips without calendar normalization and is not in the future, then cover invalid calendar dates, future attestations and a valid historical timestamp in regression tests. This is a code-review action item, **not evidence of production approval**.
