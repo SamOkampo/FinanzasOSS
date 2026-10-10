@@ -22,3 +22,16 @@ The existing import engine's review/deduplication gates still apply. This change
 
 ## Outstanding gate
 Provider/business/legal authorization, real API entitlement, verified OAuth scopes/redirects and regulatory suitability remain unverified and must not be inferred from developer portal registration. No production access or Phase 16 work is authorized.
+## Static visual preview (follow-up)
+
+The self-contained `apps/web/public/index.html` is an accessible **static preview**, with local `preview.css` and `preview.js` (no third-party libraries). It demonstrates a mobile-responsive, import-first onboarding flow with three working navigation sections: overview, file-import guidance, and provider requirements.
+
+Security boundaries for this preview:
+
+- Strict Content Security Policy: `connect-src 'none'`, `form-action 'none'`; no API calls, external assets or data transmission.
+- No financial amounts, accounts, secret fields, file-picker or processing of real statements.
+- Clear disclaimer that this preview is not wired to the existing import parser or any live provider.
+- Accessible navigation buttons, status announcement, keyboard focus, mobile layout and reduced-motion handling.
+- Regression `tests/onboarding-preview-15-1.mjs` validates navigation, CSP, and explicit data-collection prohibition.
+
+No hosted deployment is claimed. A real app/runtime must wire this view to the existing, reviewed import engine and validate its end-to-end behavior before inviting real files; this demo alone is not a ready financial product.
