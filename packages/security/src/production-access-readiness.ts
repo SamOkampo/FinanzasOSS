@@ -16,16 +16,16 @@ export interface ProductionAccessReadiness {
 }
 
 function required(value: string | undefined, label: string): string {
-  const normalized = value?.trim() ?? "";
+  const normalized = typeof value === "string" ? value.trim() : "";
   if (!normalized) throw new Error(`${label} is required`);
-  if (/\s/.test(normalized) && label.toLowerCase().includes("reference")) {
+  if (typeof value === "string" && /\s/.test(value) && label.toLowerCase().includes("reference")) {
     throw new Error(`${label} must be an opaque reference without whitespace`);
   }
   return normalized;
 }
 
 function isOpaqueReference(value: string | undefined): boolean {
-  return typeof value === "string" && value.trim().length > 0 && !/\s/.test(value.trim());
+  return typeof value === "string" && value.trim().length > 0 && !/\s/.test(value);
 }
 
 function isValidReviewTimestamp(value: string | undefined): boolean {
@@ -45,8 +45,9 @@ function assertIso(value: string, label: string): void {
 export function assessProductionAccessEvidence(
   evidence: Partial<ProductionAccessEvidence>,
 ): ProductionAccessReadiness {
+  evidence = evidence ?? {};
   const missing: string[] = [];
-  const providerId = evidence.providerId?.trim() ?? "";
+  const providerId = typeof evidence.providerId === "string" ? evidence.providerId.trim() : "";
 
   if (!providerId) missing.push("providerId");
   if (!isOpaqueReference(evidence.agreementReference)) missing.push("agreementReference");
@@ -54,7 +55,7 @@ export function assessProductionAccessEvidence(
   if (evidence.certificateReference !== undefined && !isOpaqueReference(evidence.certificateReference)) {
     missing.push("certificateReference");
   }
-  if (!evidence.verifiedBy?.trim()) missing.push("verifiedBy");
+  if (typeof evidence.verifiedBy !== "string" || !evidence.verifiedBy.trim()) missing.push("verifiedBy");
   if (!isValidReviewTimestamp(evidence.verifiedAt)) missing.push("verifiedAt");
   if (evidence.environment !== "production") missing.push("environment=production");
   if (evidence.readOnly !== true) missing.push("readOnly=true");
@@ -69,6 +70,7 @@ export function assessProductionAccessEvidence(
 export function assertProductionAccessEvidence(
   evidence: ProductionAccessEvidence,
 ): void {
+  if (evidence == null) throw new Error("Production access evidence is required");
   required(evidence.providerId, "Provider id");
   required(evidence.agreementReference, "Agreement reference");
   required(evidence.credentialReference, "Credential reference");
