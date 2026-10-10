@@ -40,3 +40,7 @@ No live financial credentials, bank data, production provider endpoints/scopes, 
 ## Next gate
 
 Do not start Phase 16 as though Phase 15 were closed. First collect and verify the external evidence above. Once all 15.1–15.5 roadmap items can truthfully be marked complete, close/audit Phase 15 and then begin Phase 16.
+
+## Phase 15.1 validation hardening (after initial gate)
+
+PR #147, CI #326 (green), squash merge `0956970` corrected an internal fail-closed discrepancy: `assessProductionAccessEvidence()` and `assertProductionAccessEvidence()` now consistently reject whitespace-bearing agreement/credential references and invalid optional certificate references. Regression tests cover malformed references, invalid date, wrong environment and missing read-only attestation. The external provider agreement/access/certificate remains **unverified**, and all Phase 15 external gates remain open.

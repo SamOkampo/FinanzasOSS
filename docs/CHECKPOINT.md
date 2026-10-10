@@ -365,3 +365,7 @@ Cobertura: `tests/import-first-onboarding-15-1.mjs` dentro de `npm test`. Docume
 Se añadió una vista previa HTML/CSS/JS de incorporación de fuentes en `apps/web/public/index.html`, móvil y accesible. Permite explorar las secciones Resumen, Importar y Conexiones sin usar datos financieros reales. CSP sin red (`connect-src 'none'`) ni formularios; no existe selector de archivos, upload, petición API, conexión bancaria o despliegue reclamado. Los textos explican que el parser y las integraciones reales no están conectados a esta vista.
 
 Regresión `tests/onboarding-preview-15-1.mjs` incorporada a `npm test`; detalles en `docs/experience/PHASE_15_1_IMPORT_FIRST.md`. Esto no cierra los gates externos de Fase 15 ni autoriza empezar Fase 16.
+
+## Fase 15.1 — Cierre del hallazgo de validación (sin cierre del gate externo)
+
+El PR #147 (CI #326 verde, merge `0956970`) corrigió la divergencia entre la evaluación de readiness y la validación estricta de referencias opacas de acuerdo, credencial administrada y certificado opcional. Incluye regresiones negativas y checklist de evidencias por proveedor en `docs/phase-15-1-external-evidence-handoff.md`. Los controles internos 15.1–15.5 permanecen integrados, pero Fase 15 está **abierta** por acuerdos/accesos/certificados reales, revisión jurídica, infraestructura productiva, pentest externo y canary aprobado. **No empezar Fase 16** sin cierre verificable de dichos gates. No se activó ninguna capacidad financiera productiva.
