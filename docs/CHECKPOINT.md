@@ -372,4 +372,4 @@ El PR #147 (CI #326 verde, merge `0956970`) corrigió la divergencia entre la ev
 
 ## Fase 15.1 — Observación adicional de auditoría de timestamps
 
-Se documentó en `docs/phase-15-1-external-evidence-handoff.md` una observación verificable: `Date.parse` permite normalización de fechas imposibles y no rechaza una revisión fechada en el futuro. La corrección de código y sus pruebas permanecen pendientes; esta observación documental no satisface el gate externo 15.1 ni habilita 15.2/16. Mantener Fase 15 abierta y conexiones financieras productivas deshabilitadas.
+Se documentó en `docs/phase-15-1-external-evidence-handoff.md` una observación verificable: `Date.parse` permite normalización de fechas imposibles y no rechaza una revisión fechada en el futuro. La corrección de código y sus regresiones están preparadas en esta rama para validación por PR y CI, pero no deben considerarse integradas hasta merge con CI verde. Este hardening no satisface el gate externo 15.1 ni habilita 15.2/16. Mantener Fase 15 abierta y conexiones financieras productivas deshabilitadas.
