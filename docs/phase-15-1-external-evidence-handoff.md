@@ -29,3 +29,9 @@ Keep 15.1–15.5 unchecked until genuine external evidence is independently veri
 ## Review timestamp validation follow-up
 
 The Phase 15.1 assessor and assertion now require canonical UTC timestamps that round-trip without date normalization and cannot be in the future. Regression cases cover impossible calendar dates, future attestations, timezone offsets, invalid precision and valid historical timestamps. This is internal validation hardening, **not evidence of production approval**.
+
+## Additional Phase 15.1 evidence-shape audit — open finding
+
+**Status: OPEN, not remediated in `main`.** The current TypeScript `ProductionAccessEvidence` interface is not a runtime schema. The production-access readiness assessor/assertion validate expected values but do not reject extra object properties. Consequently an otherwise valid object with an unexpected field (including an accidentally attached credential-like field) can be accepted as ready. Object getters/accessors also need fail-closed handling before these records can be considered trustworthy. This is an internal input-boundary defect, **not** proof of any leaked credential or actual provider integration.
+
+**Remediation gate:** both `assessProductionAccessEvidence` and `assertProductionAccessEvidence` must reject unexpected own string/symbol keys, non-enumerable extras, accessor properties, non-plain records and malformed values without logging their contents. Add synthetic-only regression tests; ensure legitimate records (including omitted optional certificate reference) remain valid. Merge the code and tests only after full CI passes. Until then, treat provider evidence as untrusted and do not enable production access. External provider/legal/infrastructure/pentest/canary evidence remains required independently.
