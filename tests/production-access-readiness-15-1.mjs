@@ -54,6 +54,26 @@ for (const malformed of [
   assert.throws(() => assertProductionAccessEvidence(malformed));
 }
 
+for (const verifiedAt of [
+  "2026-02-30T03:00:00Z",
+  "2025-02-29T03:00:00Z",
+  "2999-01-01T00:00:00Z",
+  "2026-10-06",
+  "2026-10-06T03:00:00+00:00",
+  "2026-10-06T24:00:00Z",
+  "2026-10-06T03:00:00.1234Z",
+]) {
+  const invalid = { ...evidence, verifiedAt };
+  assert.equal(assessProductionAccessEvidence(invalid).ready, false, verifiedAt);
+  assert.ok(assessProductionAccessEvidence(invalid).missing.includes("verifiedAt"));
+  assert.throws(() => assertProductionAccessEvidence(invalid), /UTC timestamp/);
+}
+for (const verifiedAt of ["2024-02-29T03:00:00Z", "2026-10-06T03:00:00.123Z"]) {
+  const valid = { ...evidence, verifiedAt };
+  assert.equal(assessProductionAccessEvidence(valid).ready, true, verifiedAt);
+  assert.doesNotThrow(() => assertProductionAccessEvidence(valid));
+}
+
 assert.throws(
   () => assertProductionAccessEvidence({ ...evidence, readOnly: false }),
   /must remain read-only/,

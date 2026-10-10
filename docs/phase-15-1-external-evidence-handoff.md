@@ -28,4 +28,4 @@ Keep 15.1–15.5 unchecked until genuine external evidence is independently veri
 
 ## Review timestamp validation follow-up
 
-A remaining internal hardening issue is that the Phase 15.1 review timestamp currently uses JavaScript date parsing, which can normalize impossible calendar dates and accept a future review date. The production-access assessor and assertion both use this check. Before any external go-live decision, require a canonical UTC timestamp that round-trips without calendar normalization and is not in the future, then cover invalid calendar dates, future attestations and a valid historical timestamp in regression tests. This is a code-review action item, **not evidence of production approval**.
+The Phase 15.1 assessor and assertion now require canonical UTC timestamps that round-trip without date normalization and cannot be in the future. Regression cases cover impossible calendar dates, future attestations, timezone offsets, invalid precision and valid historical timestamps. This is internal validation hardening, **not evidence of production approval**.

@@ -28,8 +28,18 @@ function isOpaqueReference(value: string | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0 && !/\s/.test(value.trim());
 }
 
+function isValidReviewTimestamp(value: string | undefined): boolean {
+  if (typeof value !== "string") return false;
+  const canonicalUtc = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]{3})?Z$/;
+  if (!canonicalUtc.test(value)) return false;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || parsed > Date.now()) return false;
+  const iso = new Date(parsed).toISOString();
+  return value === iso || value === iso.replace(".000Z", "Z");
+}
+
 function assertIso(value: string, label: string): void {
-  if (Number.isNaN(Date.parse(value))) throw new Error(`${label} must be a valid date`);
+  if (!isValidReviewTimestamp(value)) throw new Error(`${label} must be a valid non-future UTC timestamp`);
 }
 
 export function assessProductionAccessEvidence(
@@ -45,7 +55,7 @@ export function assessProductionAccessEvidence(
     missing.push("certificateReference");
   }
   if (!evidence.verifiedBy?.trim()) missing.push("verifiedBy");
-  if (!evidence.verifiedAt || Number.isNaN(Date.parse(evidence.verifiedAt))) missing.push("verifiedAt");
+  if (!isValidReviewTimestamp(evidence.verifiedAt)) missing.push("verifiedAt");
   if (evidence.environment !== "production") missing.push("environment=production");
   if (evidence.readOnly !== true) missing.push("readOnly=true");
 
