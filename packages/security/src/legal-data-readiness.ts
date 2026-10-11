@@ -23,6 +23,7 @@ function hasText(value: string | undefined): boolean {
 export function assessLegalDataReadiness(
   evidence: Partial<LegalDataReviewEvidence>,
 ): LegalDataReadiness {
+  evidence = evidence ?? {};
   const missing: string[] = [];
   if (!hasText(evidence.reviewReference)) missing.push("reviewReference");
   if (!hasText(evidence.approvedBy)) missing.push("approvedBy");
