@@ -1,3 +1,4 @@
+import { isValidReviewTimestamp } from "./production-access-readiness.js";
 import {
   assessProductionAccessEvidence,
   type ProductionAccessEvidence,
@@ -77,7 +78,7 @@ export function assessConnectorGoLive(input: {
   }
   if (!hasText(input.rollout.supportOwner)) reasons.push("rollout:supportOwner");
   if (!hasText(input.rollout.approvedBy)) reasons.push("rollout:approvedBy");
-  if (!input.rollout.approvedAt || Number.isNaN(Date.parse(input.rollout.approvedAt))) {
+  if (!isValidReviewTimestamp(input.rollout.approvedAt)) {
     reasons.push("rollout:approvedAt");
   }
 

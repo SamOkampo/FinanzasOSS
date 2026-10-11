@@ -91,6 +91,28 @@ assert.ok(
   crossProviderEvidence.reasons.includes("rollout:connectorId does not match access:providerId"),
 );
 
+// No gate may accept impossible, future, or non-canonical review dates.
+for (const invalidTimestamp of [
+  "2026-02-30T03:40:00Z",
+  "2999-01-01T00:00:00Z",
+  "2026-10-06",
+  "2026-10-06T03:40:00+00:00",
+]) {
+  for (const [section, field] of [
+    ["legal", "approvedAt"],
+    ["infrastructure", "verifiedAt"],
+    ["pentest", "performedAt"],
+    ["rollout", "approvedAt"],
+  ]) {
+    const evidence = { access, legal, infrastructure, pentest, rollout };
+    const result = assessConnectorGoLive({
+      ...evidence,
+      [section]: { ...evidence[section], [field]: invalidTimestamp },
+    });
+    assert.equal(result.eligibleForManualCanary, false, `${section} must reject ${invalidTimestamp}`);
+  }
+}
+
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
 assert.equal(gradualGoLivePolicy.manualCanaryApprovalRequired, true);

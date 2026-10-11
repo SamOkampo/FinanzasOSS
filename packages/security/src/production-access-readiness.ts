@@ -28,7 +28,7 @@ function isOpaqueReference(value: string | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0 && !/\s/.test(value);
 }
 
-function isValidReviewTimestamp(value: string | undefined): boolean {
+export function isValidReviewTimestamp(value: string | undefined): boolean {
   if (typeof value !== "string") return false;
   const canonicalUtc = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]{3})?Z$/;
   if (!canonicalUtc.test(value)) return false;

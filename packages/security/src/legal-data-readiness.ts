@@ -1,3 +1,5 @@
+import { isValidReviewTimestamp } from "./production-access-readiness.js";
+
 export interface LegalDataReviewEvidence {
   reviewReference: string;
   approvedBy: string;
@@ -15,7 +17,7 @@ export interface LegalDataReadiness {
 }
 
 function hasText(value: string | undefined): boolean {
-  return Boolean(value?.trim());
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function assessLegalDataReadiness(
@@ -24,7 +26,7 @@ export function assessLegalDataReadiness(
   const missing: string[] = [];
   if (!hasText(evidence.reviewReference)) missing.push("reviewReference");
   if (!hasText(evidence.approvedBy)) missing.push("approvedBy");
-  if (!evidence.approvedAt || Number.isNaN(Date.parse(evidence.approvedAt))) missing.push("approvedAt");
+  if (!isValidReviewTimestamp(evidence.approvedAt)) missing.push("approvedAt");
   if (!hasText(evidence.privacyNoticeReference)) missing.push("privacyNoticeReference");
   if (!hasText(evidence.retentionPolicyReference)) missing.push("retentionPolicyReference");
   if (!hasText(evidence.dataSubjectRightsProcedureReference)) {

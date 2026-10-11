@@ -1,3 +1,5 @@
+import { isValidReviewTimestamp } from "./production-access-readiness.js";
+
 export interface ProductionInfrastructureEvidence {
   environmentReference: string;
   kmsOrSecretManagerReference: string;
@@ -18,7 +20,7 @@ export interface ProductionInfrastructureReadiness {
 }
 
 function hasText(value: string | undefined): boolean {
-  return Boolean(value?.trim());
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function assessProductionInfrastructureReadiness(
@@ -41,7 +43,7 @@ export function assessProductionInfrastructureReadiness(
   for (const key of required) {
     if (!hasText(evidence[key] as string | undefined)) missing.push(key);
   }
-  if (!evidence.verifiedAt || Number.isNaN(Date.parse(evidence.verifiedAt))) {
+  if (!isValidReviewTimestamp(evidence.verifiedAt)) {
     missing.push("verifiedAt");
   }
 
