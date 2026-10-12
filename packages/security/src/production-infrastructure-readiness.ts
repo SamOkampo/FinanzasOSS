@@ -26,6 +26,7 @@ function hasText(value: string | undefined): boolean {
 export function assessProductionInfrastructureReadiness(
   evidence: Partial<ProductionInfrastructureEvidence>,
 ): ProductionInfrastructureReadiness {
+  evidence = evidence ?? {};
   const missing: string[] = [];
   const required: Array<keyof ProductionInfrastructureEvidence> = [
     "environmentReference",
