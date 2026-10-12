@@ -91,27 +91,48 @@ assert.ok(
   crossProviderEvidence.reasons.includes("rollout:connectorId does not match access:providerId"),
 );
 
-// No gate may accept impossible, future, or non-canonical review dates.
-for (const invalidTimestamp of [
+// Every readiness gate must reject malformed or non-canonical review timestamps.
+// All references are synthetic; this test never enables a provider or canary.
+const invalidReviewTimestamps = [
   "2026-02-30T03:40:00Z",
-  "2999-01-01T00:00:00Z",
+  "2026-02-29T03:40:00Z",
+  "2026-04-31T03:40:00Z",
   "2026-10-06",
   "2026-10-06T03:40:00+00:00",
-]) {
-  for (const [section, field] of [
-    ["legal", "approvedAt"],
-    ["infrastructure", "verifiedAt"],
-    ["pentest", "performedAt"],
-    ["rollout", "approvedAt"],
-  ]) {
-    const evidence = { access, legal, infrastructure, pentest, rollout };
+  "2026-10-06T25:40:00Z",
+  "2026-10-06T03:60:00Z",
+  "2999-01-01T00:00:00Z",
+  null,
+  undefined,
+  0,
+  {},
+];
+const reviewTimestampGates = [
+  ["access", "verifiedAt", "access:verifiedAt"],
+  ["legal", "approvedAt", "legal:approvedAt"],
+  ["infrastructure", "verifiedAt", "infrastructure:verifiedAt"],
+  ["pentest", "performedAt", "pentest:valid performedAt missing"],
+  ["rollout", "approvedAt", "rollout:approvedAt"],
+];
+let invalidTimestampCases = 0;
+for (const invalidTimestamp of invalidReviewTimestamps) {
+  for (const [section, field, reason] of reviewTimestampGates) {
     const result = assessConnectorGoLive({
-      ...evidence,
-      [section]: { ...evidence[section], [field]: invalidTimestamp },
+      access,
+      legal,
+      infrastructure,
+      pentest,
+      rollout,
+      [section]: { ...{ access, legal, infrastructure, pentest, rollout }[section], [field]: invalidTimestamp },
     });
-    assert.equal(result.eligibleForManualCanary, false, `${section} must reject ${invalidTimestamp}`);
+    assert.equal(result.eligibleForManualCanary, false, `${section} accepted ${String(invalidTimestamp)}`);
+    assert.ok(result.reasons.includes(reason), `${section}: expected ${reason}, got ${result.reasons.join(", ")}`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    invalidTimestampCases++;
   }
 }
+assert.equal(invalidTimestampCases, 60);
 
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
