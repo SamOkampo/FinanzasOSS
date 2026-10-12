@@ -13,6 +13,16 @@ assert.equal(incomplete.ready, false);
 assert.ok(incomplete.missing.includes("kmsOrSecretManagerReference"));
 assert.ok(incomplete.missing.includes("tenantIsolationReference"));
 
+// Runtime evidence can be absent even when static types require an object.
+for (const absent of [null, undefined]) {
+  const assessed = assessProductionInfrastructureReadiness(absent);
+  assert.equal(assessed.ready, false);
+  assert.ok(assessed.missing.includes("environmentReference"));
+  assert.ok(assessed.missing.includes("verifiedAt"));
+  assert.deepEqual(assessed.missing, assessProductionInfrastructureReadiness({}).missing);
+  assert.throws(() => assertProductionInfrastructureEvidence(absent), /Production infrastructure evidence incomplete:/);
+}
+
 const evidence = {
   environmentReference: "prod-env-001",
   kmsOrSecretManagerReference: "kms-ref-001",
