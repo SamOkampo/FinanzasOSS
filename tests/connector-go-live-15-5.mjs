@@ -134,6 +134,34 @@ for (const invalidTimestamp of invalidReviewTimestamps) {
 }
 assert.equal(invalidTimestampCases, 60);
 
+// Runtime JSON may contain non-object sections even when TypeScript contracts are strict.
+// A malformed section must never throw, grant manual-canary eligibility, or enable writes.
+const runtimeSections = { access, legal, infrastructure, pentest, rollout };
+const malformedRuntimeValues = [
+  null, undefined, {}, [], 42, false, "", [{}],
+  { verifiedAt: 42, approvedAt: 42, performedAt: 42, connectorId: 42, providerId: 42 },
+];
+let malformedRuntimeCases = 0;
+for (const section of Object.keys(runtimeSections)) {
+  for (const value of malformedRuntimeValues) {
+    const result = assessConnectorGoLive({ ...runtimeSections, [section]: value });
+    assert.equal(result.eligibleForManualCanary, false, `${section}: invalid evidence accepted`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    assert.ok(result.reasons.length > 0);
+    malformedRuntimeCases++;
+  }
+}
+for (const value of malformedRuntimeValues) {
+  const result = assessConnectorGoLive(value);
+  assert.equal(result.eligibleForManualCanary, false, "invalid top-level evidence accepted");
+  assert.equal(result.automaticActivation, false);
+  assert.equal(result.writeCapabilitiesAllowed, false);
+  assert.ok(result.reasons.length > 0);
+  malformedRuntimeCases++;
+}
+assert.equal(malformedRuntimeCases, 54);
+
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
 assert.equal(gradualGoLivePolicy.manualCanaryApprovalRequired, true);
