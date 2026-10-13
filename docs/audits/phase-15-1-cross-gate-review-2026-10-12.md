@@ -1,22 +1,27 @@
-# Phase 15.1 — cross-gate review and integration evidence (2026-10-12)
+# Phase 15.1 — cross-gate review and integration evidence (revalidated 2026-10-14)
 
-This note records repository evidence only; it is **not** approval to activate any financial connector.
+This document records **repository evidence only**. It is not legal approval, bank authorization, an external pentest, or permission to activate a financial connector.
 
-## Verified dependency chain
+## Verified source of truth
 
-- Base `main`: `1987e5e2d8294994f85f6e9c20e9e83b7a64fbac`.
-- PR #151 (`fix/phase15-1-cross-gate-date-guards`), head `326dd5aa3be4b5552cb347304b84ed46cd88bed2`, is a draft against `main`. CI #334 completed successfully; no human reviews were recorded at the time of inspection.
-- PR #152 (`fix/phase15-1-direct-assessor-nullish-20261011`), head `daed55024a2e76160dd90606bca56a748457b4ba`, targets the #151 branch. CI #335 completed successfully. It cannot be treated as integrated into `main` merely because the stacked PR CI is green.
-- The `isValidReviewTimestamp` helper exported in #151 rejects noncanonical UTC strings, impossible dates and future dates. The PR extends this check to legal, infrastructure, pentest and rollout evidence.
+- `main`: `1987e5e2d8294994f85f6e9c20e9e83b7a64fbac`.
+- PR #151 (`fix/phase15-1-cross-gate-date-guards`): HEAD `935d7d40f6c28154099144bad1b00271a4347248`; targets `main`, draft, mergeable, **zero submitted reviews** at inspection.
+- CI run #343 (`38467971046`) completed successfully on that exact HEAD. The `quality` job concluded `success`.
+- PR #151 changes **seven files** (five security sources and two test files). The connector go-live regression adds **60 invalid-timestamp** and **54 malformed-runtime** cases; pentest regressions cover null and undefined evidence.
+- PR #152 (legal nullish guard): HEAD `daed55024a2e76160dd90606bca56a748457b4ba`, 2 commits ahead / 5 behind current #151; only legal assessor and its test differ from its original stacked base.
+- PR #153 (this documentation): HEAD at the time of inspection `255ddd8a04d270cd3085561135ffa45d0db2b99a`, 1 commit ahead / 5 behind current #151. This file previously referred to obsolete #151 SHA `326dd5a`, CI #334 and six files; those are **historical**, not current merge gates.
+- PR #154 (infrastructure nullish guard): HEAD `b35d7327f7172c70f3b64ef379e3865bff9e4cf6`, 2 commits ahead / 5 behind current #151; infrastructure assessor and test differ from its original stacked base.
+- All three dependent PRs still target the #151 branch. Their old green CI does not establish compatibility with its latest HEAD.
 
-## Gate to merge
+## Required review and integration sequence
 
-1. Review the six changed files of #151 and require CI on the exact head SHA; convert draft to ready only after review requirements can be met.
-2. Merge #151 only with review and green CI; recheck `main` SHA.
-3. Retarget #152 to `main`, verify the resulting diff is limited to legal nullish fail-closed handling, and require fresh CI/review before merge.
-4. Test malformed/nullish evidence independently for infrastructure, pentest and rollout; stage additional small PRs only after prior gate integration, keeping CI green.
-5. Reconcile `docs/ROADMAP.md` and `docs/CHECKPOINT.md` against actual merges rather than interpreting successful CI as integration.
+1. Obtain an independent review of #151 (author cannot self-approve), including canonical UTC timestamp validation, fail-closed malformed evidence, no automatic activation and no financial writes.
+2. Move #151 out of draft only when the review process can proceed. Reconfirm CI success for its final SHA, then merge only when review and repository protections are satisfied.
+3. Re-read `main` after merge. Rebase or rebuild #152 on current `main`, verify a two-file minimal diff, run new CI, obtain review and merge.
+4. Rebase or rebuild #154 on updated `main`, verify its two-file diff, run new CI, obtain review and merge.
+5. Reconcile this documentation-only #153 against actual merged SHAs and CI; avoid merging historical statements as current truth. Update `docs/CHECKPOINT.md` and `docs/ROADMAP.md` only with verified integration and external gate status.
+6. Keep Phase 15 external gates 15.1–15.5 open until their real evidence exists. Phase 16 and Post-MVP 17+ are not authorized to begin by this documentation.
 
-## Explicitly excluded
+## Safety invariants
 
-No provider credentials, secrets, endpoints, scopes, agreements, production environments, external pentest reports or legal approvals were supplied or validated. Phase 15 external gates 15.1–15.5 remain open. Phase 16 must not be marked started, and post-MVP phases 17+ remain out of scope.
+Official Open Finance APIs and verified consent precede any connector. Never store bank passwords, seed phrases or private keys; never invent endpoints, scopes or certificates. Portfolios remain read-only, bank-to-investment transfers are `investment_transfer`, and no trading, withdrawals, production connections, real financial data or costs are authorized. Green CI is a code-quality signal, **not** permission for production.
