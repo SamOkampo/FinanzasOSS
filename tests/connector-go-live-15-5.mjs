@@ -162,6 +162,31 @@ for (const value of malformedRuntimeValues) {
 }
 assert.equal(malformedRuntimeCases, 54);
 
+// A complete, synthetic fixture must fail closed if any required evidence field
+// is omitted. Certificate references are optional, so they are excluded here.
+// This is a structural regression, NOT proof of external provider approval.
+const requiredEvidenceFields = {
+  access: ["providerId", "agreementReference", "credentialReference", "verifiedAt", "verifiedBy", "environment", "readOnly"],
+  legal: ["reviewReference", "approvedBy", "approvedAt", "privacyNoticeReference", "retentionPolicyReference", "dataSubjectRightsProcedureReference", "thirdPartyReceiverAssessmentReference", "jurisdictionReference"],
+  infrastructure: ["environmentReference", "kmsOrSecretManagerReference", "tenantIsolationReference", "databaseBackupRestoreReference", "egressPolicyReference", "loggingRedactionReviewReference", "monitoringReference", "alertingReference", "incidentRunbookReference", "verifiedAt", "verifiedBy"],
+  pentest: ["reportReference", "assessorReference", "scopeReference", "performedAt", "remediationReference", "retestReference", "openCriticalFindings", "openHighFindings"],
+  rollout: ["connectorId", "canaryPlanReference", "rollbackPlanReference", "initialAudienceReference", "healthDashboardReference", "supportOwner", "approvedBy", "approvedAt"],
+};
+let requiredEvidenceOmissions = 0;
+for (const [section, fields] of Object.entries(requiredEvidenceFields)) {
+  for (const field of fields) {
+    const incomplete = { ...runtimeSections[section] };
+    delete incomplete[field];
+    const result = assessConnectorGoLive({ ...runtimeSections, [section]: incomplete });
+    assert.equal(result.eligibleForManualCanary, false, `${section}.${field} omission accepted`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    assert.ok(result.reasons.length > 0, `${section}.${field} missing rejection reason`);
+    requiredEvidenceOmissions++;
+  }
+}
+assert.equal(requiredEvidenceOmissions, 42);
+
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
 assert.equal(gradualGoLivePolicy.manualCanaryApprovalRequired, true);
