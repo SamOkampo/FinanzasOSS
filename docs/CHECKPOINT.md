@@ -2,6 +2,13 @@
 
 ## Estado actual
 
+> **Checkpoint operativo revalidado 2026-10-14 (fuente: GitHub main + PRs + CI + ROADMAP).** La numeración 10.1 visible en versiones anteriores era una instrucción obsoleta, no el estado real: **Fases 0–14 están marcadas como integradas en ROADMAP**; 15.1–15.5 tienen readiness técnico en main pero **no** evidencia externa para el cierre. Fase 16 está pendiente y condicionada al cierre formal de Fase 15. Los apuntes históricos de esta página no reemplazan los estados vivos de PR/CI.
+>
+> **Cola verificable, no integrada:** PR #151 (`bb870a87405d998b6137f4c470b46380eaac234e`, listo para revisión desde 2026-10-14, CI [38493160158](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38493160158) exitoso, **0 revisiones** al verificar). #152 (guard legal nullish), #154 (guard infra nullish), #153 (auditoría documental) son PRs apilados sobre una base antigua de #151; sus CI previos no validan una integración automática sobre el HEAD actual. La corrección documental de este PR es independiente y **no** acredita ningún merge de esos PRs.
+>
+> **Secuencia de trabajo:** 1) revisión independiente y merge seguro de #151; 2) revalidar main y reconstruir/reconciliar #152, #154, #153 uno a uno sobre el main actualizado con diff mínimo y CI verde; 3) actualizar este checkpoint solo tras verificar los merges; 4) completar exclusivamente trabajo preparatorio permitido del mismo gate, sin fabricar aprobaciones ni activar proveedores. Si falta revisor externo, dejar #151 listo para revisión y trabajar en documentos/test de ese mismo gate, **no repetir indefinidamente el mismo reporte o matriz de pruebas**. Jamás fusionar por conveniencia sin la revisión requerida.
+
+
 - **Fase 7 — Cobertura bancaria Colombia: CERRADA e integrada.**
 - **Fase 8 — Universal Import Engine: CERRADA e integrada.**
 - **Fase 9 — Portafolios, brokers, exchanges y wallets: CERRADA e integrada.**
@@ -22,7 +29,7 @@
 - 9.8 Portfolio snapshots e historial: PR #75, CI #169 verde, merge `11d86ff`.
 - 9.9 Cost basis/P&L/dividendos/fees/impuestos: PR #77, CI #173 verde, merge `70baa59`.
 - 9.10 TWR/XIRR y separación estricta de rendimiento vs aportes: PR #79, CI #177 verde, merge `42824fd`.
-- Próximo bloque exacto permitido: **Fase 10.1 — Merchant normalization y categorización**.
+- Próximo bloque técnico pendiente: **integración del PR #151** (CI sobre HEAD verificado, revisión independiente), seguida de reconciliación y gates propios de #152, #154 y #153. Las Fases 15.1–15.5 siguen abiertas por requisitos externos; no iniciar Fase 16 automáticamente.
 
 ## Cierre Fase 8
 
