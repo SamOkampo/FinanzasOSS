@@ -18,7 +18,7 @@ export interface QuickWorkerEnv {
 export interface QuickWorkerContext {
   readonly access?: {
     readonly aud?: string;
-    getIdentity(): Promise<{ id?: string; email?: string } | null>;
+    getIdentity(): Promise<{ user_uuid?: string; id?: string; email?: string } | null>;
   };
 }
 
@@ -112,8 +112,14 @@ function requireSameOrigin(request: Request): void {
 async function principal(ctx: QuickWorkerContext, env: QuickWorkerEnv): Promise<string | null> {
   if (!ctx.access || !env.ACCESS_AUD || ctx.access.aud !== env.ACCESS_AUD) return null;
   try {
-    const id = (await ctx.access.getIdentity())?.id;
-    return typeof id === "string" && OWNER_RE.test(id) ? id : null;
+    // Cloudflare's full Access identity uses user_uuid for the stable user
+    // identifier. The prior implementation only read "id", so an authorized
+    // user with user_uuid (but no id) was rejected with HTTP 401.
+    // Use only an Access-authenticated stable ID; never substitute email,
+    // browser headers, or an ownerId from the request body.
+    const identity = await ctx.access.getIdentity();
+    const ownerId = identity?.user_uuid ?? identity?.id;
+    return typeof ownerId === "string" && OWNER_RE.test(ownerId) ? ownerId : null;
   } catch { return null; }
 }
 async function listAccounts(db: QuickD1, owner: string): Promise<Response> {
