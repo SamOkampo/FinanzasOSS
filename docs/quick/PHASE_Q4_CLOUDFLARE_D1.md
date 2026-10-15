@@ -1,5 +1,8 @@
 # FinanzasOSS Quick — Cloudflare Workers + D1 (staging)
 
+> **Actualización operativa del 15-oct-2026:** La cuenta Cloudflare y la base D1 concreta se verificaron tras recibir su URL. `finanzasoss-staging` existe y recibió la migración SQL; comprobadas dos tablas, FK compuesta, índice y **cero registros financieros**. Worker `finanzasoss-quick-staging` creado, versión compilada de `apps/quick-worker/src/index.ts` cargada, binding `DB` correcto, `ALLOW_WRITES=false`, `ACCESS_AUD` verificado contra aplicación Access de política **un único correo autorizado**, `workers.dev` habilitado y previews desactivados. La URL de prueba es `https://finanzasoss-quick-staging.socampoecheverry.workers.dev/healthz`. **No hay evidencia de login físico aún; cero autorización para activar escrituras ni usar datos reales.** La antigua nota inferior sobre bloqueo del inventario Cloudflare es histórica y queda superada **para este D1 explícito**.
+>
+
 **Estado:** implementación de código en GitHub. **No significa que exista un Worker o D1 desplegado en Cloudflare.** El intento de leer el inventario Cloudflare mediante conector estuvo bloqueado por controles de acceso; no repetir ni eludir ese bloqueo, no inventar IDs, no tocar otros proyectos.
 
 ## Arquitectura adoptada
@@ -43,7 +46,7 @@ Cloudflare ofrece D1 en Workers Free con límites de capacidad y filas compartid
 
 - **Q4.A** Supabase/PostgreSQL: contrato y SQL alternativos; no aplicados a servicio.
 - **Q4.D1-A** Cloudflare: esquema, Worker, configuración segura y regresiones de SQLite/HTTP preparados; CI determina integración.
-- **Q4.D1-B** Cuenta real, D1 creada y migrada, Access real y Worker desplegado: **pendiente**.
+- **Q4.D1-B** Cuenta D1, esquema, Worker compilado y Access creado/configurado: **verificados vía Cloudflare API**. Falta confirmar la protección y el inicio de sesión desde navegador (B2) y mantener escrituras deshabilitadas hasta superar ese gate.
 - **Q4.C** Historias de usuario extremo a extremo contra staging con login, guardar y recuperar datos: **pendiente**.
 - **Q5** UI/widget: **pendiente**, nunca confundir PWA con widget nativo iOS.
 
