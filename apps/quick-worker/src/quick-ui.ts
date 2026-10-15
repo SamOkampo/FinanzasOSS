@@ -131,7 +131,10 @@ export const QUICK_JS = `"use strict";
         const meta = document.createElement("div");
         meta.className = "entry-meta";
         const account = state.accounts.find((a) => a.id === item.account_id);
-        meta.textContent = new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual");
+        const movementKind = item.kind === "investment_transfer"
+          ? "APORTE A INVERSIÓN" : item.kind === "transfer"
+            ? "TRANSFERENCIA PROPIA" : "GASTO";
+        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual");
         left.append(concept, meta);
         const amount = document.createElement("div");
         amount.className = "entry-amount";
@@ -178,10 +181,22 @@ export const QUICK_JS = `"use strict";
     if (!state.writes || buttonEntry.disabled) return;
     const acct = state.accounts.find((a) => a.id === get("account").value);
     if (!acct) { message("entry-message", "Selecciona una cuenta de prueba.", true); return; }
+    const selectedClass = get("classification").value;
+    const classLabel = selectedClass === "investment_transfer"
+      ? "APORTE A INVERSIÓN (NO ES UN GASTO)"
+      : selectedClass === "own_transfer"
+        ? "TRANSFERENCIA PROPIA (NO ES UN GASTO)"
+        : "GASTO";
+    // Make an economic classification explicit before any irreversible
+    // append-only ledger write. No automatic changes to previous entries.
+    if (!window.confirm("Confirma este movimiento de prueba:\\n\\n" +
+      classLabel + "\\nMonto: $" + get("amount").value.trim() +
+      " " + acct.currency + "\\nCuenta: " + acct.label +
+      "\\n\\n¿Es correcto el tipo de movimiento?")) return;
     const values = {
       accountId: acct.id, amount: get("amount").value.trim(),
       currency: acct.currency, paymentMethod: get("method").value,
-      classification: get("classification").value,
+      classification: selectedClass,
       occurredAt: new Date().toISOString(), merchant: get("merchant").value.trim() || null,
       bankLabel: null, confirmed: true,
     };

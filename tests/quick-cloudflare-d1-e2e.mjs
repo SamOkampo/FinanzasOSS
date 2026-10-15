@@ -87,6 +87,13 @@ for (const path of ["/", "/quick.js", "/quick.css"]) {
     assert.doesNotMatch(body, /<script(?:\s|>)(?![^>]*src=)/i);
   } else if (path === "/quick.js") {
     assert.match(body, /\/api\/quick\/entries/);
+    assert.match(body, /TRANSFERENCIA PROPIA/);
+    assert.match(body, /APORTE A INVERSIÓN/);
+    assert.match(body, /window\.confirm/);
+    assert.match(body, /¿Es correcto el tipo de movimiento\?/);
+    // The browser receives a JS string embedded in a TypeScript template;
+    // compile it as source too, catching accidental escaped newline syntax.
+    assert.doesNotThrow(() => new Function(body));
     assert.doesNotMatch(body, /localStorage|sessionStorage|innerHTML/);
   } else {
     assert.match(body, /prefers-reduced-motion/);
