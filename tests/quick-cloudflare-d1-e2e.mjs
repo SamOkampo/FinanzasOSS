@@ -25,8 +25,14 @@ const disabledEnv = { ...env, ALLOW_WRITES: "false" };
 const identity = (id, aud = env.ACCESS_AUD) => ({
   access: { aud, async getIdentity() { return { id }; } },
 });
-const A = identity("access-user-a");
-const B = identity("access-user-b");
+// Production Cloudflare Access identity has user_uuid rather than guaranteed id.
+const A = { access: { aud: env.ACCESS_AUD, async getIdentity() {
+  return { user_uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "redacted@example.invalid" };
+} } };
+const B = { access: { aud: env.ACCESS_AUD, async getIdentity() {
+  return { user_uuid: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+} } };
+const LEGACY = identity("access-user-a");
 const missing = {};
 const origin = "https://finanzasoss-staging.invalid";
 const account = {
@@ -64,6 +70,15 @@ async function call(path, method = "GET", payload, user = A, options = {}) {
 
 assert.equal((await call("/healthz", "GET", undefined, missing)).status, 200);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, missing)).status, 401);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, A)).status, 200);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, B)).status, 200);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, LEGACY)).status, 200);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, {
+  access: { aud: env.ACCESS_AUD, async getIdentity() { return { user_uuid: "bad user!" }; } },
+})).status, 401);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, {
+  access: { aud: env.ACCESS_AUD, async getIdentity() { return { email: "only-email@example.invalid" }; } },
+})).status, 401);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, identity("u", "wrong-aud"))).status, 401);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, identity(""))).status, 401);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, {
@@ -135,7 +150,7 @@ assert.equal(sqlite.prepare("SELECT COUNT(*) as n FROM quick_manual_entries").ge
 assert.throws(() => sqlite.prepare(
   "INSERT INTO quick_manual_entries(id,owner_id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at)" +
   " VALUES(?,?,?,?,?,?,?,?,?)",
-).run("fake", "access-user-b", aAccount, "fake-unique-000001", 1, "COP", "cash", "purchase", entry.occurredAt), /FOREIGN KEY/);
+).run("fake", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", aAccount, "fake-unique-000001", 1, "COP", "cash", "purchase", entry.occurredAt), /FOREIGN KEY/);
 
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();
