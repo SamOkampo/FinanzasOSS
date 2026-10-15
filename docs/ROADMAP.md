@@ -137,7 +137,7 @@
 - [ ] Q4 Persistencia real autenticada con cuenta manual explícita, RLS/aislamiento, idempotencia transaccional y recuperación.
   - [x] Q4.A Contrato de confirmación + migración PostgreSQL/Supabase revisable, RLS/aislamiento, idempotencia y regresiones SQL efímeras (ver `docs/quick/PHASE_Q4_PERSISTENCE_FOUNDATION.md`); no equivale a despliegue.
   - [ ] Q4.B Seleccionar infraestructura de staging dedicada (ahora se prefiere Cloudflare D1 + Workers; el contrato Supabase se conserva como alternativa), sin costes ni datos financieros reales.
-  - [ ] Q4.D1-A Esquema SQLite, Worker protegido por Access y pruebas reales de SQLite/HTTP con usuarios ficticios — en PR; comprobar CI antes de marcar completo.
+  - [x] Q4.D1-A Esquema SQLite, Worker que exige identidad Access válida (no configuración Access remota todavía), y pruebas reales de SQLite/HTTP con usuarios ficticios — PR #163, merge `24db135`, CI #38787818872 SUCCESS.
   - [ ] Q4.D1-B Cuenta Cloudflare autorizada, D1 nueva, Access configurado con AUD correcto, migración y despliegue staging verificables (pendiente por bloqueo de acceso al inventario Cloudflare).
   - [ ] Q4.D1-C Pruebas de sesiones auténticas en staging, aislamiento, idempotencia, backups/restauración y respuesta a errores.
   - [ ] Q4.C Endpoint o adaptador autenticado + persistencia real, pruebas completas POST/SELECT/reintentos y seguridad con dos usuarios, exportación/borrado.
