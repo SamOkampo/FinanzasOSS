@@ -103,6 +103,8 @@ begin
   end;
 end $$;
 
+-- Psql variables do not interpolate inside PL/pgSQL dollar-quoted bodies.
+select set_config('test.account_id', :'account_id', false);
 -- Different user, same tenant label: no access to first user's account.
 set request.jwt.claim.sub = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 select 1 / case when (select count(*) from public.quick_manual_accounts) = 0 then 1 else 0 end;
@@ -110,7 +112,7 @@ select 1 / case when (select count(*) from public.quick_manual_entries) = 0 then
 
 do $$
 declare
-  v_foreign uuid := :'account_id'::uuid;
+  v_foreign uuid := current_setting('test.account_id')::uuid;
 begin
   begin
     perform public.quick_confirm_manual_entry(
