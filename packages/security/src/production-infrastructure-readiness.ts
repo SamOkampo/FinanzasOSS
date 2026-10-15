@@ -26,6 +26,8 @@ function hasText(value: string | undefined): boolean {
 export function assessProductionInfrastructureReadiness(
   evidence: Partial<ProductionInfrastructureEvidence>,
 ): ProductionInfrastructureReadiness {
+  // Absent runtime evidence must fail closed, not throw during validation.
+  evidence = evidence ?? {};
   const missing: string[] = [];
   const required: Array<keyof ProductionInfrastructureEvidence> = [
     "environmentReference",
