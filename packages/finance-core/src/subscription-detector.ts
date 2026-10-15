@@ -60,10 +60,26 @@ function cadenceFor(intervalDays: number): SubscriptionCadence {
   return "unknown";
 }
 
-function addDaysIso(value: string, days: number): string {
-  const date = new Date(value);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString();
+function estimateNextBillingAt(
+  lastPostedAt: string,
+  cadence: Exclude<SubscriptionCadence, "unknown">,
+  observedDates: readonly string[],
+): string {
+  const last = new Date(lastPostedAt);
+  if (cadence === "weekly") {
+    last.setUTCDate(last.getUTCDate() + 7);
+    return last.toISOString();
+  }
+
+  // Use the observed day of month as a conservative anchor. This avoids
+  // drifting a day each month after a 28-, 30-, or 31-day billing period.
+  // Median limits the impact of individual delayed/weekend charges.
+  const anchorDay = Math.round(median(observedDates.map((value) => new Date(value).getUTCDate())));
+  const targetYear = last.getUTCFullYear() + (cadence === "yearly" ? 1 : 0);
+  const targetMonth = last.getUTCMonth() + (cadence === "monthly" ? 1 : 0);
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  last.setUTCFullYear(targetYear, targetMonth, Math.min(anchorDay, lastDayOfTargetMonth));
+  return last.toISOString();
 }
 
 export function detectSubscription(
@@ -140,10 +156,13 @@ export function detectSubscription(
         ? "medium"
         : "low";
 
-  const expectedDays = cadence === "weekly" ? 7 : cadence === "monthly" ? Math.round(medianInterval) : 365;
   const last = eligible[eligible.length - 1];
   if (!last) return null;
-  const nextExpectedAt = addDaysIso(last.postedAt, expectedDays);
+  const nextExpectedAt = estimateNextBillingAt(
+    last.postedAt,
+    cadence,
+    eligible.map((item) => item.postedAt),
+  );
 
   return {
     merchantKey,

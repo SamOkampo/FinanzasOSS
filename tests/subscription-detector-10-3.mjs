@@ -44,4 +44,25 @@ const mixedMerchant = detectSubscription([
 ]);
 assert.equal(mixedMerchant, null);
 
+// Monthly billing dates must not drift just because months differ in length.
+assert.equal(monthly.nextExpectedAt?.slice(0, 10), "2026-05-05");
+
+const endOfMonth = detectSubscription([
+  { id: "jan", postedAt: "2026-01-31T08:00:00Z", merchantKey: "storage", amountMinor: 10000n, currency: "COP", direction: "debit", status: "posted" },
+  { id: "feb", postedAt: "2026-02-28T08:00:00Z", merchantKey: "storage", amountMinor: 10000n, currency: "COP", direction: "debit", status: "posted" },
+  { id: "mar", postedAt: "2026-03-31T08:00:00Z", merchantKey: "storage", amountMinor: 10000n, currency: "COP", direction: "debit", status: "posted" },
+  { id: "apr", postedAt: "2026-04-30T08:00:00Z", merchantKey: "storage", amountMinor: 10000n, currency: "COP", direction: "debit", status: "posted" },
+]);
+assert.equal(endOfMonth?.cadence, "monthly");
+assert.equal(endOfMonth?.nextExpectedAt?.slice(0, 10), "2026-05-31");
+
+// A fixed 365-day jump from January 2024 would incorrectly predict December 2024.
+const yearlyLeap = detectSubscription([
+  { id: "y22", postedAt: "2022-01-01T10:00:00Z", merchantKey: "annual", amountMinor: 300000n, currency: "COP", direction: "debit", status: "posted" },
+  { id: "y23", postedAt: "2023-01-01T10:00:00Z", merchantKey: "annual", amountMinor: 300000n, currency: "COP", direction: "debit", status: "posted" },
+  { id: "y24", postedAt: "2024-01-01T10:00:00Z", merchantKey: "annual", amountMinor: 300000n, currency: "COP", direction: "debit", status: "posted" },
+]);
+assert.equal(yearlyLeap?.cadence, "yearly");
+assert.equal(yearlyLeap?.nextExpectedAt?.slice(0, 10), "2025-01-01");
+
 console.log("Phase 10.3 subscription detector regression passed");
