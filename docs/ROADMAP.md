@@ -138,11 +138,13 @@
   - [x] Q4.A Contrato de confirmación + migración PostgreSQL/Supabase revisable, RLS/aislamiento, idempotencia y regresiones SQL efímeras (ver `docs/quick/PHASE_Q4_PERSISTENCE_FOUNDATION.md`); no equivale a despliegue.
   - [x] Q4.B Infraestructura de staging dedicada elegida: Cloudflare D1 + Workers. La alternativa PostgreSQL/Supabase se conserva sin desplegar; cero datos financieros reales.
   - [x] Q4.D1-A Esquema SQLite, Worker que exige identidad Access válida (no configuración Access remota todavía), y pruebas reales de SQLite/HTTP con usuarios ficticios — PR #163, merge `24db135`, CI #38787818872 SUCCESS.
-  - [x] Q4.D1-B1 Cloudflare remoto: base D1 nueva y esquema aplicado, Worker independiente con bundle TS auditado y D1 binding correcto, política Access restringida a la cuenta autorizada, AUD concordante, workers.dev habilitado con previews desactivados y ALLOW_WRITES=false (15-oct-2026).
-  - [ ] Q4.D1-B2 Verificación física de la autenticación Cloudflare Access en el navegador y de que la ruta completa requiere sesión; pendiente antes de habilitar escrituras.
-  - [ ] Q4.D1-C Habilitar escrituras **solo después del gate B2** y probar cuentas/gastos ficticios, reintentos, aislamiento autenticado, backups/restauración y respuesta a errores. No almacenar gastos reales por ahora.
+  - [x] Q4.D1-B1 Cloudflare remoto: D1 nueva, tablas creadas, Worker independiente, Access exclusivo para la cuenta autorizada, binding/AUD correctos y previews desactivados (15-oct-2026). La configuración de escrituras evolucionó después a `ALLOW_WRITES=true` **solo para pruebas con información ficticia**.
+  - [x] Q4.D1-B2 La persona propietaria confirmó respuesta autenticada `{"accounts":[]}` en navegador después de corregir `user_uuid` (#166). Protección Worker/Access y política de único correo contrastadas; prueba anónima remota independiente aún recomendable.
+  - [ ] Q4.D1-C Escrituras de staging habilitadas tras autenticación comprobada, con API y formulario (PR #167) ya desplegados; **pendiente** E2E humano con cuenta/gasto ficticios, reintentos, backup/restauración, borrado y pruebas de aislamiento remoto. No almacenar gastos reales todavía.
   - [ ] Q4.C Endpoint o adaptador autenticado + persistencia real, pruebas completas POST/SELECT/reintentos y seguridad con dos usuarios, exportación/borrado.
 - [ ] Q5 UI móvil accesible de registro rápido y shortcut/PWA funcional, pruebas físicas; no confundir con widget nativo de iOS.
+  - [x] Q5.A Formulario web responsive, cuenta ficticia, captura y listado con CSP y Access, PR #167, CI verde, desplegado en Worker staging.
+  - [ ] Q5.B Prueba física móvil/iPhone, acceso directo/shortcut, feedback real, accesibilidad y errores de red, antes de completar Q5.
 - [ ] Q6 Recibos seleccionados → candidatos de suscripción; comprobación humana, calendario/alertas opt-in, sin afirmar cargos bancarios.
 - [ ] Q7 Gmail OAuth opcional sujeto a permisos de Google, verificación/seguridad de scopes, privacidad, revocación y borrado.
 
