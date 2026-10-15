@@ -27,12 +27,7 @@ jobs:
         run: |
           npx --yes esbuild@0.25.12 apps/quick-worker/src/index.ts --bundle --platform=browser --format=esm --target=es2022 --minify --outfile=/tmp/finanzasoss-quick-worker.mjs
           test -s /tmp/finanzasoss-quick-worker.mjs
-          # Temporary staging deployment hand-off. Bundle contains source only,
-          # no bindings/credentials/financial data. Remove before merging.
-          echo FINANZASOSS_RELEASE_START
-          base64 -w0 /tmp/finanzasoss-quick-worker.mjs
-          echo
-          echo FINANZASOSS_RELEASE_END
+          # Do not print bundled source, user data or credentials to CI logs.
 
   quick-db-integration:
     runs-on: ubuntu-latest
