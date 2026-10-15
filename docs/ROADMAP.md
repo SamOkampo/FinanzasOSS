@@ -127,6 +127,18 @@
 - [x] 14.4 Billing/planes preparado, sin activación automática
 - [x] 14.5 Administración/soporte seguro
 
+## Extensión del MVP — Quick + Subscriptions (desarrollo interno autorizado)
+
+> Esta línea de producto complementa el MVP personal basado en importaciones. No sustituye ni declara aprobados los gates externos 15.1–15.5; Fase 16 continúa sin iniciar.
+
+- [x] Q1 Modelo de borrador manual: monto exacto, método, fecha, tenant, idempotency key y clasificación gasto vs transferencias — PR #158, merge `029e2c3`.
+- [x] Q2 Corregir deriva de fechas de suscripciones mensuales y anuales — PR #159, merge `ef30ba7`.
+- [x] Q3 Plan de conciliación manual ↔ importaciones: coincidencias a revisión, no autopersistencia ni duplicación, fail-closed cross-tenant — PR #160, merge `572d42c`.
+- [ ] Q4 Persistencia real autenticada con cuenta manual explícita, RLS/aislamiento, idempotencia transaccional y recuperación.
+- [ ] Q5 UI móvil accesible de registro rápido y shortcut/PWA funcional, pruebas físicas; no confundir con widget nativo de iOS.
+- [ ] Q6 Recibos seleccionados → candidatos de suscripción; comprobación humana, calendario/alertas opt-in, sin afirmar cargos bancarios.
+- [ ] Q7 Gmail OAuth opcional sujeto a permisos de Google, verificación/seguridad de scopes, privacidad, revocación y borrado.
+
 ## Fase 15 — Producción fintech (requiere autorización explícita)
 - [ ] 15.1 Accesos productivos/acuerdos/certificados — readiness interno integrado; evidencia externa pendiente (UX import-first y vista previa visual segura implementadas sin habilitar API ni sincronización)
 - [ ] 15.2 Revisión jurídica y tratamiento de datos — readiness interno integrado; aprobación humana pendiente
