@@ -1,0 +1,210 @@
+// Static, dependency-free staging UI. No third-party scripts, analytics, or storage.
+export const QUICK_HTML = `<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111c25">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Quick · FinanzasOSS</title>
+<link rel="stylesheet" href="/quick.css">
+<script src="/quick.js" defer></script>
+</head><body>
+<main class="shell">
+  <header class="top">
+    <div class="brand"><span class="brand-icon">F<span>.</span></span><span>FINANZAS<span class="brand-light">OSS</span></span></div>
+    <div class="env"><span class="env-dot"></span> STAGING PRIVADO</div>
+  </header>
+  <section class="intro"><div class="eyebrow">CONTROL DIARIO / QUICK</div><h1>Tus gastos.<br><em>Sin fricción.</em></h1><p>Registra un movimiento en segundos. Por ahora, usa únicamente información ficticia para las pruebas.</p></section>
+  <div class="warning" role="note"><span aria-hidden="true">●</span><span>Entorno de pruebas. No introduzcas datos bancarios reales, contraseñas ni movimientos personales.</span></div>
+  <section class="panel" aria-labelledby="capture-title">
+    <div class="panel-title"><div><div class="eyebrow">01 / CAPTURA</div><h2 id="capture-title">Nuevo movimiento</h2></div><span class="pill" id="write-flag">Comprobando...</span></div>
+    <form id="entry-form" autocomplete="off">
+      <label class="field-label" for="amount">¿Cuánto gastaste?</label>
+      <div class="amount-field"><span>$</span><input id="amount" name="amount" type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" value="25000" maxlength="14" aria-describedby="amount-help" required><small>COP</small></div>
+      <div id="amount-help" class="hint">Para la prueba: 25000. Sin puntos de miles ni comas.</div>
+      <div class="grid-fields">
+        <div><label class="field-label" for="account">Cuenta manual</label><select id="account" required><option value="">Cargando cuentas...</option></select></div>
+        <div><label class="field-label" for="method">Método</label><select id="method" required><option value="debit_card">Tarjeta débito</option><option value="cash">Efectivo</option><option value="credit_card">Tarjeta crédito</option><option value="bank_transfer">Transferencia</option><option value="digital_wallet">Billetera digital</option><option value="other">Otro</option></select></div>
+        <div><label class="field-label" for="classification">Tipo de movimiento</label><select id="classification" required><option value="expense">Gasto</option><option value="own_transfer">Transferencia propia</option><option value="investment_transfer">Aporte a inversión</option></select></div>
+        <div><label class="field-label" for="merchant">Concepto · opcional</label><input id="merchant" type="text" maxlength="120" placeholder="Almuerzo de prueba"></div>
+      </div>
+      <div class="submit-zone"><div class="hint">Una transferencia propia o una inversión no cuenta como gasto.</div><button id="save-entry" type="submit" disabled>Guardar movimiento <span aria-hidden="true">↗</span></button></div>
+    </form>
+    <div id="entry-message" class="feedback" role="status" aria-live="polite"></div>
+  </section>
+  <section class="panel compact" aria-labelledby="accounts-title">
+    <div class="panel-title"><div><div class="eyebrow">02 / CONFIGURACIÓN</div><h2 id="accounts-title">Cuenta de prueba</h2></div></div>
+    <p class="subline">Es una etiqueta manual, no una conexión con un banco.</p>
+    <form id="account-form" autocomplete="off">
+      <div class="account-row"><div class="grow"><label class="field-label" for="account-label">Nombre</label><input id="account-label" maxlength="100" value="Efectivo de prueba" required></div><div><label class="field-label" for="account-kind">Clase</label><select id="account-kind"><option value="cash">Efectivo</option><option value="bank_manual">Banco manual</option><option value="wallet_manual">Billetera manual</option></select></div></div>
+      <button id="save-account" class="secondary" disabled type="submit">Crear cuenta ficticia <span aria-hidden="true">+</span></button>
+    </form>
+    <div id="account-message" class="feedback" role="status" aria-live="polite"></div>
+  </section>
+  <section class="history" aria-labelledby="history-title">
+    <div class="panel-title"><div><div class="eyebrow">03 / HISTORIAL</div><h2 id="history-title">Últimos registros</h2></div><button id="refresh" class="mini" type="button">Actualizar ↻</button></div>
+    <div class="history-body" id="history-body"><div class="empty">Consultando D1...</div></div>
+  </section>
+  <footer>FINANZASOSS / QUICK · PRUEBA DE ALMACENAMIENTO · SIN MOVIMIENTOS BANCARIOS</footer>
+</main>
+</body></html>`;
+
+export const QUICK_CSS = `:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#16242c;background:#f4f3f0;font-synthesis:none}*{box-sizing:border-box}body{margin:0}.shell{max-width:820px;margin:0 auto;padding:0 24px 52px}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #d3d6d3;padding:25px 0 22px;gap:12px}.brand{display:flex;align-items:center;gap:10px;font-size:14px;letter-spacing:.075em;font-weight:800}.brand-light{font-weight:450;color:#6a7c83}.brand-icon{display:grid;place-content:center;height:35px;width:35px;border-radius:7px;background:#16242c;color:#fff;font-size:19px;letter-spacing:-.08em}.brand-icon span{color:#8cf0bb}.env{display:flex;align-items:center;gap:7px;border:1px solid #cbd6d1;border-radius:4px;padding:8px 10px;color:#53665c;font-size:10px;font-weight:750;letter-spacing:.065em;white-space:nowrap}.env-dot{height:7px;width:7px;border-radius:50%;background:#53b585}.intro{padding:50px 0 20px}.eyebrow{font-size:10px;letter-spacing:.16em;font-weight:800;color:#6e8b7b}.intro h1{font-size:clamp(36px,7vw,60px);letter-spacing:-.065em;line-height:1.06;margin:14px 0 12px;font-weight:780}.intro em{font-style:normal;color:#478c68}.intro p{font-size:14px;line-height:1.65;max-width:440px;color:#63747a}.warning{display:flex;gap:12px;background:#edf2ea;border:1px solid #d3dfd1;padding:13px 16px;font-size:12px;line-height:1.5;color:#416147;margin:16px 0 26px;border-radius:4px}.warning>span:first-child{font-size:13px}.panel{background:#fff;border:1px solid #d9deda;border-radius:7px;padding:29px;margin-bottom:16px;box-shadow:0 4px 18px rgba(18,36,27,.025)}.panel.compact{padding:25px 29px}.panel-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:23px}.panel h2,.history h2{font-size:21px;letter-spacing:-.035em;margin:6px 0 0;font-weight:720}.pill{background:#f2f3f0;color:#73817c;font-size:10px;border:1px solid #dfe4e0;border-radius:4px;padding:7px 9px;white-space:nowrap}.pill.enabled{color:#287d4b;background:#e8f6ec;border-color:#c4e4cf}.field-label{display:block;font-size:11px;letter-spacing:.03em;font-weight:720;margin-bottom:9px;color:#3b4c50}.amount-field{height:78px;display:flex;align-items:center;border-bottom:2px solid #1e3c32;gap:12px;margin-bottom:8px}.amount-field>span{font-size:30px;font-weight:500;color:#4d6858}.amount-field input{border:0;outline:0;flex:1;min-width:0;font-size:44px;letter-spacing:-.05em;font-weight:750;font-variant-numeric:tabular-nums;padding:0;background:transparent;color:#16242c}.amount-field small{font-size:12px;color:#7b8982;letter-spacing:.06em}.hint{font-size:11px;line-height:1.5;color:#82918c}.grid-fields{display:grid;grid-template-columns:1fr 1fr;gap:22px 17px;margin-top:29px}input:not(.amount-field input),select{display:block;width:100%;height:45px;border:1px solid #d8dfda;border-radius:4px;padding:10px 11px;color:#253730;background:#fafbf8;font-size:13px;font:inherit;outline-offset:3px}input:focus,select:focus{border-color:#5aa078}.submit-zone{display:flex;justify-content:space-between;align-items:center;gap:16px;border-top:1px solid #e8ebe7;padding-top:24px;margin-top:25px}.submit-zone .hint{max-width:260px}button{border:0;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px;font-weight:750;transition:transform .12s,background .12s}button:not(:disabled):active{transform:translateY(1px)}button:disabled{cursor:not-allowed;opacity:.5}button[type=submit]:not(.secondary){min-height:46px;color:#fff;background:#1d4b37;padding:12px 18px}button[type=submit]:not(.secondary):hover:not(:disabled){background:#28704e}.account-row{display:flex;align-items:end;gap:12px}.account-row>.grow{flex:1}.account-row>div:last-child{width:155px}.secondary{min-height:43px;padding:10px 14px;border:1px solid #cbd6cf;background:#e9f2ed;color:#285b3e;margin-top:17px}.subline{font-size:12px;color:#738078;margin:-14px 0 18px}.feedback{min-height:0;font-size:12px;line-height:1.55;margin-top:12px}.feedback:empty{display:none}.feedback.error{color:#ae3e3e}.feedback.good{color:#217448}.history{padding:27px 5px 15px;margin-bottom:8px}.history .panel-title{padding:0 3px}.mini{font-size:11px;color:#37674d;background:transparent;padding:9px 3px}.history-body{border-top:1px solid #d7ddd8}.entry-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:17px 4px;border-bottom:1px solid #e0e4df}.entry-description{font-size:13px;font-weight:720}.entry-meta{font-size:11px;color:#728079;margin-top:5px}.entry-amount{font-size:15px;font-weight:760;font-variant-numeric:tabular-nums;white-space:nowrap}.empty{padding:24px 4px;color:#89968e;font-size:13px}footer{text-align:center;border-top:1px solid #d7ded7;padding:24px 0;color:#96a19a;font-size:9px;letter-spacing:.1em}@media(max-width:560px){.shell{padding:0 18px 30px}.intro{padding:32px 0 13px}.intro h1{font-size:45px}.panel,.panel.compact{padding:21px 18px}.grid-fields{grid-template-columns:1fr 1fr;gap:18px 11px}.submit-zone{flex-direction:column;align-items:stretch}.submit-zone .hint{max-width:none}button[type=submit]:not(.secondary){width:100%}.amount-field input{font-size:37px}.env{font-size:9px}.account-row{flex-direction:column;align-items:stretch}.account-row>div:last-child{width:100%}}@media(prefers-reduced-motion:reduce){button{transition:none}}`;
+
+export const QUICK_JS = `"use strict";
+(() => {
+  const get = (id) => document.getElementById(id);
+  const state = { accounts: [], writes: false, entryKey: null, entryBody: null, accountKey: null, accountBody: null };
+  const formEntry = get("entry-form");
+  const formAccount = get("account-form");
+  const buttonEntry = get("save-entry");
+  const buttonAccount = get("save-account");
+  const safe = (error) => error instanceof Error ? error.message : "Error de conexión";
+  const message = (target, value, bad = false) => {
+    const node = get(target);
+    node.textContent = value;
+    node.className = "feedback " + (bad ? "error" : "good");
+  };
+  async function jsonFetch(path, init) {
+    const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...init });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || ("Error HTTP " + response.status));
+    return payload;
+  }
+  function setWriteEnabled(enabled) {
+    state.writes = enabled;
+    buttonEntry.disabled = !enabled || state.accounts.length === 0;
+    buttonAccount.disabled = !enabled;
+    get("write-flag").textContent = enabled ? "PRUEBAS HABILITADAS" : "SOLO LECTURA";
+    get("write-flag").className = "pill" + (enabled ? " enabled" : "");
+  }
+  async function health() {
+    try {
+      const payload = await jsonFetch("/healthz");
+      setWriteEnabled(payload.writesConfigured === true);
+      if (!state.writes) message("entry-message", "El registro está temporalmente deshabilitado. La lectura de datos sigue disponible.");
+    } catch { setWriteEnabled(false); }
+  }
+  async function accounts() {
+    try {
+      const data = await jsonFetch("/api/quick/accounts");
+      state.accounts = Array.isArray(data.accounts) ? data.accounts : [];
+      const sel = get("account");
+      const previous = sel.value;
+      sel.replaceChildren();
+      if (state.accounts.length === 0) {
+        const item = new Option("Primero crea una cuenta ficticia ↓", "");
+        sel.add(item);
+        message("account-message", "Todavía no hay cuentas de prueba. Crea una abajo para continuar.");
+      } else {
+        for (const a of state.accounts) {
+          sel.add(new Option(a.label + " · " + a.currency, a.id));
+        }
+        if (state.accounts.some((a) => a.id === previous)) sel.value = previous;
+        else sel.selectedIndex = 0;
+      }
+      buttonEntry.disabled = !state.writes || state.accounts.length === 0;
+    } catch (e) {
+      message("account-message", "No se pudieron leer las cuentas: " + safe(e), true);
+      buttonEntry.disabled = true;
+    }
+  }
+  async function entries() {
+    try {
+      const data = await jsonFetch("/api/quick/entries");
+      const list = get("history-body");
+      list.replaceChildren();
+      if (!data.entries || data.entries.length === 0) {
+        const placeholder = document.createElement("div");
+        placeholder.className = "empty";
+        placeholder.textContent = "Aún no hay gastos registrados.";
+        list.append(placeholder);
+        return;
+      }
+      for (const item of data.entries) {
+        const row = document.createElement("div");
+        row.className = "entry-row";
+        const left = document.createElement("div");
+        const concept = document.createElement("div");
+        concept.className = "entry-description";
+        concept.textContent = item.merchant || (item.kind === "investment_transfer" ? "Aporte a inversión" : item.kind === "transfer" ? "Transferencia propia" : "Movimiento");
+        const meta = document.createElement("div");
+        meta.className = "entry-meta";
+        const account = state.accounts.find((a) => a.id === item.account_id);
+        meta.textContent = new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual");
+        left.append(concept, meta);
+        const amount = document.createElement("div");
+        amount.className = "entry-amount";
+        amount.textContent = new Intl.NumberFormat("es-CO", { style: "currency", currency: item.currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(item.amount_minor) / 100);
+        row.append(left, amount);
+        list.append(row);
+      }
+    } catch (e) {
+      get("history-body").textContent = "No se pudo leer el historial: " + safe(e);
+    }
+  }
+  async function post(path, body) {
+    return jsonFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  }
+  formAccount.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!state.writes || buttonAccount.disabled) return;
+    const values = {
+      label: get("account-label").value.trim(),
+      accountKind: get("account-kind").value,
+      currency: "COP",
+      bankLabel: null,
+    };
+    const fingerprint = JSON.stringify(values);
+    if (state.accountKey && state.accountBody !== fingerprint) {
+      message("account-message", "Revisa el listado antes de modificar e intentar de nuevo una operación incierta.", true);
+      return;
+    }
+    state.accountKey ??= crypto.randomUUID();
+    state.accountBody = fingerprint;
+    buttonAccount.disabled = true;
+    try {
+      const result = await post("/api/quick/accounts", { ...values, clientAccountId: state.accountKey });
+      state.accountKey = null; state.accountBody = null;
+      message("account-message", result.replayed ? "Cuenta recuperada; no se duplicó." : "Cuenta ficticia creada correctamente.");
+      await accounts();
+      get("account").value = result.accountId;
+    } catch (e) {
+      message("account-message", "No se confirmó la creación: " + safe(e) + ". Consulta las cuentas antes de reintentar.", true);
+    } finally { buttonAccount.disabled = !state.writes; }
+  });
+  formEntry.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!state.writes || buttonEntry.disabled) return;
+    const acct = state.accounts.find((a) => a.id === get("account").value);
+    if (!acct) { message("entry-message", "Selecciona una cuenta de prueba.", true); return; }
+    const values = {
+      accountId: acct.id, amount: get("amount").value.trim(),
+      currency: acct.currency, paymentMethod: get("method").value,
+      classification: get("classification").value,
+      occurredAt: new Date().toISOString(), merchant: get("merchant").value.trim() || null,
+      bankLabel: null, confirmed: true,
+    };
+    // Reuse the same timestamp/key only on a retry with unchanged form data.
+    const fields = { ...values, occurredAt: undefined };
+    const fingerprint = JSON.stringify(fields);
+    if (state.entryKey && state.entryBody?.fingerprint !== fingerprint) {
+      message("entry-message", "Primero verifica el historial antes de cambiar los datos de un envío incierto.", true);
+      return;
+    }
+    state.entryKey ??= crypto.randomUUID();
+    if (!state.entryBody) state.entryBody = { fingerprint, occurredAt: values.occurredAt };
+    values.occurredAt = state.entryBody.occurredAt;
+    buttonEntry.disabled = true;
+    try {
+      const result = await post("/api/quick/entries", { ...values, clientEntryId: state.entryKey });
+      state.entryKey = null; state.entryBody = null;
+      message("entry-message", result.replayed ? "Movimiento confirmado; no se duplicó." : "Movimiento ficticio guardado en D1.");
+      await entries();
+    } catch (e) {
+      message("entry-message", "No se confirmó el guardado: " + safe(e) + ". Revisa el historial antes de reintentar.", true);
+    } finally { buttonEntry.disabled = !state.writes || state.accounts.length === 0; }
+  });
+  get("refresh").addEventListener("click", () => void entries());
+  void (async () => { await health(); await accounts(); await entries(); })();
+})();`;

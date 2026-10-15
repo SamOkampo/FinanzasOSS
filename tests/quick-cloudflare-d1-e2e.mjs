@@ -68,6 +68,31 @@ async function call(path, method = "GET", payload, user = A, options = {}) {
   return { status: response.status, body: await response.json(), headers: response.headers };
 }
 
+// UI and assets must be gated by the authenticated Access principal.
+for (const path of ["/", "/quick.js", "/quick.css"]) {
+  const denied = await call(path, "GET", undefined, missing);
+  assert.equal(denied.status, 401);
+  const allowed = await handleQuickRequest(
+    new Request(origin + path), disabledEnv, A,
+  );
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("Cache-Control"), "no-store, private");
+  assert.equal(allowed.headers.get("X-Content-Type-Options"), "nosniff");
+  const body = await allowed.text();
+  assert.ok(body.length > 100);
+  if (path === "/") {
+    assert.match(body, /<title>Quick · FinanzasOSS<\/title>/);
+    assert.match(body, /id="entry-form"/);
+    assert.match(allowed.headers.get("Content-Security-Policy"), /script-src 'self'/);
+    assert.doesNotMatch(body, /<script(?:\s|>)(?![^>]*src=)/i);
+  } else if (path === "/quick.js") {
+    assert.match(body, /\/api\/quick\/entries/);
+    assert.doesNotMatch(body, /localStorage|sessionStorage|innerHTML/);
+  } else {
+    assert.match(body, /prefers-reduced-motion/);
+  }
+}
+assert.equal((await call("/", "POST", {}, A)).status, 404);
 assert.equal((await call("/healthz", "GET", undefined, missing)).status, 200);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, missing)).status, 401);
 assert.equal((await call("/api/quick/accounts", "GET", undefined, A)).status, 200);

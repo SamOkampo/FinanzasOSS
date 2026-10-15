@@ -1,4 +1,5 @@
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
+import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -49,6 +50,23 @@ function respond(body: unknown, status = 200): Response {
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    },
+  });
+}
+
+function respondAsset(body: string, mediaType: string): Response {
+  const csp = mediaType === "text/html"
+    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    : "default-src 'none'; frame-ancestors 'none'";
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": mediaType + "; charset=utf-8",
+      "Cache-Control": "no-store, private",
+      "Content-Security-Policy": csp,
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
     },
   });
 }
@@ -226,10 +244,18 @@ export async function handleQuickRequest(
   if (pathname === "/healthz" && request.method === "GET") {
     return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true" });
   }
-  if (!pathname.startsWith("/api/quick/")) return respond({ error: "Not found" }, 404);
+  const isUiPath = pathname === "/" || pathname === "/quick.css" || pathname === "/quick.js";
+  if (!isUiPath && !pathname.startsWith("/api/quick/")) {
+    return respond({ error: "Not found" }, 404);
+  }
   const owner = await principal(ctx, env);
   if (!owner) return respond({ error: "Cloudflare Access required" }, 401);
   if (!env.DB) return respond({ error: "Database not configured" }, 503);
+  if (request.method === "GET" && isUiPath) {
+    if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
+    if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
+    return respondAsset(QUICK_JS, "application/javascript");
+  }
   try {
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true") return respond({ error: "Staging writes disabled" }, 503);
