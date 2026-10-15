@@ -106,4 +106,35 @@ assert.throws(
   CrossSourceReconciliationError,
 );
 
+const manuallyRecorded = tx({ id: "quick-posted", sourceType: "manual", description: "Spotify" });
+const matchingStatement = tx({ id: "stmt-same", sourceType: "statement_import", description: "Spotify" });
+const exactManualPlan = reconcileCrossSourceTransactions([manuallyRecorded], [matchingStatement]);
+assert.equal(exactManualPlan.inserts.length, 0);
+assert.equal(exactManualPlan.replacements.length, 0);
+assert.equal(exactManualPlan.suppressions.length, 0);
+assert.equal(exactManualPlan.reviews[0].level, "exact");
+assert.equal(exactManualPlan.reviews[0].matchedId, "quick-posted");
+
+const alteredDescription = tx({ id: "stmt-ambiguous", sourceType: "statement_import", description: "UNKNOWN STORE" });
+const possibleManual = reconcileCrossSourceTransactions([manuallyRecorded], [alteredDescription]);
+assert.equal(possibleManual.inserts.length, 0);
+assert.equal(possibleManual.reviews[0].level, "possible");
+assert.ok(possibleManual.reviews[0].reasons.some((x) => x.includes("manual overlap")));
+
+const separateAccount = reconcileCrossSourceTransactions(
+  [manuallyRecorded], [{ ...alteredDescription, accountId: "acct-2" }],
+);
+assert.equal(separateAccount.reviews.length, 0);
+assert.equal(separateAccount.inserts.length, 1);
+
+const investment = { ...manuallyRecorded, kind: "investment_transfer", rawDescription: "Broker funding" };
+const separateEconomicClass = reconcileCrossSourceTransactions([investment], [alteredDescription]);
+assert.equal(separateEconomicClass.reviews.length, 0);
+assert.equal(separateEconomicClass.inserts.length, 1);
+
+assert.throws(
+  () => reconcileCrossSourceTransactions([manuallyRecorded], [{ ...alteredDescription, tenantId: "tenant-2" }]),
+  /Cross-tenant reconciliation denied/,
+);
+
 console.log("cross-source reconciliation 8.6: ok");
