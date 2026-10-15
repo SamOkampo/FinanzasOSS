@@ -35,4 +35,13 @@ assert.equal(legalDataReadinessPolicy.codeMaySelfApproveLegalReview, false);
 assert.equal(legalDataReadinessPolicy.externalHumanApprovalRequired, true);
 assert.equal(legalDataReadinessPolicy.legalConclusionsMayBeInvented, false);
 
+// Direct public gate calls must reject absent JSON evidence without throwing.
+for (const malformed of [null, undefined]) {
+  const decision = assessLegalDataReadiness(malformed);
+  assert.equal(decision.ready, false);
+  assert.ok(decision.missing.length > 0);
+  assert.ok(Object.isFrozen(decision));
+  assert.throws(() => assertLegalDataReviewEvidence(malformed), /evidence incomplete/i);
+}
+
 console.log("Phase 15.2 legal/data readiness regression passed");
