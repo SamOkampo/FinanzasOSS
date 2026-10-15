@@ -77,11 +77,10 @@ grant select on public.quick_manual_entries to authenticated;
 
 -- Atomic confirmation + idempotent retry. Authentication is derived from
 -- Supabase's validated request JWT, never from user-supplied owner/actor IDs.
--- SQL SECURITY INVOKER retains caller RLS; entry INSERT privilege is granted
--- only during this SQL routine via a dedicated insert policy/function strategy.
--- See migration below: grant INSERT to authenticated is necessary for the
--- invoker and RLS still denies cross-user or cross-account writes.
-grant insert on public.quick_manual_entries to authenticated;
+-- SECURITY DEFINER is intentionally narrow (fixed SQL, empty search_path),
+-- and the routine verifies the caller's UID and account ownership explicitly.
+-- No direct INSERT grant to authenticated: writes must go through this RPC.
+-- The migration/function owner must remain a trusted admin role only.
 
 create or replace function public.quick_confirm_manual_entry(
   p_tenant_id text,
@@ -98,7 +97,7 @@ create or replace function public.quick_confirm_manual_entry(
 )
 returns table (entry_id uuid, replayed boolean)
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
