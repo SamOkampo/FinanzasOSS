@@ -2,6 +2,14 @@
 
 ## Estado actual
 
+> **Estado operativo revalidado 2026-10-15:** `docs/ROADMAP.md` registra Fases 0–14 completadas. Los controles internos de readiness de 15.1–15.5 están integrados, pero los requisitos externos permanecen **ABIERTOS**. Fase 16 no comienza hasta cierre verificable de toda Fase 15. Los registros históricos más abajo no sustituyen al estado vivo de `main`, CI y PRs.
+>
+> **Correcciones internas integradas en `main` (2026-10-15):** PR #151, squash merge `a0f608260e1b1dc55ad9933ace888f53c0246a00` (CI [#345](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38493160158) SUCCESS), endurece fechas UTC y evidencia malformada; PR #156, squash merge `9ea70521d40e68199e87cb579e6307267b6e9416` (CI [38686264283](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38686264283) SUCCESS), legal nullish fail-closed; PR #157, squash merge `e269122174de83c16e906403bb25a89a28421c39` (CI [38686312387](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38686312387) SUCCESS), infraestructura nullish fail-closed. Los PR apilados #152/#154 fueron reemplazados por #156/#157; #153 era una auditoría histórica y se cerró sin merge para evitar evidencia obsoleta.
+>
+> **Política de integración interna autorizada el 2026-10-15:** revisión técnica automatizada del diff + CI/regresión verde sobre el HEAD exacto + merge reproducible son suficientes para PRs de **código o documentación internos**, sin exigir un segundo revisor humano en cada PR. No atribuir a ello una revisión humana independiente. Si el riesgo no puede verificarse de forma automatizada, detener esa integración. Para acceso bancario, privacidad/asesoría jurídica, infraestructura real, pentest externo y canary/go-live, se mantienen las aprobaciones externas independientes y la autorización explícita de producción.
+>
+> **Siguiente gate real, no autocertificable:** obtener acuerdos/acceso/certificados oficiales de proveedor (15.1), validación jurídica humana y política de datos (15.2), KMS/IAM/RLS/backups/observabilidad de producción (15.3), pentest independiente (15.4) y canary manual aprobado con rollback (15.5). Hasta contar con evidencia verificable: **cero producción financiera, credenciales bancarias reales, secretos, movimientos de dinero, trading/retiros y costes**. Ninguna fase 17+ está autorizada.
+
 - **Fase 7 — Cobertura bancaria Colombia: CERRADA e integrada.**
 - **Fase 8 — Universal Import Engine: CERRADA e integrada.**
 - **Fase 9 — Portafolios, brokers, exchanges y wallets: CERRADA e integrada.**
@@ -22,7 +30,7 @@
 - 9.8 Portfolio snapshots e historial: PR #75, CI #169 verde, merge `11d86ff`.
 - 9.9 Cost basis/P&L/dividendos/fees/impuestos: PR #77, CI #173 verde, merge `70baa59`.
 - 9.10 TWR/XIRR y separación estricta de rendimiento vs aportes: PR #79, CI #177 verde, merge `42824fd`.
-- Próximo bloque exacto permitido: **Fase 10.1 — Merchant normalization y categorización**.
+- Próximo punto exacto permitido: **cerrar con evidencias externas los gates 15.1–15.5** antes de iniciar Fase 16. En paralelo, corregir solo defectos internos nuevos y verificables con PR pequeños, CI verde y revisión técnica automatizada; nunca fingir aprobación jurídica, bancaria, pentest o canary.
 
 ## Cierre Fase 8
 
