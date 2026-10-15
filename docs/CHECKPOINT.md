@@ -2,6 +2,11 @@
 
 ## Estado actual
 
+> **Extensión Quick + Subscriptions, revalidada 2026-10-15:** PR #158 (merge `029e2c326c71a842360a9a41793435ff4083dca2`, CI #355 SUCCESS) añade el núcleo **review-only** de captura manual; PR #159 (merge `ef30ba72c4d08daa6fcb65c2b888516f240dd62e`, CI #357 SUCCESS) corrige fechas futuras de suscripciones mensuales/anuales; PR #160 (merge `572d42cb4d58286df79b5c5a09661c879fd3860c`, CI #38778889455 SUCCESS) agrega conciliación review-only de entradas manuales existentes e impide lotes cross-tenant. **No existe todavía UI de guardado real, API CRUD autenticada ni implementación persistente; tampoco Gmail OAuth/lectura de correo.** Consultar `docs/audits/QUICK_SUBSCRIPTIONS_PREFLIGHT_2026-10-15.md`.
+>
+> **Próximo bloque de producto verificable: Q4 — persistencia real autenticada de gastos Quick**, con cuenta manual explícita, esquema/RLS, endpoint de confirmación e idempotencia. Después Q5 UI/shortcut, Q6 candidatos de recibos y Q7 Gmail opcional según verificación de Google. Estas tareas son internas y NO suponen permisos Open Finance, aprobación legal ni autorización productiva: los gates externos 15.1–15.5 continúan abiertos y Fase 16 sigue pendiente.
+
+
 > **Estado operativo revalidado 2026-10-15:** `docs/ROADMAP.md` registra Fases 0–14 completadas. Los controles internos de readiness de 15.1–15.5 están integrados, pero los requisitos externos permanecen **ABIERTOS**. Fase 16 no comienza hasta cierre verificable de toda Fase 15. Los registros históricos más abajo no sustituyen al estado vivo de `main`, CI y PRs.
 >
 > **Correcciones internas integradas en `main` (2026-10-15):** PR #151, squash merge `a0f608260e1b1dc55ad9933ace888f53c0246a00` (CI [#345](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38493160158) SUCCESS), endurece fechas UTC y evidencia malformada; PR #156, squash merge `9ea70521d40e68199e87cb579e6307267b6e9416` (CI [38686264283](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38686264283) SUCCESS), legal nullish fail-closed; PR #157, squash merge `e269122174de83c16e906403bb25a89a28421c39` (CI [38686312387](https://github.com/SamOkampo/FinanzasOSS/actions/runs/38686312387) SUCCESS), infraestructura nullish fail-closed. Los PR apilados #152/#154 fueron reemplazados por #156/#157; #153 era una auditoría histórica y se cerró sin merge para evitar evidencia obsoleta.
