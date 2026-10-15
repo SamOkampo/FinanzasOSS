@@ -23,15 +23,11 @@ jobs:
       - run: npm run security:secrets
       - run: npm run security:deps
       - run: npm test
-      - name: Build temporary Cloudflare Worker release bundle
+      - name: Verify Cloudflare Worker standalone bundle
         run: |
           npx --yes esbuild@0.25.12 apps/quick-worker/src/index.ts --bundle --platform=browser --format=esm --target=es2022 --minify --outfile=/tmp/finanzasoss-quick-worker.mjs
           test -s /tmp/finanzasoss-quick-worker.mjs
-          sha256sum /tmp/finanzasoss-quick-worker.mjs
-          echo FINANZASOSS_WORKER_BUNDLE_BASE64_START
-          base64 -w0 /tmp/finanzasoss-quick-worker.mjs
-          echo
-          echo FINANZASOSS_WORKER_BUNDLE_BASE64_END
+          # Do not print bundled source, user data or credentials to CI logs.
 
   quick-db-integration:
     runs-on: ubuntu-latest
