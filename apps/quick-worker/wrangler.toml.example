@@ -1,0 +1,21 @@
+# Copy to apps/quick-worker/wrangler.toml ONLY after choosing an authorized
+# Cloudflare account and a dedicated empty D1 staging database.
+# Never deploy into an existing application or reuse another project's D1.
+name = "finanzasoss-quick-staging"
+main = "src/index.ts"
+compatibility_date = "2026-10-15"
+workers_dev = true
+
+[vars]
+# Fail-closed default: only enable after Cloudflare Access is configured
+# on every Worker route and authenticated multi-user staging tests pass.
+ALLOW_WRITES = "false"
+# Replace with the actual Cloudflare Access application AUD on this Worker.
+# This is NOT a banking credential; never use a guessed value.
+ACCESS_AUD = "REPLACE_WITH_VERIFIED_CLOUDFLARE_ACCESS_AUD"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "finanzasoss-staging"
+database_id = "REPLACE_WITH_NEW_D1_DATABASE_ID"
+migrations_dir = "migrations"
