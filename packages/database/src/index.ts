@@ -96,3 +96,5 @@ export * from "./data-lifecycle.js";
 export * from "./tenant-isolation.js";
 
 export * from "./tenant-workspace.js";
+
+export * from "./quick-entry-persistence.js";
