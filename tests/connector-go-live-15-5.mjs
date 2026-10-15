@@ -91,6 +91,102 @@ assert.ok(
   crossProviderEvidence.reasons.includes("rollout:connectorId does not match access:providerId"),
 );
 
+// Every readiness gate must reject malformed or non-canonical review timestamps.
+// All references are synthetic; this test never enables a provider or canary.
+const invalidReviewTimestamps = [
+  "2026-02-30T03:40:00Z",
+  "2026-02-29T03:40:00Z",
+  "2026-04-31T03:40:00Z",
+  "2026-10-06",
+  "2026-10-06T03:40:00+00:00",
+  "2026-10-06T25:40:00Z",
+  "2026-10-06T03:60:00Z",
+  "2999-01-01T00:00:00Z",
+  null,
+  undefined,
+  0,
+  {},
+];
+const reviewTimestampGates = [
+  ["access", "verifiedAt", "access:verifiedAt"],
+  ["legal", "approvedAt", "legal:approvedAt"],
+  ["infrastructure", "verifiedAt", "infrastructure:verifiedAt"],
+  ["pentest", "performedAt", "pentest:valid performedAt missing"],
+  ["rollout", "approvedAt", "rollout:approvedAt"],
+];
+let invalidTimestampCases = 0;
+for (const invalidTimestamp of invalidReviewTimestamps) {
+  for (const [section, field, reason] of reviewTimestampGates) {
+    const result = assessConnectorGoLive({
+      access,
+      legal,
+      infrastructure,
+      pentest,
+      rollout,
+      [section]: { ...{ access, legal, infrastructure, pentest, rollout }[section], [field]: invalidTimestamp },
+    });
+    assert.equal(result.eligibleForManualCanary, false, `${section} accepted ${String(invalidTimestamp)}`);
+    assert.ok(result.reasons.includes(reason), `${section}: expected ${reason}, got ${result.reasons.join(", ")}`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    invalidTimestampCases++;
+  }
+}
+assert.equal(invalidTimestampCases, 60);
+
+// Runtime JSON may contain non-object sections even when TypeScript contracts are strict.
+// A malformed section must never throw, grant manual-canary eligibility, or enable writes.
+const runtimeSections = { access, legal, infrastructure, pentest, rollout };
+const malformedRuntimeValues = [
+  null, undefined, {}, [], 42, false, "", [{}],
+  { verifiedAt: 42, approvedAt: 42, performedAt: 42, connectorId: 42, providerId: 42 },
+];
+let malformedRuntimeCases = 0;
+for (const section of Object.keys(runtimeSections)) {
+  for (const value of malformedRuntimeValues) {
+    const result = assessConnectorGoLive({ ...runtimeSections, [section]: value });
+    assert.equal(result.eligibleForManualCanary, false, `${section}: invalid evidence accepted`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    assert.ok(result.reasons.length > 0);
+    malformedRuntimeCases++;
+  }
+}
+for (const value of malformedRuntimeValues) {
+  const result = assessConnectorGoLive(value);
+  assert.equal(result.eligibleForManualCanary, false, "invalid top-level evidence accepted");
+  assert.equal(result.automaticActivation, false);
+  assert.equal(result.writeCapabilitiesAllowed, false);
+  assert.ok(result.reasons.length > 0);
+  malformedRuntimeCases++;
+}
+assert.equal(malformedRuntimeCases, 54);
+
+// A complete, synthetic fixture must fail closed if any required evidence field
+// is omitted. Certificate references are optional, so they are excluded here.
+// This is a structural regression, NOT proof of external provider approval.
+const requiredEvidenceFields = {
+  access: ["providerId", "agreementReference", "credentialReference", "verifiedAt", "verifiedBy", "environment", "readOnly"],
+  legal: ["reviewReference", "approvedBy", "approvedAt", "privacyNoticeReference", "retentionPolicyReference", "dataSubjectRightsProcedureReference", "thirdPartyReceiverAssessmentReference", "jurisdictionReference"],
+  infrastructure: ["environmentReference", "kmsOrSecretManagerReference", "tenantIsolationReference", "databaseBackupRestoreReference", "egressPolicyReference", "loggingRedactionReviewReference", "monitoringReference", "alertingReference", "incidentRunbookReference", "verifiedAt", "verifiedBy"],
+  pentest: ["reportReference", "assessorReference", "scopeReference", "performedAt", "remediationReference", "retestReference", "openCriticalFindings", "openHighFindings"],
+  rollout: ["connectorId", "canaryPlanReference", "rollbackPlanReference", "initialAudienceReference", "healthDashboardReference", "supportOwner", "approvedBy", "approvedAt"],
+};
+let requiredEvidenceOmissions = 0;
+for (const [section, fields] of Object.entries(requiredEvidenceFields)) {
+  for (const field of fields) {
+    const incomplete = { ...runtimeSections[section] };
+    delete incomplete[field];
+    const result = assessConnectorGoLive({ ...runtimeSections, [section]: incomplete });
+    assert.equal(result.eligibleForManualCanary, false, `${section}.${field} omission accepted`);
+    assert.equal(result.automaticActivation, false);
+    assert.equal(result.writeCapabilitiesAllowed, false);
+    assert.ok(result.reasons.length > 0, `${section}.${field} missing rejection reason`);
+    requiredEvidenceOmissions++;
+  }
+}
+assert.equal(requiredEvidenceOmissions, 42);
+
 assert.equal(gradualGoLivePolicy.automaticActivationAllowed, false);
 assert.equal(gradualGoLivePolicy.financialWriteCapabilitiesAllowed, false);
 assert.equal(gradualGoLivePolicy.manualCanaryApprovalRequired, true);

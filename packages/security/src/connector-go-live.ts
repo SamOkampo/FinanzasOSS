@@ -1,3 +1,4 @@
+import { isValidReviewTimestamp } from "./production-access-readiness.js";
 import {
   assessProductionAccessEvidence,
   type ProductionAccessEvidence,
@@ -35,7 +36,13 @@ export interface ConnectorGoLiveReadiness {
 }
 
 function hasText(value: string | undefined): boolean {
-  return Boolean(value?.trim());
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function asEvidence<T extends object>(value: unknown): Partial<T> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Partial<T>)
+    : {};
 }
 
 export function assessConnectorGoLive(input: {
@@ -45,39 +52,51 @@ export function assessConnectorGoLive(input: {
   pentest: Partial<ExternalPentestEvidence>;
   rollout: Partial<GradualRolloutEvidence>;
 }): ConnectorGoLiveReadiness {
+  const raw = asEvidence<{
+    access: Partial<ProductionAccessEvidence>;
+    legal: Partial<LegalDataReviewEvidence>;
+    infrastructure: Partial<ProductionInfrastructureEvidence>;
+    pentest: Partial<ExternalPentestEvidence>;
+    rollout: Partial<GradualRolloutEvidence>;
+  }>(input);
+  const accessEvidence = asEvidence<ProductionAccessEvidence>(raw.access);
+  const legalEvidence = asEvidence<LegalDataReviewEvidence>(raw.legal);
+  const infrastructureEvidence = asEvidence<ProductionInfrastructureEvidence>(raw.infrastructure);
+  const pentestEvidence = asEvidence<ExternalPentestEvidence>(raw.pentest);
+  const rolloutEvidence = asEvidence<GradualRolloutEvidence>(raw.rollout);
   const reasons: string[] = [];
-  const access = assessProductionAccessEvidence(input.access);
+  const access = assessProductionAccessEvidence(accessEvidence);
   if (!access.ready) reasons.push(...access.missing.map((item) => `access:${item}`));
 
-  const legal = assessLegalDataReadiness(input.legal);
+  const legal = assessLegalDataReadiness(legalEvidence);
   if (!legal.ready) reasons.push(...legal.missing.map((item) => `legal:${item}`));
 
-  const infrastructure = assessProductionInfrastructureReadiness(input.infrastructure);
+  const infrastructure = assessProductionInfrastructureReadiness(infrastructureEvidence);
   if (!infrastructure.ready) {
     reasons.push(...infrastructure.missing.map((item) => `infrastructure:${item}`));
   }
 
-  const pentest = assessExternalPentestReadiness(input.pentest);
+  const pentest = assessExternalPentestReadiness(pentestEvidence);
   if (!pentest.ready) reasons.push(...pentest.reasons.map((item) => `pentest:${item}`));
 
-  const connectorId = input.rollout.connectorId?.trim() ?? "";
+  const connectorId = typeof rolloutEvidence.connectorId === "string" ? rolloutEvidence.connectorId.trim() : "";
   if (!connectorId) reasons.push("rollout:connectorId");
 
-  const accessProviderId = input.access.providerId?.trim() ?? "";
+  const accessProviderId = typeof accessEvidence.providerId === "string" ? accessEvidence.providerId.trim() : "";
   if (connectorId && accessProviderId && connectorId !== accessProviderId) {
     reasons.push("rollout:connectorId does not match access:providerId");
   }
-  if (!hasText(input.rollout.canaryPlanReference)) reasons.push("rollout:canaryPlanReference");
-  if (!hasText(input.rollout.rollbackPlanReference)) reasons.push("rollout:rollbackPlanReference");
-  if (!hasText(input.rollout.initialAudienceReference)) {
+  if (!hasText(rolloutEvidence.canaryPlanReference)) reasons.push("rollout:canaryPlanReference");
+  if (!hasText(rolloutEvidence.rollbackPlanReference)) reasons.push("rollout:rollbackPlanReference");
+  if (!hasText(rolloutEvidence.initialAudienceReference)) {
     reasons.push("rollout:initialAudienceReference");
   }
-  if (!hasText(input.rollout.healthDashboardReference)) {
+  if (!hasText(rolloutEvidence.healthDashboardReference)) {
     reasons.push("rollout:healthDashboardReference");
   }
-  if (!hasText(input.rollout.supportOwner)) reasons.push("rollout:supportOwner");
-  if (!hasText(input.rollout.approvedBy)) reasons.push("rollout:approvedBy");
-  if (!input.rollout.approvedAt || Number.isNaN(Date.parse(input.rollout.approvedAt))) {
+  if (!hasText(rolloutEvidence.supportOwner)) reasons.push("rollout:supportOwner");
+  if (!hasText(rolloutEvidence.approvedBy)) reasons.push("rollout:approvedBy");
+  if (!isValidReviewTimestamp(rolloutEvidence.approvedAt)) {
     reasons.push("rollout:approvedAt");
   }
 
