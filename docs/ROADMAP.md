@@ -135,6 +135,9 @@
 - [x] Q2 Corregir deriva de fechas de suscripciones mensuales y anuales — PR #159, merge `ef30ba7`.
 - [x] Q3 Plan de conciliación manual ↔ importaciones: coincidencias a revisión, no autopersistencia ni duplicación, fail-closed cross-tenant — PR #160, merge `572d42c`.
 - [ ] Q4 Persistencia real autenticada con cuenta manual explícita, RLS/aislamiento, idempotencia transaccional y recuperación.
+  - [x] Q4.A Contrato de confirmación + migración PostgreSQL/Supabase revisable, RLS/aislamiento, idempotencia y regresiones SQL efímeras (ver `docs/quick/PHASE_Q4_PERSISTENCE_FOUNDATION.md`); no equivale a despliegue.
+  - [ ] Q4.B Selección explícita de Supabase staging de FinanzasOSS, migración aplicada sin costes ni datos financieros reales, backup/rollback y comprobación de JWT/RLS.
+  - [ ] Q4.C Endpoint o adaptador autenticado + persistencia real, pruebas completas POST/SELECT/reintentos y seguridad con dos usuarios, exportación/borrado.
 - [ ] Q5 UI móvil accesible de registro rápido y shortcut/PWA funcional, pruebas físicas; no confundir con widget nativo de iOS.
 - [ ] Q6 Recibos seleccionados → candidatos de suscripción; comprobación humana, calendario/alertas opt-in, sin afirmar cargos bancarios.
 - [ ] Q7 Gmail OAuth opcional sujeto a permisos de Google, verificación/seguridad de scopes, privacidad, revocación y borrado.
