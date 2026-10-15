@@ -136,7 +136,10 @@
 - [x] Q3 Plan de conciliación manual ↔ importaciones: coincidencias a revisión, no autopersistencia ni duplicación, fail-closed cross-tenant — PR #160, merge `572d42c`.
 - [ ] Q4 Persistencia real autenticada con cuenta manual explícita, RLS/aislamiento, idempotencia transaccional y recuperación.
   - [x] Q4.A Contrato de confirmación + migración PostgreSQL/Supabase revisable, RLS/aislamiento, idempotencia y regresiones SQL efímeras (ver `docs/quick/PHASE_Q4_PERSISTENCE_FOUNDATION.md`); no equivale a despliegue.
-  - [ ] Q4.B Selección explícita de Supabase staging de FinanzasOSS, migración aplicada sin costes ni datos financieros reales, backup/rollback y comprobación de JWT/RLS.
+  - [ ] Q4.B Seleccionar infraestructura de staging dedicada (ahora se prefiere Cloudflare D1 + Workers; el contrato Supabase se conserva como alternativa), sin costes ni datos financieros reales.
+  - [ ] Q4.D1-A Esquema SQLite, Worker protegido por Access y pruebas reales de SQLite/HTTP con usuarios ficticios — en PR; comprobar CI antes de marcar completo.
+  - [ ] Q4.D1-B Cuenta Cloudflare autorizada, D1 nueva, Access configurado con AUD correcto, migración y despliegue staging verificables (pendiente por bloqueo de acceso al inventario Cloudflare).
+  - [ ] Q4.D1-C Pruebas de sesiones auténticas en staging, aislamiento, idempotencia, backups/restauración y respuesta a errores.
   - [ ] Q4.C Endpoint o adaptador autenticado + persistencia real, pruebas completas POST/SELECT/reintentos y seguridad con dos usuarios, exportación/borrado.
 - [ ] Q5 UI móvil accesible de registro rápido y shortcut/PWA funcional, pruebas físicas; no confundir con widget nativo de iOS.
 - [ ] Q6 Recibos seleccionados → candidatos de suscripción; comprobación humana, calendario/alertas opt-in, sin afirmar cargos bancarios.
