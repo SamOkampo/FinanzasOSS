@@ -202,6 +202,17 @@ async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<
     ...(data.merchant === undefined ? {} : { merchant: data.merchant as string }),
     ...(data.bankLabel === undefined ? {} : { bankLabel: data.bankLabel as string }),
   });
+  // Bank selection is a property of card / bank transfer payment method,
+  // not a login or bank integration. Fail closed if submitted mismatched.
+  const methodRequiresBank = draft.paymentMethod === "debit_card" ||
+    draft.paymentMethod === "credit_card" ||
+    draft.paymentMethod === "bank_transfer";
+  if (methodRequiresBank && !draft.bankLabel) {
+    return respond({ error: "Bank name required for card or bank transfer" }, 422);
+  }
+  if (!methodRequiresBank && draft.bankLabel !== null) {
+    return respond({ error: "Bank name only allowed for card or bank transfer" }, 422);
+  }
   // D1 integers are safely representable here because the domain maximum is 1e12.
   const minor = Number(draft.money.amountMinor);
   if (!Number.isSafeInteger(minor)) throw new InputError("Amount exceeds supported integer range");

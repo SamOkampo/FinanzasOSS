@@ -51,7 +51,7 @@ const entry = {
   classification: "expense",
   occurredAt: "2026-10-15T12:30:00.000Z",
   merchant: "Almuerzo",
-  bankLabel: null,
+  bankLabel: "Banco de prueba",
   confirmed: true,
 };
 async function call(path, method = "GET", payload, user = A, options = {}) {
@@ -83,11 +83,15 @@ for (const path of ["/", "/quick.js", "/quick.css"]) {
   if (path === "/") {
     assert.match(body, /<title>Quick · FinanzasOSS<\/title>/);
     assert.match(body, /id="entry-form"/);
+    assert.match(body, /id="bank-field" hidden/);
+    assert.match(body, /¿Qué banco es\?/);
     assert.match(allowed.headers.get("Content-Security-Policy"), /script-src 'self'/);
     assert.doesNotMatch(body, /<script(?:\s|>)(?![^>]*src=)/i);
   } else if (path === "/quick.js") {
     assert.match(body, /\/api\/quick\/entries/);
     assert.match(body, /TRANSFERENCIA PROPIA/);
+    assert.match(body, /BANK_METHODS/);
+    assert.match(body, /bankLabel/);
     assert.match(body, /APORTE A INVERSIÓN/);
     assert.match(body, /window\.confirm/);
     assert.match(body, /¿Es correcto el tipo de movimiento\?/);
@@ -145,6 +149,8 @@ assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, amount: "0" 
 assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, amount: "1.999" })).status, 422);
 assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, tenantId: "access-user-b" })).status, 422);
 assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, currency: "USD" })).status, 403);
+assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, bankLabel: null })).status, 422);
+assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, paymentMethod: "cash", bankLabel: "Banco de prueba" })).status, 422);
 
 const saved = await call("/api/quick/entries", "POST", aEntry);
 assert.equal(saved.status, 201);
@@ -153,12 +159,14 @@ assert.match(saved.body.entryId, /^[0-9a-f-]{36}$/);
 assert.equal((await call("/api/quick/entries", "POST", aEntry)).body.entryId, saved.body.entryId);
 assert.equal((await call("/api/quick/entries", "POST", aEntry)).body.replayed, true);
 assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, amount: "100" })).status, 409);
+assert.equal((await call("/api/quick/entries", "POST", { ...aEntry, bankLabel: "Otro banco" })).status, 409);
 
 const aListed = await call("/api/quick/entries");
 assert.equal(aListed.status, 200);
 assert.equal(aListed.body.entries.length, 1);
 assert.equal(aListed.body.entries[0].amount_minor, "2500050");
 assert.equal(aListed.body.entries[0].kind, "purchase");
+assert.equal(aListed.body.entries[0].bank_label, "Banco de prueba");
 assert.equal(aListed.body.entries[0].source, undefined);
 assert.equal(aListed.headers.get("Cache-Control"), "no-store, private");
 assert.equal((await call("/api/quick/entries", "GET", undefined, B)).body.entries.length, 0);
