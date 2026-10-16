@@ -65,6 +65,60 @@ export const QUICK_JS = `"use strict";
     node.textContent = value;
     node.className = "feedback " + (bad ? "error" : "good");
   };
+  // Apple Shortcuts passes draft values via a URL *fragment*, never through an
+  // HTTP query/body. Consume and erase it before performing any fetch.
+  // This prefill is untrusted input; the authenticated POST still validates it.
+  function consumeShortcutDraft() {
+    const fragment = window.location.hash;
+    if (!fragment || !fragment.startsWith("#quick=")) return null;
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch {
+      window.location.hash = "";
+    }
+    if (fragment.length > 512) return { error: "Atajo demasiado largo." };
+    const params = new URLSearchParams(fragment.slice(1));
+    const allowed = ["quick", "amount", "concept", "account"];
+    const fields = [...params.keys()];
+    if (fields.length !== allowed.length || allowed.some((key) => params.getAll(key).length !== 1)
+      || fields.some((key) => !allowed.includes(key)) || params.get("quick") !== "1") {
+      return { error: "El enlace del Atajo no tiene el formato esperado." };
+    }
+    const amount = params.get("amount").trim();
+    const concept = params.get("concept").trim();
+    const account = params.get("account").trim();
+    if (!/^[0-9]{1,10}([.][0-9]{1,2})?$/.test(amount) || !(Number(amount) > 0)) {
+      return { error: "Monto inválido. En el Atajo escribe 25000, sin puntos de miles." };
+    }
+    if (!concept || concept.length > 120 || !account || account.length > 100
+      || [...concept, ...account].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
+      return { error: "Concepto o cuenta no válidos en el Atajo." };
+    }
+    return { amount, concept, account };
+  }
+  const shortcutDraft = consumeShortcutDraft();
+  function applyShortcutDraft() {
+    if (!shortcutDraft) return;
+    if (shortcutDraft.error) {
+      message("entry-message", shortcutDraft.error + " Introduce los datos manualmente.", true);
+      return;
+    }
+    get("amount").value = shortcutDraft.amount;
+    get("merchant").value = shortcutDraft.concept;
+    // Do not guess the user's financial account if two labels match, or if
+    // the requested account does not exist. Require a manual selection.
+    const normalize = (label) => label.trim().toLocaleLowerCase("es-CO");
+    const matched = state.accounts.filter((item) =>
+      item.currency === "COP" && normalize(item.label) === normalize(shortcutDraft.account));
+    if (matched.length !== 1) {
+      get("account").selectedIndex = -1;
+      buttonEntry.disabled = true;
+      message("entry-message", "Monto y concepto precargados, pero no se encontró una cuenta única con el nombre indicado. Selecciónala manualmente.", true);
+      return;
+    }
+    get("account").value = matched[0].id;
+    message("entry-message", "Atajo precargado. Revisa el tipo de movimiento y el método antes de confirmar. Nada se ha guardado todavía.");
+  }
   async function jsonFetch(path, init) {
     const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...init });
     const payload = await response.json().catch(() => ({}));
@@ -221,5 +275,8 @@ export const QUICK_JS = `"use strict";
     } finally { buttonEntry.disabled = !state.writes || state.accounts.length === 0; }
   });
   get("refresh").addEventListener("click", () => void entries());
-  void (async () => { await health(); await accounts(); await entries(); })();
+  get("account").addEventListener("change", () => {
+    buttonEntry.disabled = !state.writes || !get("account").value;
+  });
+  void (async () => { await health(); await accounts(); applyShortcutDraft(); await entries(); })();
 })();`;
