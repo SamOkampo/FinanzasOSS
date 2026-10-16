@@ -25,6 +25,7 @@ export const QUICK_HTML = `<!doctype html>
       <div class="grid-fields">
         <div><label class="field-label" for="account">Cuenta manual</label><select id="account" required><option value="">Cargando cuentas...</option></select></div>
         <div><label class="field-label" for="method">Método</label><select id="method" required><option value="debit_card">Tarjeta débito</option><option value="cash">Efectivo</option><option value="credit_card">Tarjeta crédito</option><option value="bank_transfer">Transferencia</option><option value="digital_wallet">Billetera digital</option><option value="other">Otro</option></select></div>
+        <div id="bank-field" hidden><label class="field-label" for="bank">¿Qué banco es?</label><input id="bank" type="text" maxlength="80" autocomplete="off" placeholder="Ej. Banco de prueba"></div>
         <div><label class="field-label" for="classification">Tipo de movimiento</label><select id="classification" required><option value="expense">Gasto</option><option value="own_transfer">Transferencia propia</option><option value="investment_transfer">Aporte a inversión</option></select></div>
         <div><label class="field-label" for="merchant">Concepto · opcional</label><input id="merchant" type="text" maxlength="120" placeholder="Almuerzo de prueba"></div>
       </div>
@@ -59,6 +60,17 @@ export const QUICK_JS = `"use strict";
   const formAccount = get("account-form");
   const buttonEntry = get("save-entry");
   const buttonAccount = get("save-account");
+  const BANK_METHODS = new Set(["debit_card", "credit_card", "bank_transfer"]);
+  const METHODS = new Set(["cash", "debit_card", "credit_card", "bank_transfer", "digital_wallet", "other"]);
+  function updateBankField() {
+    const needed = BANK_METHODS.has(get("method").value);
+    const field = get("bank-field");
+    const input = get("bank");
+    field.hidden = !needed;
+    input.required = needed;
+    input.disabled = !needed;
+    if (!needed) input.value = "";
+  }
   const safe = (error) => error instanceof Error ? error.message : "Error de conexión";
   const message = (target, value, bad = false) => {
     const node = get(target);
@@ -78,15 +90,30 @@ export const QUICK_JS = `"use strict";
     }
     if (fragment.length > 512) return { error: "Atajo demasiado largo." };
     const params = new URLSearchParams(fragment.slice(1));
-    const allowed = ["quick", "amount", "concept", "account"];
+    const legacy = ["quick", "amount", "concept", "account"];
+    const extended = [...legacy, "method", "bank"];
     const fields = [...params.keys()];
-    if (fields.length !== allowed.length || allowed.some((key) => params.getAll(key).length !== 1)
+    // Existing 4-parameter shortcuts remain supported; new ones must
+    // explicitly specify both method and bank (blank only if not bank-based).
+    const allowed = fields.length === legacy.length ? legacy
+      : fields.length === extended.length ? extended : null;
+    if (!allowed || allowed.some((key) => params.getAll(key).length !== 1)
       || fields.some((key) => !allowed.includes(key)) || params.get("quick") !== "1") {
       return { error: "El enlace del Atajo no tiene el formato esperado." };
     }
     const amount = params.get("amount").trim();
     const concept = params.get("concept").trim();
     const account = params.get("account").trim();
+    const method = allowed === extended ? params.get("method") : null;
+    const bank = allowed === extended ? params.get("bank").trim() : "";
+    if (method !== null && !METHODS.has(method)) {
+      return { error: "Método de pago inválido en el Atajo." };
+    }
+    if (method !== null && ((BANK_METHODS.has(method) &&
+      (!bank || bank.length > 80 || [...bank].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)))
+      || (!BANK_METHODS.has(method) && bank !== ""))) {
+      return { error: "El banco solo debe indicarse para tarjeta o transferencia, y no puede estar vacío en esos métodos." };
+    }
     if (!/^[0-9]{1,10}([.][0-9]{1,2})?$/.test(amount) || !(Number(amount) > 0)) {
       return { error: "Monto inválido. En el Atajo escribe 25000, sin puntos de miles." };
     }
@@ -94,7 +121,7 @@ export const QUICK_JS = `"use strict";
       || [...concept, ...account].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
       return { error: "Concepto o cuenta no válidos en el Atajo." };
     }
-    return { amount, concept, account };
+    return { amount, concept, account, method, bank };
   }
   const shortcutDraft = consumeShortcutDraft();
   function applyShortcutDraft() {
@@ -105,6 +132,13 @@ export const QUICK_JS = `"use strict";
     }
     get("amount").value = shortcutDraft.amount;
     get("merchant").value = shortcutDraft.concept;
+    if (shortcutDraft.method !== null) {
+      get("method").value = shortcutDraft.method;
+      updateBankField();
+      if (BANK_METHODS.has(shortcutDraft.method)) {
+        get("bank").value = shortcutDraft.bank;
+      }
+    }
     // Do not guess the user's financial account if two labels match, or if
     // the requested account does not exist. Require a manual selection.
     const normalize = (label) => label.trim().toLocaleLowerCase("es-CO");
@@ -188,7 +222,7 @@ export const QUICK_JS = `"use strict";
         const movementKind = item.kind === "investment_transfer"
           ? "APORTE A INVERSIÓN" : item.kind === "transfer"
             ? "TRANSFERENCIA PROPIA" : "GASTO";
-        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual");
+        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual") + (item.bank_label ? " · " + item.bank_label : "");
         left.append(concept, meta);
         const amount = document.createElement("div");
         amount.className = "entry-amount";
@@ -241,18 +275,25 @@ export const QUICK_JS = `"use strict";
       : selectedClass === "own_transfer"
         ? "TRANSFERENCIA PROPIA (NO ES UN GASTO)"
         : "GASTO";
-    // Make an economic classification explicit before any irreversible
-    // append-only ledger write. No automatic changes to previous entries.
+    const needsBank = BANK_METHODS.has(get("method").value);
+    const bankLabel = needsBank ? get("bank").value.trim() : null;
+    if (needsBank && (!bankLabel || bankLabel.length > 80)) {
+      message("entry-message", "Escribe el nombre del banco para tarjeta o transferencia.", true);
+      return;
+    }
+    // Make the method, bank and economic classification explicit before
+    // append-only storage. No automatic changes to previous entries.
     if (!window.confirm("Confirma este movimiento de prueba:\\n\\n" +
       classLabel + "\\nMonto: $" + get("amount").value.trim() +
       " " + acct.currency + "\\nCuenta: " + acct.label +
+      (needsBank ? "\\nBanco: " + bankLabel : "") +
       "\\n\\n¿Es correcto el tipo de movimiento?")) return;
     const values = {
       accountId: acct.id, amount: get("amount").value.trim(),
       currency: acct.currency, paymentMethod: get("method").value,
       classification: selectedClass,
       occurredAt: new Date().toISOString(), merchant: get("merchant").value.trim() || null,
-      bankLabel: null, confirmed: true,
+      bankLabel, confirmed: true,
     };
     // Reuse the same timestamp/key only on a retry with unchanged form data.
     const fields = { ...values, occurredAt: undefined };
@@ -274,6 +315,8 @@ export const QUICK_JS = `"use strict";
       message("entry-message", "No se confirmó el guardado: " + safe(e) + ". Revisa el historial antes de reintentar.", true);
     } finally { buttonEntry.disabled = !state.writes || state.accounts.length === 0; }
   });
+  get("method").addEventListener("change", updateBankField);
+  updateBankField();
   get("refresh").addEventListener("click", () => void entries());
   get("account").addEventListener("change", () => {
     buttonEntry.disabled = !state.writes || !get("account").value;
