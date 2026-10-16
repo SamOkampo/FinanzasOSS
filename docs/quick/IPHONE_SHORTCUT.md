@@ -1,47 +1,76 @@
-# FinanzasOSS Quick — Atajo avanzado para iPhone (STAGING)
+# FinanzasOSS Quick — Atajo avanzado de iPhone (STAGING)
 
-> **Solo datos ficticios.** Esta integración no constituye autorización para almacenar información financiera real. El sitio requiere el inicio de sesión por Cloudflare Access. La revisión humana y la confirmación final de clasificación son obligatorias; el Atajo jamás escribe directamente en D1.
+> **Solo datos ficticios.** Cloudflare Access protege el Worker. El Atajo precarga el formulario; nunca llama directamente a la API ni guarda entradas. Se requiere revisión humana de tipo económico y confirmación antes de persistir.
 
-## Funcionamiento
+## Nuevo flujo
 
-El Atajo solicita **monto (COP)**, **concepto** y **nombre exacto de una cuenta manual existente**. Abre la página privada con esos valores en el fragmento de la URL, por ejemplo:
+El Atajo pregunta **monto en COP**, **concepto**, **cuenta manual existente** y **método de pago**. Solamente al seleccionar **tarjeta débito**, **tarjeta crédito** o **transferencia bancaria** preguntará además **«¿Qué banco es?»** (nombre libre, sin conexión bancaria). Efectivo, billetera digital y otro método no preguntan el banco. Método y banco se precargan y, una vez confirmados, quedan registrados con el movimiento en D1.
 
-```text
-https://finanzasoss-quick-staging.socampoecheverry.workers.dev/#quick=1&amount=25000&concept=Almuerzo%20de%20prueba&account=Efectivo%20de%20prueba
-```
+Ejemplo ficticio para tarjeta:
 
-Este fragmento (#...) no se envía en la petición HTTP y el frontend lo elimina de la barra de direcciones **antes de consultar la API**. Sigue siendo temporalmente visible en el Atajo y podría aparecer en historial local o copias del enlace, por eso en staging no usar importes reales ni detalles personales.
+~~~text
+https://finanzasoss-quick-staging.socampoecheverry.workers.dev/#quick=1&amount=25000&concept=Almuerzo%20de%20prueba&account=Efectivo%20de%20prueba&method=debit_card&bank=Banco%20de%20prueba
+~~~
 
-## Cómo crear «Registrar gasto Quick» en la app Atajos
+Ejemplo ficticio para efectivo, sin banco:
 
-1. Abrir **Atajos**, pulsar **+** y llamar al atajo «Registrar gasto Quick».
-2. Añadir **Pedir entrada** (tipo **Texto**) con la pregunta **«¿Cuánto? Escribe 25000, sin puntos de miles»**. Usar la variable de resultado como «Cantidad». No introducir el signo $ ni separadores de miles.
-3. Añadir **Pedir entrada** (Texto) «¿Concepto de prueba?», por ejemplo «Almuerzo de prueba». Guardar su variable de salida como «Concepto».
-4. Añadir **Codificar URL** (también puede llamarse **Codificar texto para URL**, según iOS) para la variable «Concepto». Guardar el resultado como «ConceptoCodificado».
-5. Añadir **Pedir entrada** (Texto) «¿Qué cuenta manual?», por ejemplo **Efectivo de prueba**. Guardar el resultado como «Cuenta».
-6. Añadir otra acción **Codificar URL** aplicada a «Cuenta». Guardar el resultado como «CuentaCodificada».
-7. Añadir la acción **Texto** que contenga la dirección de arriba, reemplazando solo los tres valores de muestra por las **variables mágicas** «Cantidad», «ConceptoCodificado» y «CuentaCodificada». Conservar literalmente `#quick=1&amount=`, `&concept=` y `&account=`. No poner comillas alrededor de las variables.
-8. Añadir acción **URL** con el resultado de la acción Texto y luego **Abrir URLs**. Si el editor permite pasar Texto directamente a **Abrir URLs**, puede omitirse el paso URL intermediario.
-9. Probar el Atajo con **25000**, **Almuerzo de prueba** y **Efectivo de prueba**. Confirmar que se abre el formulario **sin guardar automáticamente**, que la cuenta coincide y que se solicita seleccionar/revisar el tipo y método de movimiento antes del guardado.
-10. Desde el menú de detalles del Atajo, seleccionar **Añadir a pantalla de inicio**. Se podrá invocar por Siri usando su nombre.
+~~~text
+https://finanzasoss-quick-staging.socampoecheverry.workers.dev/#quick=1&amount=25000&concept=Almuerzo%20de%20prueba&account=Efectivo%20de%20prueba&method=cash&bank=
+~~~
 
-## Reglas de protección
+El fragmento después de # no se envía en la petición HTTP y se borra de la barra de direcciones antes de las consultas D1. Aun así puede permanecer temporalmente en el historial local de Atajos o ser compartido. **No usar datos reales en staging.**
 
-- El fragmento debe contener **exactamente** las claves `quick`, `amount`, `concept` y `account`, sin duplicados ni claves adicionales; se borrará incluso si es inválido.
-- `amount`: positivo, hasta 10 dígitos enteros y opcionalmente hasta dos decimales con punto, sin signos ni separadores de miles.
-- `concept`: texto no vacío de máximo 120 caracteres, sin caracteres de control.
-- `account`: texto no vacío de máximo 100 caracteres, sin caracteres de control.
-- Solo se selecciona una cuenta si hay **una única coincidencia exacta** de su etiqueta sin distinción de mayúsculas y con moneda COP. Si no existe o hay etiquetas repetidas, **el envío queda bloqueado hasta escoger una cuenta manualmente**.
-- El atajo no modifica la clase económica ni el método de pago, no crea cuentas, no envía ningún POST, no guarda en D1 y no aplica autorización propia. Cloudflare Access continúa siendo imprescindible.
-- Un inicio de sesión nuevo en Access puede eliminar el fragmento durante la redirección. Para probar, iniciar sesión primero en Safari y luego abrir el Atajo. Cuando se expire la sesión, volver a autenticarse y ejecutar el atajo otra vez.
-- No usar «Obtener contenidos de URL» para enviar el movimiento desde Atajos: la API requiere una petición de mismo origen y confirmación humana.
-- No se ha realizado todavía la prueba física en un iPhone real. Debe verificarse antes de marcar Q5 como completada.
+## Construcción en iOS de «Registrar gasto Quick»
 
-## Criterios de prueba física pendiente
+1. Abrir **Atajos**, pulsar **+**, nombrar «Registrar gasto Quick».
+2. Añadir **Pedir entrada** tipo **Texto** con «¿Cuánto? (COP, por ejemplo 25000)». Guardar variable **Cantidad**, sin signo de pesos ni separadores de miles.
+3. Añadir **Pedir entrada** tipo Texto «¿En qué?», guardar como **Concepto**; acción **Codificar URL** y almacenar como **ConceptoCodificado**.
+4. Añadir **Pedir entrada** tipo Texto «¿Desde qué cuenta manual?», por ejemplo **Efectivo de prueba**; guardar como **Cuenta**, luego **Codificar URL** y guardar **CuentaCodificada**.
+5. Inicializar **BancoCodificado** con una acción **Texto** vacío y **Establecer variable**. Así, los métodos sin banco enviarán un valor vacío.
+6. Añadir **Elegir del menú** con pregunta «¿Cómo pagaste?» y seis opciones. Dentro de cada rama poner acción **Texto** con su código y **Establecer variable MetodoCodigo**:
+   - Tarjeta débito → debit_card
+   - Tarjeta crédito → credit_card
+   - Transferencia bancaria → bank_transfer
+   - Efectivo → cash
+   - Billetera digital → digital_wallet
+   - Otro → other
+7. **Solo dentro de las tres ramas Tarjeta débito, Tarjeta crédito y Transferencia bancaria**, agregar tras «Establecer variable MetodoCodigo»: **Pedir entrada** de tipo Texto «¿Qué banco es?»; **Codificar URL** el resultado; **Establecer variable BancoCodificado** con el resultado codificado. En las otras tres ramas no preguntar banco.
+8. Después de **Fin del menú**, añadir **Texto** con esta plantilla, sustituyendo los seis campos entre corchetes por las **variables mágicas** (no escribir los corchetes):
 
-- [ ] Safari iOS con Cloudflare Access autenticado mantiene el fragmento durante la navegación de Atajos a la web.
-- [ ] Monto, concepto y cuenta aparecen precargados; clasificación y método siguen bajo control humano.
-- [ ] Rechazar la confirmación no crea entradas.
-- [ ] Guardar una vez registra un único movimiento ficticio; refrescar no duplica.
-- [ ] Cuenta desconocida o ambigua requiere selección manual.
-- [ ] Al cerrar/abrir Safari, no quedan datos precargados en la URL.
+~~~text
+https://finanzasoss-quick-staging.socampoecheverry.workers.dev/#quick=1&amount=[Cantidad]&concept=[ConceptoCodificado]&account=[CuentaCodificada]&method=[MetodoCodigo]&bank=[BancoCodificado]
+~~~
+
+9. Añadir acción **URL** usando ese texto y **Abrir URLs** con su resultado. Algunas versiones de iOS permiten pasar el texto directamente a Abrir URLs.
+10. Probar con valores **ficticios**. Safari debe mostrar monto, cuenta, método y banco precargados según corresponda. Revisar y elegir el tipo económico (gasto/transferencia propia/inversión) y confirmar antes de guardar.
+11. En los detalles del Atajo escoger **Añadir a pantalla de inicio**. Siri puede activarlo por nombre.
+
+## Validaciones
+
+- Los enlaces previos de cuatro campos (quick, amount, concept, account) siguen funcionando; permiten seleccionar método y banco manualmente en la web.
+- La variante nueva exige exactamente seis claves: quick, amount, concept, account, method y bank; sin claves repetidas/adicionales ni campos faltantes.
+- Método admitido: cash, debit_card, credit_card, bank_transfer, digital_wallet, other.
+- Para tarjeta débito, crédito y transferencia bancaria: banco obligatorio de 1 a 80 caracteres, sin caracteres de control. Para efectivo, billetera u otro: bank vacío; la API también valida esta coherencia.
+- Monto positivo en COP, máximo 10 cifras enteras y 2 decimales con punto, sin separador de miles; concepto hasta 120 y cuenta hasta 100 caracteres.
+- Solo se preselecciona una cuenta COP si hay una coincidencia única y exacta de etiqueta (sin importar mayúsculas). Si falta o está duplicada, el formulario obliga a seleccionarla manualmente. El **banco pagador** no es lo mismo que la **cuenta manual de origen**.
+- Si se cambia el método a efectivo/billetera/otro, el banco se borra y desaparece. El historial muestra el banco cuando consta.
+- El Atajo no guarda automáticamente, no crea cuentas ni tiene credenciales. Sigue haciendo falta Cloudflare Access y la confirmación del formulario.
+- Si una nueva sesión Cloudflare Access pierde el fragmento, iniciar sesión primero en Safari y ejecutar el Atajo de nuevo.
+- No utilizar «Obtener contenidos de URL» para enviar pagos o movimientos. Nunca pedir credenciales de bancos, PIN, CVV ni números de tarjeta.
+
+## Evidencia automatizada
+
+- [x] Prefill legado de cuatro claves sin ruptura.
+- [x] Débito, crédito y transferencia requieren y precargan banco; efectivo, billetera y otros lo omiten.
+- [x] Formato inválido, banco faltante, método erróneo o banco sobrante son rechazados.
+- [x] Cambiar método a efectivo borra el banco.
+- [x] No hay POST sin interacción y confirmación humanas.
+- [x] D1/API verifican obligación de banco y rechazan banco con efectivo u otros métodos.
+
+## Pruebas físicas pendientes
+
+- [ ] iPhone Atajos → Safari con sesión Access conserva los datos hasta que la página los procese.
+- [ ] Las tres opciones bancarias preguntan «¿Qué banco es?» y efectivo no lo pregunta.
+- [ ] Banco, método, concepto, cuenta y monto se precargan; tipo de movimiento editable, sin guardado automático.
+- [ ] Cancelar la confirmación no escribe; guardar una sola vez preserva bank_label y la clasificación adecuada.
+- [ ] Historial, reintento, cuenta ambigua, navegación/redirección Access y error de red probados en iPhone.
