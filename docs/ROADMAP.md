@@ -144,7 +144,8 @@
   - [ ] Q4.C Endpoint o adaptador autenticado + persistencia real, pruebas completas POST/SELECT/reintentos y seguridad con dos usuarios, exportación/borrado.
 - [ ] Q5 UI móvil accesible de registro rápido y shortcut/PWA funcional, pruebas físicas; no confundir con widget nativo de iOS.
   - [x] Q5.A Formulario web responsive, cuenta ficticia, captura y listado con CSP y Access, PR #167, CI verde, desplegado en Worker staging.
-  - [ ] Q5.B Prueba física móvil/iPhone, acceso directo/shortcut, feedback real, accesibilidad y errores de red, antes de completar Q5.
+  - [x] Q5.B1 Integración en código del Atajo de iPhone — PR #170, merge `d8ba15c`, CI #38932399128 SUCCESS. Prefill local vía fragmento (#quick=1), limpieza inmediata del fragmento, cuenta COP coincidente de forma única, sin POST automático y pruebas VM de casos invalidos. Desplegado en `finanzasoss-quick-staging` el 16-oct-2026 tras gate de Access y binding D1; la base permaneció en 1 cuenta y 1 transferencia ficticia (no se modificaron).
+  - [ ] Q5.B2 Prueba **física iPhone** de Atajos → Safari/Cloudflare Access → datos precargados → confirmación manual; accesibilidad, historial, error de red y acceso directo. Q5 no está cerrada. Ver `docs/quick/IPHONE_SHORTCUT.md`.
 - [ ] Q6 Recibos seleccionados → candidatos de suscripción; comprobación humana, calendario/alertas opt-in, sin afirmar cargos bancarios.
 - [ ] Q7 Gmail OAuth opcional sujeto a permisos de Google, verificación/seguridad de scopes, privacidad, revocación y borrado.
 
