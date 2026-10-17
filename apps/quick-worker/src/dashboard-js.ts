@@ -15,7 +15,7 @@ export const DASH_JS = `(() => {
   const fmtFull = new Intl.DateTimeFormat("es-CO", {
     timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric",
   });
-  const COLORS = ["#82eac9", "#b1b4fb", "#e9c28f", "#78b6ee", "#f19caa", "#9fbf9a"];
+  const COLORS = ["#b66b45", "#829e8c", "#c7a57b", "#69918c", "#a48e9e", "#92927d"];
   const LABELS = {
     cash: "Efectivo", debit_card: "Tarjeta débito",
     credit_card: "Tarjeta crédito", bank_transfer: "Transferencia",
@@ -362,7 +362,8 @@ export const DASH_JS = `(() => {
       if (overview.truncated) throw new Error("El historial supera el máximo de agregaciones permitido. Contacta soporte para una consulta completa.");
       state.overview = overview;
       renderDashboard();
-      if (overview.excludedUsd) {
+      document.dispatchEvent(new CustomEvent("finanzasoss:data", {detail:{overview}}));
+      if (overview.excludedUsd && $("testing")) {
         $("testing").textContent = "ENTORNO STAGING · " + overview.excludedUsd +
           " movimiento(s) en USD excluidos de totales COP; disponibles en el historial.";
       }
