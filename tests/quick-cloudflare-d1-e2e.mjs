@@ -561,7 +561,7 @@ assert.equal(preview.body.monthKey,thisMonth);
 assert.equal(preview.body.confirmationPhrase,"BORRAR ESTE MES");
 assert.ok(preview.body.counts.directExpenses>0);
 assert.equal(preview.body.preservesShortcuts,true);
-assert.equal((await confirmReset(preview.body.challengeId,"all")).status,422,
+assert.equal((await confirmReset(preview.body.challengeId,"all")).status,409,
   "Scope or typed phrase must not expand period");
 assert.equal((await confirmReset(preview.body.challengeId,"month",B)).status,409,
   "Challenge belongs to exactly one Access owner");
