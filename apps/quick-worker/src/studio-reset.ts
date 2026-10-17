@@ -7,7 +7,7 @@ export class ResetInputError extends Error {
 }
 type Totals = { manualEntries: number; directExpenses: number; manualAccounts: number; shortcutDevices: number };
 type RawCounts = { manual_entries: number; direct_expenses: number; manual_accounts: number; shortcut_devices: number };
-type ChallengeRow = RawCounts & { id: string; owner_id: string; expires_at: string };
+type ChallengeRow = { id: string; owner_id: string; expires_at: string; expected_manual_entries: number; expected_shortcut_expenses: number; expected_accounts: number; expected_devices: number };
 const REQUIRED_PHRASE = "RESTABLECER TODO";
 const EXPIRES_MS = 5 * 60 * 1000;
 
