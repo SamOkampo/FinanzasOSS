@@ -1,5 +1,11 @@
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
+import { DASH_HTML } from "./dashboard-html.js";
+import { DASH_CSS } from "./dashboard-css.js";
+import { DASH_JS } from "./dashboard-js.js";
+import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
+import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
+import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -15,6 +21,7 @@ export interface QuickWorkerEnv {
   readonly DB: QuickD1;
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
+  readonly ALLOW_SHORTCUT_WRITES?: string;
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -56,7 +63,7 @@ function respond(body: unknown, status = 200): Response {
 
 function respondAsset(body: string, mediaType: string): Response {
   const csp = mediaType === "text/html"
-    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; manifest-src 'self'; img-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     : "default-src 'none'; frame-ancestors 'none'";
   return new Response(body, {
     status: 200,
@@ -176,14 +183,19 @@ async function createAccount(db: QuickD1, owner: string, body: unknown): Promise
   return respond({ accountId: prior.id, replayed: true });
 }
 async function listEntries(db: QuickD1, owner: string): Promise<Response> {
+  // Combine legacy manually-accounted records and new account-free Shortcut
+  // expenses, without assigning a fake bank/cash account to the latter.
   const data = await db.prepare(
     "SELECT id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at," +
     "merchant,bank_label,created_at FROM quick_manual_entries WHERE owner_id=? " +
+    "UNION ALL SELECT id,NULL AS account_id,client_entry_id,amount_minor,currency," +
+    "payment_method,kind,occurred_at,merchant,bank_label,created_at " +
+    "FROM quick_shortcut_expenses WHERE owner_id=? " +
     "ORDER BY occurred_at DESC,id DESC LIMIT 100",
-  ).bind(owner).all<ManualEntry>();
+  ).bind(owner, owner).all<ManualEntry>();
   return respond({ entries: data.results.map((x) => ({ ...x, amount_minor: String(x.amount_minor) })) });
 }
-async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+async function confirmEntry(db: QuickD1, owner: string, body: unknown, ignoreReplayTime = false): Promise<Response> {
   const data = strictObject(body, [
     "accountId", "clientEntryId", "amount", "currency", "paymentMethod", "classification",
     "occurredAt", "merchant", "bankLabel", "confirmed",
@@ -241,7 +253,7 @@ async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<
   if (!prior) return respond({ error: "Unable to verify write" }, 503);
   if (prior.account_id !== accountId || prior.amount_minor !== minor ||
       prior.currency !== draft.money.currency || prior.payment_method !== draft.paymentMethod ||
-      prior.kind !== draft.kind || prior.occurred_at !== draft.occurredAt ||
+      prior.kind !== draft.kind || (!ignoreReplayTime && prior.occurred_at !== draft.occurredAt) ||
       prior.merchant !== draft.merchant || prior.bank_label !== draft.bankLabel) {
     return respond({ error: "Entry idempotency key reused with different data" }, 409);
   }
@@ -253,11 +265,20 @@ export async function handleQuickRequest(
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (pathname === "/healthz" && request.method === "GET") {
-    return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true" });
+    return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true", shortcutsConfigured: env.ALLOW_SHORTCUT_WRITES === "true" });
   }
-  const isUiPath = pathname === "/" || pathname === "/quick.css" || pathname === "/quick.js";
+  const isUiPath = new Set([
+    "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
+    "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
+    "/dashboard-sw.js",
+  ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
+  }
+  // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
+  if (pathname === "/api/quick/shortcut/expense" && request.method === "POST") {
+    try { return await shortcutExpense(request, env, ctx); }
+    catch (error) { return shortcutFailure(error); }
   }
   const owner = await principal(ctx, env);
   if (!owner) return respond({ error: "Cloudflare Access required" }, 401);
@@ -265,7 +286,18 @@ export async function handleQuickRequest(
   if (request.method === "GET" && isUiPath) {
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
-    return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
+    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
+    if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
+    if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
+    if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
+    if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
+    // An iOS home-screen icon requires PNG, not only a manifest SVG.
+    return new Response(Uint8Array.from(atob(DASH_ICON_180_PNG_BASE64), (c) => c.charCodeAt(0)), {
+      headers: { "Content-Type": "image/png", "Cache-Control": "no-store, private",
+        "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" },
+    });
   }
   try {
     if (request.method === "POST") {
@@ -274,13 +306,23 @@ export async function handleQuickRequest(
       const data = await parseJson(request);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
+      if (pathname === "/api/quick/shortcut/enroll") {
+        if (env.ALLOW_SHORTCUT_WRITES !== "true") return respond({ error: "Direct shortcuts disabled" }, 503);
+        return await enrollShortcut(env.DB, owner, data);
+      }
+      if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
+      if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/dashboard/movements") {
+        return await dashboardMovements(env.DB, owner, new URL(request.url));
+      }
+      if (pathname === "/api/quick/shortcut/devices") return await shortcutStatus(env.DB, owner);
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {

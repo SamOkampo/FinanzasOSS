@@ -1,0 +1,40 @@
+name: Reviewed FinanzasOSS Staging Bundle
+
+on:
+  push:
+    branches:
+      - feature/quick-iphone-direct-expense
+    paths:
+      - .github/workflows/finanzasoss-staging-bundle.yml
+      - apps/quick-worker/src/**
+      - packages/finance-core/src/**
+
+permissions:
+  contents: write
+
+jobs:
+  reviewed-staging-bundle:
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm install -g typescript@5.8.3
+      - run: npm run lint && npm run typecheck && npm test
+      - name: Build browser-compatible Worker module
+        run: |
+          npx --yes esbuild@0.25.12 apps/quick-worker/src/index.ts --bundle --platform=browser --format=esm --target=es2022 --minify --outfile=apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          test -s apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+      - name: Persist the tested staging bundle for controlled deployment
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "build(quick): pin tested account-free staging Worker bundle"
+          git push origin HEAD:feature/quick-iphone-direct-expense
