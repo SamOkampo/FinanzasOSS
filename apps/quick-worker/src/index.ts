@@ -1,5 +1,10 @@
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
+import { DASH_HTML } from "./dashboard-html.js";
+import { DASH_CSS } from "./dashboard-css.js";
+import { DASH_JS } from "./dashboard-js.js";
+import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
+import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -58,7 +63,7 @@ function respond(body: unknown, status = 200): Response {
 
 function respondAsset(body: string, mediaType: string): Response {
   const csp = mediaType === "text/html"
-    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; manifest-src 'self'; img-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     : "default-src 'none'; frame-ancestors 'none'";
   return new Response(body, {
     status: 200,
@@ -262,7 +267,11 @@ export async function handleQuickRequest(
   if (pathname === "/healthz" && request.method === "GET") {
     return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true", shortcutsConfigured: env.ALLOW_SHORTCUT_WRITES === "true" });
   }
-  const isUiPath = pathname === "/" || pathname === "/quick.css" || pathname === "/quick.js";
+  const isUiPath = new Set([
+    "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
+    "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
+    "/dashboard-sw.js",
+  ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
   }
@@ -277,7 +286,18 @@ export async function handleQuickRequest(
   if (request.method === "GET" && isUiPath) {
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
-    return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
+    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
+    if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
+    if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
+    if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
+    if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
+    // An iOS home-screen icon requires PNG, not only a manifest SVG.
+    return new Response(Uint8Array.from(atob(DASH_ICON_180_PNG_BASE64), (c) => c.charCodeAt(0)), {
+      headers: { "Content-Type": "image/png", "Cache-Control": "no-store, private",
+        "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" },
+    });
   }
   try {
     if (request.method === "POST") {
@@ -294,6 +314,10 @@ export async function handleQuickRequest(
     } else if (request.method === "GET") {
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
+      if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/dashboard/movements") {
+        return await dashboardMovements(env.DB, owner, new URL(request.url));
+      }
       if (pathname === "/api/quick/shortcut/devices") return await shortcutStatus(env.DB, owner);
     }
     return respond({ error: "Not found" }, 404);
