@@ -178,11 +178,16 @@ async function createAccount(db: QuickD1, owner: string, body: unknown): Promise
   return respond({ accountId: prior.id, replayed: true });
 }
 async function listEntries(db: QuickD1, owner: string): Promise<Response> {
+  // Combine legacy manually-accounted records and new account-free Shortcut
+  // expenses, without assigning a fake bank/cash account to the latter.
   const data = await db.prepare(
     "SELECT id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at," +
     "merchant,bank_label,created_at FROM quick_manual_entries WHERE owner_id=? " +
+    "UNION ALL SELECT id,NULL AS account_id,client_entry_id,amount_minor,currency," +
+    "payment_method,kind,occurred_at,merchant,bank_label,created_at " +
+    "FROM quick_shortcut_expenses WHERE owner_id=? " +
     "ORDER BY occurred_at DESC,id DESC LIMIT 100",
-  ).bind(owner).all<ManualEntry>();
+  ).bind(owner, owner).all<ManualEntry>();
   return respond({ entries: data.results.map((x) => ({ ...x, amount_minor: String(x.amount_minor) })) });
 }
 async function confirmEntry(db: QuickD1, owner: string, body: unknown, ignoreReplayTime = false): Promise<Response> {
@@ -263,7 +268,7 @@ export async function handleQuickRequest(
   }
   // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
   if (pathname === "/api/quick/shortcut/expense" && request.method === "POST") {
-    try { return await shortcutExpense(request, env, ctx, confirmEntry); }
+    try { return await shortcutExpense(request, env, ctx); }
     catch (error) { return shortcutFailure(error); }
   }
   const owner = await principal(ctx, env);
