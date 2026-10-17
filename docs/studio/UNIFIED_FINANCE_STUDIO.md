@@ -34,3 +34,13 @@ FinanzasOSS Quick (D1 + Cloudflare Access + Atajos) es **captura de gastos** y n
 3. Diseñar un único ledger persistente y conciliador para importador + Quick + conectores.
 4. Cableado seguro de importación con preview y confirmación; luego métricas patrimoniales con fuentes verificadas.
 5. Restablecimiento de datos de prueba **solo con confirmación específica del propietario**, nunca asumir autorización por un rediseño.
+
+## Corrección Safari / restablecimiento total (17 oct 2026)
+
+- iOS/Safari: se quitó el listener `fetch` del Service Worker: ninguna solicitud financiera es interceptada por la PWA. El SW antiguo puede conservar el control de la pestaña hasta recargar o volver a abrir Safari; el nuevo activa `skipWaiting` y no usa `respondWith`. Los errores de red se muestran con texto claro y no con excepciones internas.
+- Diseño: reemplazar todos los `↗` del HTML por iconos dibujados con CSS, evitando que iOS los convierta en cuadrados de emoji azules. Control de recarga también dibujado con CSS; modo sin hover evita pestañas iluminadas tras tocar en iPhone.
+- `Ajustes > Restablecer todo`: la acción de apertura **no borra nada**. `POST /api/quick/studio/reset/prepare` requiere Access humano autenticado, Origin del Worker y `ALLOW_RESET_WRITES=true` (solo staging). Entrega conteos y desafío ligado al propietario que expira en 5 minutos. `POST /api/quick/studio/reset/confirm` exige frase exacta `RESTABLECER TODO`, `confirmed:true`, desafío de un solo uso y totales sin cambios desde la revisión.
+- El borrado ejecuta un lote transaccional D1 `batch()` con owner derivado exclusivamente de Cloudflare Access; elimina: `quick_manual_entries`, `quick_shortcut_expenses`, `quick_manual_accounts` y `quick_shortcut_devices` de **ese usuario**. Conserva los datos de otras personas y las políticas externas de Cloudflare Access. Revocar las autorizaciones del iPhone hace necesario reenrolar el Atajo.
+- Antes de habilitar el backend en staging se verificó el bookmark D1 y los conteos; publicar la funcionalidad **no ejecuta ningún borrado**.
+- Las regresiones prueban en SQLite real, con D1-shaped `batch` transaccional, aislamiento por owner, caducidad lógica, desafío repetido, diferencias entre snapshot y estado actual, confirmación explícita, conservación de otros usuarios, revocación de token iPhone y posibilidad de volver a activar el acceso humano.
+- **Límite de QA:** prueba local/CI de lógica y endpoints más integridad de D1 en remoto; el acto destructivo real de D1 **no se ejecuta sin intervención del usuario**. Revisar la experiencia visual en Safari físico antes de dar por cerrada la UX.
