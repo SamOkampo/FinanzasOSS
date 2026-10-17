@@ -63,6 +63,13 @@ export async function subscribe(db:QuickD1,owner:string,env:QuickWorkerEnv,body:
     "RETURNING endpoint_hash").bind(owner,hash,endpoint,new Date().toISOString()).first();
   return reply({subscribed:true,replayed:!!existing},existing?200:201);
 }
+export async function subscriptionStatus(db:QuickD1,owner:string,body:unknown):Promise<Response>{
+  const obj=strict(body,["endpoint"]);
+  const hash=await digest(endpointOf(obj.endpoint));
+  const found=await db.prepare("SELECT endpoint_hash FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=?")
+    .bind(owner,hash).first<{endpoint_hash:string}>();
+  return reply({registered:Boolean(found)});
+}
 export async function unsubscribe(db:QuickD1,owner:string,body:unknown):Promise<Response>{
   const obj=strict(body,["endpoint"]);
   const hash=await digest(endpointOf(obj.endpoint));
