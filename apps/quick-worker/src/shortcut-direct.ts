@@ -140,6 +140,20 @@ export async function shortcutExpense(
   ).bind(await digestToken(token), new Date().toISOString()).first<{ owner_id: string }>();
   if (!row) return reply({ error: "Device authorization expired or revoked" }, 401);
   const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel"]);
+  return saveAccountlessExpense(env.DB, row.owner_id, data);
+}
+
+// The browser flow reuses the SAME append-only write routine as iOS Atajos.
+// Human Access authentication, feature flag and same-origin CSRF gate live in index.ts.
+export async function browserExpense(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+  const data = strict(body, ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "confirmed"]);
+  if (data.confirmed !== true) throw new ShortcutInputError("Expense confirmation required");
+  return saveAccountlessExpense(db, owner, data);
+}
+
+async function saveAccountlessExpense(
+  db: QuickD1, owner: string, data: Record<string, unknown>,
+): Promise<Response> {
   const key = requiredText(data.clientEntryId, 96, "clientEntryId");
   if (!ID_RE.test(key)) throw new ShortcutInputError("Invalid clientEntryId");
   const concept = requiredText(data.concept, 120, "Concept");
@@ -155,7 +169,7 @@ export async function shortcutExpense(
   // Do not require, infer or secretly create an account: the user explicitly
   // wants account-free expense capture. Keep the method and optional bank.
   const draft = prepareQuickEntry({
-    tenantId: row.owner_id, actorId: row.owner_id,
+    tenantId: owner, actorId: owner,
     clientEntryId: key, amount: data.amount,
     currency: "COP", paymentMethod: method as "cash" | "debit_card" | "credit_card" | "bank_transfer" | "digital_wallet" | "other",
     classification: "expense", occurredAt: new Date().toISOString(), merchant: concept,
@@ -164,13 +178,13 @@ export async function shortcutExpense(
   const minor = Number(draft.money.amountMinor);
   if (!Number.isSafeInteger(minor)) throw new ShortcutInputError("Invalid amount");
   const fields = {
-    ownerId: row.owner_id, clientEntryId: key,
+    ownerId: owner, clientEntryId: key,
     amountMinor: minor, paymentMethod: draft.paymentMethod,
     kind: draft.kind, merchant: draft.merchant, bankLabel: draft.bankLabel,
   };
   // Compatibility for retrying an expense sent before the account-free
   // migration: return the existing entry rather than creating a duplicate.
-  const legacy = await env.DB.prepare(
+  const legacy = await db.prepare(
     "SELECT id,amount_minor,currency,payment_method,kind,merchant,bank_label " +
     "FROM quick_manual_entries WHERE owner_id=? AND client_entry_id=? LIMIT 1",
   ).bind(fields.ownerId, key).first<StoredExpense>();
@@ -178,7 +192,7 @@ export async function shortcutExpense(
 
   // Append-only, account-free table; owner-scoped idempotency is enforced in
   // SQLite atomically, not with a preflight race-prone SELECT.
-  const inserted = await env.DB.prepare(
+  const inserted = await db.prepare(
     "INSERT INTO quick_shortcut_expenses(" +
     "id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) " +
     "VALUES(?,?,?,?,?,?,?,?,?,?) " +
@@ -188,13 +202,14 @@ export async function shortcutExpense(
     draft.kind, draft.occurredAt, draft.merchant, draft.bankLabel,
   ).first<{ id: string }>();
   if (inserted) return reply({ entryId: inserted.id, replayed: false }, 201);
-  const prior = await env.DB.prepare(
+  const prior = await db.prepare(
     "SELECT id,amount_minor,currency,payment_method,kind,merchant,bank_label " +
     "FROM quick_shortcut_expenses WHERE owner_id=? AND client_entry_id=? LIMIT 1",
   ).bind(fields.ownerId, key).first<StoredExpense>();
   if (!prior) return reply({ error: "Unable to verify write" }, 503);
   return replayOrConflict(prior, fields);
 }
+
 
 export function shortcutFailure(error: unknown): Response {
   if (error instanceof ShortcutInputError) return reply({ error: error.message }, error.status);
