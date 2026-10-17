@@ -3,7 +3,7 @@ export const DASH_MANIFEST = JSON.stringify({
   id: "/dashboard", name: "FinanzasOSS · Mi panel", short_name: "FinanzasOSS",
   description: "Consulta tus movimientos y gastos desde tu iPhone de forma privada.",
   start_url: "/dashboard", scope: "/", display: "standalone",
-  background_color: "#080d13", theme_color: "#0b1016",
+  background_color: "#f5f3ee", theme_color: "#172c2c",
   lang: "es-CO", categories: ["finance", "productivity"],
   icons: [
     { src: "/dashboard-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
