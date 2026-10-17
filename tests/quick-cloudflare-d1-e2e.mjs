@@ -401,5 +401,78 @@ assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, C)).
 assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, A)).body.movementCount, 8,
   "Pagination cannot leak other owner movements");
 
+
+// Unified Studio: policy-backed capabilities, access-controlled assets,
+// deliberate non-active banking features, browser/Shortcut shared ledger.
+for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
+  const noAccess = await call(path, "GET", undefined, missing);
+  assert.equal(noAccess.status, 401, path + " must not be public");
+  const secured = await call(path, "GET", undefined, A);
+  assert.equal(secured.status, 200);
+  assert.equal(secured.headers.get("Cache-Control"), "no-store, private");
+  if (path === "/studio.js") {
+    const js = await secured.text();
+    assert.doesNotThrow(() => new Function(js), "Browser interactions compile as JavaScript");
+    assert.match(js, /prefers-reduced-motion/);
+    assert.match(js, /finanzasoss:data/);
+    assert.doesNotMatch(js, /localStorage|sessionStorage|innerHTML/);
+  } else {
+    const model = await secured.json();
+    assert.equal(model.navigation.primary.length, 5);
+    assert.deepEqual(model.navigation.primary.map(x => x.id),
+      ["today","movement","portfolio","plan","map"]);
+    assert.equal(model.banks.connected, 0);
+    assert.equal(model.banks.automaticSync, false);
+    assert.equal(model.investments.connected, 0);
+    assert.equal(model.imports.liveUpload, false);
+    assert.equal(model.quick.accountRequired, false);
+    assert.equal(model.pwa.cacheFinancialData, false);
+  }
+}
+const unifiedShell = await call("/dashboard");
+assert.equal(unifiedShell.status, 200);
+const unifiedHtml = await (await handleQuickRequest(new Request(origin + "/dashboard"), env, A)).text();
+for(const name of ["space-today","space-movement","space-portfolio","space-plan","space-map",
+  "space-imports","space-connections","space-settings","expense-dialog","privacy-toggle"]) {
+  assert.match(unifiedHtml, new RegExp('id="' + name + '"'), name);
+}
+assert.match(unifiedHtml, /src="\/studio.js"/);
+assert.doesNotMatch(unifiedHtml, /<script(?![^>]*src=)/i);
+const browserBody = {
+  clientEntryId: "studio-browser-00000001", amount: "9876", concept: "Compra de prueba PWA",
+  paymentMethod: "credit_card", bankLabel: "Banco de prueba", confirmed: true,
+};
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, missing)).status, 401);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, A,
+  { env: disabledEnv })).status, 503);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, A,
+  { origin: "https://evil.example" })).status, 403);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, confirmed: false })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, ownerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, accountId: aAccount })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, bankLabel: null })).status, 422);
+const accountCountBefore = sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n;
+const directCountBefore = sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n;
+const createdPwa = await call("/api/quick/studio/expense", "POST", browserBody);
+assert.equal(createdPwa.status, 201);
+assert.equal(createdPwa.body.replayed, false);
+assert.match(createdPwa.body.entryId, /^[0-9a-f-]{36}$/);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n, accountCountBefore);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n,
+  directCountBefore+1);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody)).body.entryId,
+  createdPwa.body.entryId);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody)).body.replayed, true);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, amount: "9877" })).status, 409);
+const afterBrowserA = await call("/api/quick/dashboard/movements", "GET", undefined, A);
+assert.ok(afterBrowserA.body.entries.some(x=>x.id===createdPwa.body.entryId && x.account_id===null));
+const bAfterBrowser = await call("/api/quick/dashboard/movements", "GET", undefined, B);
+assert.ok(!bAfterBrowser.body.entries.some(x=>x.id===createdPwa.body.entryId));
+
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();
