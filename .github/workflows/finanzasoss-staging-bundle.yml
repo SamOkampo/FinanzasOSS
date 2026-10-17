@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/quick-iphone-direct-expense
+      - feature/finanzasoss-unified-studio
     paths:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
@@ -14,7 +15,7 @@ permissions:
 
 jobs:
   reviewed-staging-bundle:
-    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense'
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -37,4 +38,4 @@ jobs:
           git add apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
           git diff --cached --quiet && exit 0
           git commit -m "build(quick): pin tested account-free staging Worker bundle"
-          git push origin HEAD:feature/quick-iphone-direct-expense
+          git push origin "HEAD:$GITHUB_REF_NAME"
