@@ -455,6 +455,12 @@ for(const name of ["space-today","space-movement","space-portfolio","space-plan"
   assert.match(unifiedHtml, new RegExp('id="' + name + '"'), name);
 }
 assert.match(unifiedHtml, /src="\/studio.js"/);
+assert.match(unifiedHtml, /id="reset-open"/);
+assert.match(unifiedHtml, /id="reset-dialog"/);
+assert.match(unifiedHtml, /id="reset-phrase"/);
+assert.match(unifiedHtml, /class="native-arrow"/);
+assert.doesNotMatch(unifiedHtml, /↗/, "No iOS emoji-style outgoing arrows");
+
 const mainScript = await handleQuickRequest(new Request(origin + "/dashboard.js"), env, A);
 assert.match(await mainScript.text(), /__finanzasossLatestOverview/,
   "Dashboard must retain the in-memory ready event payload for late-loaded UI");
@@ -511,6 +517,12 @@ const prepare = (user = A, options = {}) =>
 const complete = (challengeId, user = A, options = {}) =>
   call(confirmPath, "POST", { challengeId, phrase:"RESTABLECER TODO", confirmed:true },
     user, { env: resetEnv, ...options });
+const forbiddenOtherHost = await handleQuickRequest(
+  new Request("https://unrelated.example/api/quick/studio/reset/prepare",{
+    method:"POST",headers:{"Content-Type":"application/json","Origin":"https://unrelated.example"},
+    body:JSON.stringify({acknowledged:true}),
+  }),resetEnv,A);
+assert.equal(forbiddenOtherHost.status,403,"Staging reset cannot be used from another host");
 assert.equal((await call(previewPath, "POST", { acknowledged:true })).status, 403,
   "Reset must be disabled in all environments by default");
 assert.equal((await call(previewPath, "POST", { acknowledged:true }, missing,
