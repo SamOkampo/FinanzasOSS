@@ -5,7 +5,8 @@ import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
-import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
+import { studioCapabilities } from "./studio-capabilities.js";
+import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -306,6 +307,7 @@ export async function handleQuickRequest(
       const data = await parseJson(request);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
       if (pathname === "/api/quick/shortcut/enroll") {
         if (env.ALLOW_SHORTCUT_WRITES !== "true") return respond({ error: "Direct shortcuts disabled" }, 503);
         return await enrollShortcut(env.DB, owner, data);
@@ -315,6 +317,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/studio/capabilities") return studioCapabilities();
       if (pathname === "/api/quick/dashboard/movements") {
         return await dashboardMovements(env.DB, owner, new URL(request.url));
       }
