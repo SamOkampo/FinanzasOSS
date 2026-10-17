@@ -11,6 +11,7 @@ const sql = readFileSync(
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(sql);
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0002_shortcut_devices.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0003_accountless_shortcut_expenses.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
@@ -195,8 +196,8 @@ assert.throws(() => sqlite.prepare(
 
 
 
-// Direct iPhone Shortcut E2E: Access service identity + revocable bearer,
-// expense-only classification, exact account mapping and no duplicate writes.
+// Account-FREE iPhone Shortcut E2E: Service Auth + scoped revocable bearer,
+// expense-only classification, no account requirement and idempotency.
 const shortcutEnv = { ...env, ALLOW_SHORTCUT_WRITES: "true" };
 const shortcutDraft = {
   clientEntryId: "ios-expense-00000001", amount: "25000", concept: "Almuerzo de prueba",
@@ -210,12 +211,13 @@ async function direct(body, token, user = A, environment = shortcutEnv) {
   }), environment, user);
   return { status: response.status, body: await response.json() };
 }
-const granted = await call("/api/quick/shortcut/enroll", "POST", { label: "iPhone", confirmed: true }, A, { env: shortcutEnv });
+const granted = await call("/api/quick/shortcut/enroll", "POST",
+  { label: "iPhone", confirmed: true }, A, { env: shortcutEnv });
 assert.equal(granted.status, 201);
 const deviceToken = granted.body.token;
 assert.match(deviceToken, /^fosq_[0-9a-f]{64}$/);
 assert.equal((await call("/api/quick/shortcut/enroll", "POST",
-  { label: "iPhone", confirmed: true }, B)).status, 503, "feature flag disabled by default");
+  { label: "iPhone", confirmed: true }, B)).status, 503, "flag disabled by default");
 assert.equal((await call("/api/quick/shortcut/enroll", "POST",
   { label: "iPhone", confirmed: true }, missing, { env: shortcutEnv })).status, 401);
 assert.equal((await call("/api/quick/shortcut/enroll", "POST",
@@ -228,32 +230,87 @@ assert.equal((await direct(shortcutDraft, deviceToken, missing)).status, 401, "A
 assert.equal((await direct(shortcutDraft, deviceToken, A, env)).status, 503, "direct writes disabled without explicit opt-in");
 assert.equal((await direct({ ...shortcutDraft, classification: "own_transfer" }, deviceToken)).status, 422);
 assert.equal((await direct({ ...shortcutDraft, ownerId: "not-owner" }, deviceToken)).status, 422);
+assert.equal((await direct({ ...shortcutDraft, accountId: aAccount }, deviceToken)).status, 422, "accountId is forbidden");
 assert.equal((await direct({ ...shortcutDraft, bankLabel: "Nequi" }, deviceToken)).status, 422);
+assert.equal((await direct({ ...shortcutDraft, paymentMethod: "credit_card" }, deviceToken)).status, 422, "bank required");
+assert.equal((await direct({ ...shortcutDraft, amount: "0" }, deviceToken)).status, 422);
 const cashDirect = await direct(shortcutDraft, deviceToken);
 assert.equal(cashDirect.status, 201);
 assert.equal(cashDirect.body.replayed, false);
 assert.equal((await direct(shortcutDraft, deviceToken)).body.replayed, true);
 assert.equal((await direct({ ...shortcutDraft, amount: "35000" }, deviceToken)).status, 409);
-const expenseSaved = sqlite.prepare("SELECT kind,amount_minor,account_id,payment_method FROM quick_manual_entries WHERE owner_id=? AND client_entry_id=?")
-  .get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", shortcutDraft.clientEntryId);
+const expenseSaved = sqlite.prepare(
+  "SELECT kind,amount_minor,payment_method,merchant FROM quick_shortcut_expenses WHERE owner_id=? AND client_entry_id=?",
+).get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", shortcutDraft.clientEntryId);
 assert.equal(expenseSaved.kind, "purchase");
 assert.equal(expenseSaved.payment_method, "cash");
-assert.equal(expenseSaved.account_id, aAccount);
 assert.equal(expenseSaved.amount_minor, 2500000);
-assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-no-account-00001", paymentMethod: "debit_card", bankLabel: "Nequi de prueba" }, deviceToken)).status, 409);
-const nequi = await call("/api/quick/accounts", "POST", {
-  clientAccountId: "nequi-ios-account-00001", label: "Nequi de prueba", accountKind: "wallet_manual",
-  currency: "COP", bankLabel: null,
-});
-assert.equal(nequi.status, 201);
-const nequiDraft = {
-  ...shortcutDraft, clientEntryId: "ios-nequi-charge-00001",
-  paymentMethod: "debit_card", bankLabel: "Nequi de prueba",
-};
-assert.equal((await direct(nequiDraft, deviceToken)).status, 201);
-assert.equal((await direct({ ...nequiDraft, clientEntryId: "ios-credit-no-match-01",
-  paymentMethod: "credit_card" }, deviceToken)).status, 409);
-assert.equal((await direct({ ...nequiDraft, clientEntryId: "ios-wrong-bank-00001", bankLabel: "Otro banco" }, deviceToken)).status, 409);
+assert.equal(expenseSaved.merchant, "Almuerzo de prueba");
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_entries").get().n, 2,
+  "Direct expenses must NOT create legacy account-bound entries");
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n, 2,
+  "Direct expenses must NOT create hidden/fictional accounts");
+
+// Bank and card payments are recorded by method + optional bank alone.
+// No corresponding bank, wallet or card account is required or even looked up.
+const withoutAccount = { ...shortcutDraft, clientEntryId: "ios-no-account-00001",
+  paymentMethod: "debit_card", bankLabel: "Nequi de prueba" };
+assert.equal((await direct(withoutAccount, deviceToken)).status, 201);
+assert.equal((await direct({ ...withoutAccount, clientEntryId: "ios-credit-card-00001",
+  paymentMethod: "credit_card", bankLabel: "Banco ficticio" }, deviceToken)).status, 201);
+assert.equal((await direct({ ...withoutAccount, clientEntryId: "ios-bank-transfer-0001",
+  paymentMethod: "bank_transfer", bankLabel: "Bancolombia de prueba" }, deviceToken)).status, 201);
+assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-wallet-expense-001",
+  paymentMethod: "digital_wallet" }, deviceToken)).status, 201);
+assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-other-expense-001",
+  paymentMethod: "other" }, deviceToken)).status, 201);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n, 2);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n, 6);
+
+// Legacy retry keeps the original entry, instead of duplicating across tables.
+const oldReplay = await direct({
+  clientEntryId: aEntry.clientEntryId, amount: aEntry.amount,
+  concept: aEntry.merchant, paymentMethod: aEntry.paymentMethod,
+  bankLabel: aEntry.bankLabel,
+}, deviceToken);
+assert.equal(oldReplay.status, 200);
+assert.equal(oldReplay.body.replayed, true);
+assert.equal(oldReplay.body.entryId, saved.body.entryId);
+assert.equal((await direct({ ...withoutAccount, clientEntryId: aEntry.clientEntryId },
+  deviceToken)).status, 409, "cross-table idempotency conflict");
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n, 6);
+
+// Unified history includes account-free entries without assigning any account.
+const unified = await call("/api/quick/entries", "GET", undefined, A);
+assert.equal(unified.status, 200);
+assert.equal(unified.body.entries.length, 7);
+const noAccount = unified.body.entries.find((row) => row.client_entry_id === withoutAccount.clientEntryId);
+assert.equal(noAccount.account_id, null);
+assert.equal(noAccount.payment_method, "debit_card");
+assert.equal(noAccount.bank_label, "Nequi de prueba");
+assert.equal(unified.body.entries.find((row) => row.id === saved.body.entryId).account_id, aAccount);
+assert.equal((await call("/api/quick/entries", "GET", undefined, B)).body.entries.length, 1,
+  "Owner B cannot read owner A's iPhone entries");
+
+// A user with no account of ANY kind can still register a direct cash expense.
+const C = identity("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+const noAccountsYet = await call("/api/quick/accounts", "GET", undefined, C);
+assert.equal(noAccountsYet.body.accounts.length, 0);
+const cTokenResult = await call("/api/quick/shortcut/enroll", "POST",
+  { label: "iPhone de prueba C", confirmed: true }, C, { env: shortcutEnv });
+assert.equal(cTokenResult.status, 201);
+const cDirect = await direct({ ...shortcutDraft, clientEntryId: "ios-accountless-owner-01" },
+  cTokenResult.body.token, C);
+assert.equal(cDirect.status, 201);
+assert.equal((await call("/api/quick/accounts", "GET", undefined, C)).body.accounts.length, 0);
+assert.equal((await call("/api/quick/entries", "GET", undefined, C)).body.entries.length, 1);
+assert.equal((await call("/api/quick/entries", "GET", undefined, A)).body.entries.length, 7);
+assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-rotate-owner-test1" },
+  cTokenResult.body.token)).status, 201,
+  "device token, not human Access identity, determines account-free owner");
+assert.equal((await call("/api/quick/entries", "GET", undefined, C)).body.entries.length, 2);
+assert.equal((await call("/api/quick/entries", "GET", undefined, A)).body.entries.length, 7);
+
 const tokenRotate = await call("/api/quick/shortcut/enroll", "POST",
   { label: "iPhone nuevo", confirmed: true }, A, { env: shortcutEnv });
 assert.equal(tokenRotate.status, 201);
@@ -263,6 +320,5 @@ assert.equal((await call("/api/quick/shortcut/revoke", "POST", { confirmed: true
 assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-revoked-token-001" }, tokenRotate.body.token)).status, 401);
 assert.equal((await call("/api/quick/shortcut/devices")).body.devices.length, 0);
 assert.equal((await call("/api/quick/entries", "GET", undefined, B)).body.entries.length, 1);
-
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();
