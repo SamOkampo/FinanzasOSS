@@ -8,7 +8,7 @@ import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from 
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
-import { pushConfig, subscribe, unsubscribe, sendDailyReminders, PushInputError } from "./push.js";
+import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, PushInputError } from "./push.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -321,6 +321,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
+      if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
