@@ -15,7 +15,7 @@ export const DASH_JS = `(() => {
   const fmtFull = new Intl.DateTimeFormat("es-CO", {
     timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric",
   });
-  const COLORS = ["#82eac9", "#b1b4fb", "#e9c28f", "#78b6ee", "#f19caa", "#9fbf9a"];
+  const COLORS = ["#b66b45", "#829e8c", "#c7a57b", "#69918c", "#a48e9e", "#92927d"];
   const LABELS = {
     cash: "Efectivo", debit_card: "Tarjeta débito",
     credit_card: "Tarjeta crédito", bank_transfer: "Transferencia",
@@ -328,8 +328,15 @@ export const DASH_JS = `(() => {
     $("load-more").hidden = !state.hasMore;
   }
   async function fetchJson(url) {
-    const r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
-      headers: { Accept: "application/json" } });
+    let r;
+    try {
+      r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
+        headers: { Accept: "application/json" } });
+    } catch {
+      // On Safari, failed service-worker fetches used to bubble up as raw
+      // "FetchEvent.respondWith ... Load failed" errors.
+      throw new Error("No se pudieron cargar los datos. Comprueba tu conexión, abre la PWA desde Safari y toca Actualizar.");
+    }
     if (r.status === 401 || r.status === 403) throw new Error(
       "La sesión privada expiró. Abre esta página en Safari y vuelve a iniciar sesión con Cloudflare Access.");
     if (!r.ok) throw new Error("No se pudieron consultar los datos (HTTP " + r.status + ").");
@@ -362,7 +369,11 @@ export const DASH_JS = `(() => {
       if (overview.truncated) throw new Error("El historial supera el máximo de agregaciones permitido. Contacta soporte para una consulta completa.");
       state.overview = overview;
       renderDashboard();
-      if (overview.excludedUsd) {
+      // Transient, same-origin in-memory handoff for late-loaded Studio interactions.
+      // Never persisted in storage or a financial cache.
+      window.__finanzasossLatestOverview = overview;
+      document.dispatchEvent(new CustomEvent("finanzasoss:data", {detail:{overview}}));
+      if (overview.excludedUsd && $("testing")) {
         $("testing").textContent = "ENTORNO STAGING · " + overview.excludedUsd +
           " movimiento(s) en USD excluidos de totales COP; disponibles en el historial.";
       }
@@ -386,7 +397,11 @@ export const DASH_JS = `(() => {
   $("today").textContent = fmtFull.format(new Date());
   // Installability without offline financial data storage or analytics.
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard" }).catch(() => {});
+    // Replace legacy intercepting workers with a network-neutral worker.
+    // It exists for installability, but NEVER handles fetch events.
+    navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard",
+      updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
+
   }
   void refresh();
 })();`;

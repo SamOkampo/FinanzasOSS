@@ -12,14 +12,31 @@ const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(sql);
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0002_shortcut_devices.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0003_accountless_shortcut_expenses.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0004_staging_reset_challenges.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0005_scoped_reset_confirmation.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
     return {
+      _query:query,
+      get _args(){return args;},
       bind(...values) { args = values; return this; },
       async first() { return sqlite.prepare(query).get(...args) ?? null; },
       async all() { return { results: sqlite.prepare(query).all(...args) }; },
     };
+  },
+  async batch(statements) {
+    sqlite.exec("BEGIN IMMEDIATE");
+    try {
+      const result = statements.map((statement) => ({
+        meta:{changes:sqlite.prepare(statement._query).run(...statement._args).changes},
+      }));
+      sqlite.exec("COMMIT");
+      return result;
+    } catch(error) {
+      sqlite.exec("ROLLBACK");
+      throw error;
+    }
   },
 };
 const env = { DB: db, ACCESS_AUD: "finanzasoss-staging-access-test", ALLOW_WRITES: "true" };
@@ -36,7 +53,7 @@ const B = { access: { aud: env.ACCESS_AUD, async getIdentity() {
 } } };
 const LEGACY = identity("access-user-a");
 const missing = {};
-const origin = "https://finanzasoss-staging.invalid";
+const origin = "https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
 const account = {
   clientAccountId: "cash-account-00000001",
   label: "Efectivo de pruebas",
@@ -359,7 +376,7 @@ for (const p of ["/dashboard", "/dashboard.css", "/dashboard.js",
   }
   if (p === "/dashboard-sw.js") {
     const sw = await allowed.text();
-    assert.match(sw, /respondWith\(fetch\(event.request\)\)/);
+    assert.doesNotMatch(sw, /respondWith|addEventListener\(["\x27]fetch/);
     assert.doesNotMatch(sw, /caches\.open|localStorage|sessionStorage/);
   }
 }
@@ -400,6 +417,206 @@ assert.equal(secondPage.body.hasMore, false);
 assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, C)).body.movementCount, 47);
 assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, A)).body.movementCount, 8,
   "Pagination cannot leak other owner movements");
+
+
+// Unified Studio: policy-backed capabilities, access-controlled assets,
+// deliberate non-active banking features, browser/Shortcut shared ledger.
+for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
+  const noAccess = await handleQuickRequest(new Request(origin + path), env, missing);
+  assert.equal(noAccess.status, 401, path + " must not be public");
+  const secured = await handleQuickRequest(new Request(origin + path), env, A);
+  assert.equal(secured.status, 200);
+  assert.equal(secured.headers.get("Cache-Control"), "no-store, private");
+  if (path === "/studio.js") {
+    const js = await secured.text();
+    assert.doesNotThrow(() => new Function(js), "Browser interactions compile as JavaScript");
+    assert.match(js, /prefers-reduced-motion/);
+    assert.match(js, /finanzasoss:data/);
+    assert.match(js, /__finanzasossLatestOverview/, "Studio must consume late-loaded data safely");
+    assert.match(js, /document\.body\.classList\.toggle\("theme-night"/, "Night mode must include document and dialogs");
+    assert.doesNotMatch(js, /localStorage|sessionStorage|innerHTML/);
+  } else {
+    const model = await secured.json();
+    assert.equal(model.navigation.primary.length, 5);
+    assert.deepEqual(model.navigation.primary.map(x => x.id),
+      ["today","movement","portfolio","plan","map"]);
+    assert.equal(model.banks.connected, 0);
+    assert.equal(model.banks.automaticSync, false);
+    assert.equal(model.investments.connected, 0);
+    assert.equal(model.imports.liveUpload, false);
+    assert.equal(model.quick.accountRequired, false);
+    assert.equal(model.pwa.cacheFinancialData, false);
+  }
+}
+const unifiedShell = await handleQuickRequest(new Request(origin + "/dashboard"), env, A);
+assert.equal(unifiedShell.status, 200);
+const unifiedHtml = await (await handleQuickRequest(new Request(origin + "/dashboard"), env, A)).text();
+for(const name of ["space-today","space-movement","space-portfolio","space-plan","space-map",
+  "space-imports","space-connections","space-settings","expense-dialog","privacy-toggle"]) {
+  assert.match(unifiedHtml, new RegExp('id="' + name + '"'), name);
+}
+assert.match(unifiedHtml, /src="\/studio.js"/);
+assert.match(unifiedHtml, /id="reset-open"/);
+assert.match(unifiedHtml, /id="reset-dialog"/);
+assert.match(unifiedHtml, /id="reset-phrase"/);
+assert.match(unifiedHtml, /class="native-arrow"/);
+assert.doesNotMatch(unifiedHtml, /↗/, "No iOS emoji-style outgoing arrows");
+
+const mainScript = await handleQuickRequest(new Request(origin + "/dashboard.js"), env, A);
+assert.match(await mainScript.text(), /__finanzasossLatestOverview/,
+  "Dashboard must retain the in-memory ready event payload for late-loaded UI");
+const cssAsset = await handleQuickRequest(new Request(origin + "/dashboard.css"), env, A);
+const style = await cssAsset.text();
+assert.match(style, /body\.theme-night/, "Dark mode must color the entire document");
+assert.match(style, /min-width:44px/, "Main tap targets must remain accessible");
+
+assert.doesNotMatch(unifiedHtml, /<script(?![^>]*src=)/i);
+const browserBody = {
+  clientEntryId: "studio-browser-00000001", amount: "9876", concept: "Compra de prueba PWA",
+  paymentMethod: "credit_card", bankLabel: "Banco de prueba", confirmed: true,
+};
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, missing)).status, 401);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, A,
+  { env: disabledEnv })).status, 503);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody, A,
+  { origin: "https://evil.example" })).status, 403);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, confirmed: false })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, ownerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, accountId: aAccount })).status, 422);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, bankLabel: null })).status, 422);
+const accountCountBefore = sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n;
+const directCountBefore = sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n;
+const createdPwa = await call("/api/quick/studio/expense", "POST", browserBody);
+assert.equal(createdPwa.status, 201);
+assert.equal(createdPwa.body.replayed, false);
+assert.match(createdPwa.body.entryId, /^[0-9a-f-]{36}$/);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n, accountCountBefore);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses").get().n,
+  directCountBefore+1);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody)).body.entryId,
+  createdPwa.body.entryId);
+assert.equal((await call("/api/quick/studio/expense", "POST", browserBody)).body.replayed, true);
+assert.equal((await call("/api/quick/studio/expense", "POST",
+  { ...browserBody, amount: "9877" })).status, 409);
+const afterBrowserA = await call("/api/quick/dashboard/movements", "GET", undefined, A);
+assert.ok(afterBrowserA.body.entries.some(x=>x.id===createdPwa.body.entryId && x.account_id===null));
+const bAfterBrowser = await call("/api/quick/dashboard/movements", "GET", undefined, B);
+assert.ok(!bAfterBrowser.body.entries.some(x=>x.id===createdPwa.body.entryId));
+
+
+// Scoped reset test: never touches account metadata or Shortcut authorization.
+const resetEnv={...env,ALLOW_RESET_WRITES:"true"};
+const resetPrepare="/api/quick/studio/reset/prepare",resetConfirm="/api/quick/studio/reset/confirm";
+const prepareReset=(scope="month",who=A,opts={})=>call(resetPrepare,"POST",
+  {acknowledged:true,scope},who,{env:resetEnv,...opts});
+const confirmReset=(id,scope="month",who=A,opts={})=>call(resetConfirm,"POST",{
+  challengeId:id,scope,confirmed:true,
+  phrase:scope==="month"?"BORRAR ESTE MES":"BORRAR TODOS LOS MESES",
+},who,{env:resetEnv,...opts});
+assert.equal((await call(resetPrepare,"POST",{acknowledged:true,scope:"month"})).status,403,
+  "Reset forbidden by default without separate flag");
+assert.equal((await prepareReset("month",missing)).status,401);
+assert.equal((await prepareReset("month",A,{origin:"https://evil.invalid"})).status,403);
+assert.equal((await prepareReset("invalid")).status,422);
+assert.equal((await call(resetConfirm,"POST",{
+  confirmed:true,challengeId:crypto.randomUUID(),scope:"month",phrase:"BORRAR ESTE MES",
+},A,{env:resetEnv})).status,409);
+const resetOtherHost=await handleQuickRequest(new Request(
+  "https://unrelated.example/api/quick/studio/reset/prepare",{
+    method:"POST",headers:{"Content-Type":"application/json","Origin":"https://unrelated.example"},
+    body:JSON.stringify({acknowledged:true,scope:"month"}),
+  }),resetEnv,A);
+assert.equal(resetOtherHost.status,403);
+const ownerReset="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const ownerCount=(table,who=ownerReset)=>sqlite.prepare(
+  "SELECT COUNT(*) AS n FROM "+table+" WHERE owner_id=?").get(who).n;
+const accountCount=ownerCount("quick_manual_accounts");
+const shortcutAuth=await call("/api/quick/shortcut/enroll","POST",
+  {label:"Dispositivo conservado",confirmed:true},A,{env:shortcutEnv});
+assert.equal(shortcutAuth.status,201);
+const token=shortcutAuth.body.token;
+const deviceCount=ownerCount("quick_shortcut_devices");
+const otherB=(await call("/api/quick/dashboard/movements","GET",undefined,B)).body.entries.length;
+const otherC=(await call("/api/quick/dashboard/movements","GET",undefined,C)).body.entries.length;
+const dateParts=Object.fromEntries(new Intl.DateTimeFormat("en-US",{
+  timeZone:"America/Bogota",year:"numeric",month:"2-digit",
+}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+const thisMonth=dateParts.year+"-"+dateParts.month;
+const previousMonth=new Date(Date.UTC(Number(dateParts.year),
+  Number(dateParts.month)-2,10,14)).toISOString().slice(0,7);
+const inject=(id,date)=>sqlite.prepare("INSERT INTO quick_shortcut_expenses ("+
+  "id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant) "+
+  "VALUES(?,?,?,?,?,?,?,?,?)").run(id,ownerReset,id,10000,"COP",
+  "cash","purchase",date+"T12:00:00.000Z","Prueba controlada");
+inject("staging-prev-month-test",previousMonth+"-10");
+inject("staging-this-month-test",thisMonth+"-10");
+const preview=await prepareReset("month");
+assert.equal(preview.status,200);
+assert.equal(preview.body.scope,"month");
+assert.equal(preview.body.monthKey,thisMonth);
+assert.equal(preview.body.confirmationPhrase,"BORRAR ESTE MES");
+assert.ok(preview.body.counts.directExpenses>0);
+assert.equal(preview.body.preservesShortcuts,true);
+assert.equal((await confirmReset(preview.body.challengeId,"all")).status,409,
+  "Scope or typed phrase must not expand period");
+assert.equal((await confirmReset(preview.body.challengeId,"month",B)).status,409,
+  "Challenge belongs to exactly one Access owner");
+assert.equal((await call(resetConfirm,"POST",{
+  challengeId:preview.body.challengeId,scope:"month",phrase:"wrong",confirmed:true,
+},A,{env:resetEnv})).status,422);
+inject("staging-extra-this-month-test",thisMonth+"-11");
+assert.equal((await confirmReset(preview.body.challengeId)).status,409,
+  "Incoming movement invalidates preview");
+const currentPreview=await prepareReset("month");
+assert.equal(currentPreview.body.counts.directExpenses,preview.body.counts.directExpenses+1);
+const monthResult=await confirmReset(currentPreview.body.challengeId);
+assert.equal(monthResult.status,200);
+assert.equal(monthResult.body.scope,"month");
+assert.equal(monthResult.body.shortcutAuthorizationRevoked,false);
+assert.equal(monthResult.body.accountsRetained,true);
+assert.equal((await confirmReset(currentPreview.body.challengeId)).status,409,
+  "Challenge cannot be replayed");
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses "+
+  "WHERE owner_id=? AND substr(datetime(occurred_at,'-5 hours'),1,7)=?").get(
+  ownerReset,thisMonth).n,0);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_entries "+
+  "WHERE owner_id=? AND substr(datetime(occurred_at,'-5 hours'),1,7)=?").get(
+  ownerReset,thisMonth).n,0);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses "+
+  "WHERE owner_id=? AND client_entry_id=?").get(
+  ownerReset,"staging-prev-month-test").n,1,"Previous month must remain");
+assert.equal(ownerCount("quick_manual_accounts"),accountCount);
+assert.equal(ownerCount("quick_shortcut_devices"),deviceCount);
+assert.equal((await direct({...shortcutDraft,clientEntryId:"ios-after-month-reset-01"},
+  token,A,shortcutEnv)).status,201,"iPhone token remains authorized");
+const allPreview=await prepareReset("all");
+assert.equal(allPreview.status,200);
+assert.equal(allPreview.body.confirmationPhrase,"BORRAR TODOS LOS MESES");
+const allResult=await confirmReset(allPreview.body.challengeId,"all");
+assert.equal(allResult.status,200);
+assert.equal(allResult.body.externalBankBalancesUnaffected,true);
+assert.equal(ownerCount("quick_manual_entries"),0);
+assert.equal(ownerCount("quick_shortcut_expenses"),0);
+assert.equal(ownerCount("quick_manual_accounts"),accountCount);
+assert.equal(ownerCount("quick_shortcut_devices"),deviceCount);
+assert.equal((await confirmReset(allPreview.body.challengeId,"all")).status,409);
+assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,B)).body.entries.length,otherB);
+assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,C)).body.entries.length,otherC);
+assert.equal((await direct({...shortcutDraft,clientEntryId:"ios-after-all-reset-001"},
+  token,A,shortcutEnv)).status,201,"Even full reset retains the iPhone");
+const uiReset=await (await handleQuickRequest(new Request(origin+"/dashboard"),env,A)).text();
+assert.match(uiReset,/Restablecer movimientos y saldos/);
+assert.match(uiReset,/name="reset-scope" value="month"/);
+assert.match(uiReset,/name="reset-scope" value="all"/);
+assert.doesNotMatch(uiReset,/↗/,"Use CSS-native arrows not emoji arrows");
+const clientReset=await (await handleQuickRequest(new Request(origin+"/studio.js"),env,A)).text();
+assert.match(clientReset,/BORRAR ESTE MES/);
+assert.match(clientReset,/BORRAR TODOS LOS MESES/);
+assert.doesNotThrow(()=>new Function(clientReset));
 
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();

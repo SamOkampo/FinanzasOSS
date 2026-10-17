@@ -3,9 +3,12 @@ import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
+import { STUDIO_JS } from "./dashboard-studio-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
-import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
+import { studioCapabilities } from "./studio-capabilities.js";
+import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
+import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -16,12 +19,14 @@ interface PreparedStatement {
 }
 export interface QuickD1 {
   prepare(query: string): PreparedStatement;
+  batch?(statements: PreparedStatement[]): Promise<Array<{ meta?: { changes?: number } }>>;
 }
 export interface QuickWorkerEnv {
   readonly DB: QuickD1;
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
   readonly ALLOW_SHORTCUT_WRITES?: string;
+  readonly ALLOW_RESET_WRITES?: string;
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -270,7 +275,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js",
+    "/dashboard-sw.js", "/studio.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -290,6 +295,7 @@ export async function handleQuickRequest(
     if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
+    if (pathname === "/studio.js") return respondAsset(STUDIO_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
     if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
@@ -306,6 +312,17 @@ export async function handleQuickRequest(
       const data = await parseJson(request);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
+        // This feature must never run outside the explicitly configured private
+        // staging Worker. A typed phrase and Access-authenticated owner required.
+        if (env.ALLOW_RESET_WRITES !== "true" ||
+          new URL(request.url).hostname !== "finanzasoss-quick-staging.socampoecheverry.workers.dev") {
+          return respond({ error: "Account reset unavailable outside private staging" }, 403);
+        }
+        return pathname.endsWith("/prepare") ?
+          await prepareReset(env.DB, owner, data) : await confirmReset(env.DB, owner, data);
+      }
       if (pathname === "/api/quick/shortcut/enroll") {
         if (env.ALLOW_SHORTCUT_WRITES !== "true") return respond({ error: "Direct shortcuts disabled" }, 503);
         return await enrollShortcut(env.DB, owner, data);
@@ -315,6 +332,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/studio/capabilities") return studioCapabilities();
       if (pathname === "/api/quick/dashboard/movements") {
         return await dashboardMovements(env.DB, owner, new URL(request.url));
       }
@@ -322,7 +340,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
