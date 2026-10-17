@@ -2,6 +2,16 @@
 
 **Estado:** implementación en PR, **NO** desplegada, **NO** habilitada. Requiere Cloudflare Access Service Auth, nueva migración D1, prueba física de iPhone y aceptación explícita antes del despliegue. Exclusivamente datos ficticios. No modifica el Atajo web anterior.
 
+## Estado real de staging — 16 oct 2026 (Bogotá)
+
+- [x] **Cloudflare D1 solo de staging:** aplicada la migración `0002_shortcut_devices.sql`; tabla e índice confirmados. Antes y después: 1 cuenta, 2 movimientos, 0 tokens de dispositivo. Punto de recuperación D1 registrado antes de modificar el esquema.
+- [x] **Cloudflare Access:** creada política `FinanzasOSS iPhone staging device Service Auth` sobre **la misma aplicación Access**; conserva intacta la política original del propietario.
+- [x] **Credencial de servicio:** creada como `FinanzasOSS Quick iPhone - staging` y **DESHABILITADA**. El secreto inicial se descartó; para usarla, el propietario debe **rotar el secreto desde Zero Trust, copiar ambos encabezados de forma privada en el iPhone y habilitar el token**. No introducir secretos en GitHub ni en conversaciones.
+- [x] PR #174 con CI `38987153771` aprobado. **Este código no está desplegado.**
+- [ ] Build del Worker desde la rama del PR y carga controlada conservando exactamente `ACCESS_AUD`, `ALLOW_WRITES`, D1 y la protección Access. No desplegar código TypeScript sin compilar.
+- [ ] Probar Service Auth real con el token del propietario sin cambiar las políticas humanas. Inicialmente `ALLOW_SHORTCUT_WRITES=false` o ausente.
+- [ ] Habilitación temporal, prueba física con datos sintéticos, validación de errores, revocación y rollback. Mantener la app de Safari operativa mientras tanto.
+
 ## Comportamiento
 
 - `Registrar Gasto` se clasifica **siempre como `expense`** en el servidor, no acepta `classification` ni `ownerId` del móvil.
