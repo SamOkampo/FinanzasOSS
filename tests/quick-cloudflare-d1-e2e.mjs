@@ -415,6 +415,8 @@ for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
     assert.doesNotThrow(() => new Function(js), "Browser interactions compile as JavaScript");
     assert.match(js, /prefers-reduced-motion/);
     assert.match(js, /finanzasoss:data/);
+    assert.match(js, /__finanzasossLatestOverview/, "Studio must consume late-loaded data safely");
+    assert.match(js, /document\.body\.classList\.toggle\("theme-night"/, "Night mode must include document and dialogs");
     assert.doesNotMatch(js, /localStorage|sessionStorage|innerHTML/);
   } else {
     const model = await secured.json();
@@ -437,6 +439,14 @@ for(const name of ["space-today","space-movement","space-portfolio","space-plan"
   assert.match(unifiedHtml, new RegExp('id="' + name + '"'), name);
 }
 assert.match(unifiedHtml, /src="\/studio.js"/);
+const mainScript = await handleQuickRequest(new Request(origin + "/dashboard.js"), env, A);
+assert.match(await mainScript.text(), /__finanzasossLatestOverview/,
+  "Dashboard must retain the in-memory ready event payload for late-loaded UI");
+const cssAsset = await handleQuickRequest(new Request(origin + "/dashboard.css"), env, A);
+const style = await cssAsset.text();
+assert.match(style, /body\.theme-night/, "Dark mode must color the entire document");
+assert.match(style, /min-width:44px/, "Main tap targets must remain accessible");
+
 assert.doesNotMatch(unifiedHtml, /<script(?![^>]*src=)/i);
 const browserBody = {
   clientEntryId: "studio-browser-00000001", amount: "9876", concept: "Compra de prueba PWA",
