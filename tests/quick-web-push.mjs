@@ -41,6 +41,9 @@ assert.equal((await call("/api/quick/push/subscribe","POST",{endpoint:"https://1
 assert.equal((await call("/api/quick/push/subscribe","POST",{endpoint,confirmed:false})).status,422);
 assert.equal((await call("/api/quick/push/subscribe","POST",{endpoint,confirmed:true,ownerId:"b"})).status,422);
 assert.equal((await call("/api/quick/push/subscribe","POST",{endpoint,confirmed:true})).status,201);
+assert.equal((await call("/api/quick/push/status","POST",{endpoint})).body.registered,true);
+assert.equal((await call("/api/quick/push/status","POST",{endpoint},ownerB)).body.registered,false);
+
 assert.equal((await call("/api/quick/push/subscribe","POST",{endpoint,confirmed:true})).body.replayed,true);
 assert.equal((await call("/api/quick/push/unsubscribe","POST",{endpoint},ownerB)).status,200);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_push_subscriptions").get().n,1);
@@ -61,6 +64,7 @@ assert.equal((await sendDailyReminders(env,time,fakeFetch)).sent,0);
 assert.equal(dispatched,1);
 assert.equal((await call("/api/quick/push/unsubscribe","POST",{endpoint})).status,200);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_push_subscriptions").get().n,0);
+assert.equal((await call("/api/quick/push/status","POST",{endpoint})).body.registered,false);
 assert.equal((await sendDailyReminders({...env,ALLOW_PUSH_SEND:"false"},time,fakeFetch)).skipped,true);
 const sw=await (await handleQuickRequest(new Request(base+"/dashboard-sw.js"),env,ownerA)).text();
 assert.match(sw,/showNotification/);
