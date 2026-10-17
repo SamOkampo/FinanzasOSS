@@ -1,6 +1,6 @@
 # FinanzasOSS Quick — Registro de gastos directo desde Atajos (PROPUESTA STAGING)
 
-**Estado:** código del PR #174 desplegado en el **staging privado** y verificado por la API de Cloudflare, pero **registro directo DESHABILITADO** (`ALLOW_SHORTCUT_WRITES=false`, credencial Service Auth deshabilitada). No está fusionado a `main`; no hay pruebas físicas con iPhone ni autorización para datos reales. Se conserva el flujo web anterior.
+**Estado:** código del PR #174 desplegado en el **staging privado**, no fusionado a `main`. Desde el 16 oct 2026 (22:55 Colombia), la credencial Service Auth ya está habilitada y `ALLOW_SHORTCUT_WRITES=true` en versión activa `58611aae-ee89-4ac1-8f14-dc42ef37a52f`, tras comprobar que el iPhone recibió `/healthz` con `status:ok`. **Aún NO hay dispositivo vinculado (0 tokens D1)**; la ruta directa exige una segunda credencial revocable `fosq_...` y por ahora no puede almacenar gastos. No hay pruebas físicas de guardado, ni autorización para datos reales. Se conserva el flujo web anterior.
 
 ## Estado real de staging — 16 oct 2026 (Bogotá)
 
@@ -10,7 +10,10 @@
 - [x] PR #174 con CI `38987153771` y `38987980179` aprobados. Artefacto compilado por GitHub Actions SHA-256 verificado. **Versión 8 desplegada al 100 % en staging privado el 16 oct 2026, con registros directos desactivados.**
 - [x] Build de Worker mediante GitHub Actions, versión compilada cargada y desplegada con los bindings `ACCESS_AUD`, `ALLOW_WRITES`, `DB` intactos y `ALLOW_SHORTCUT_WRITES=false`.
 - [x] Tras despliegue, verificados: versión activa `376cc38d-ee41-43f6-9311-83df545ea0f7` con 100 % tráfico, política humana intacta, política Service Auth limitada a credencial deshabilitada y D1 con 1 cuenta, 2 entradas, 0 dispositivos. Reversión posible a versión previa `9d7f151b-0dc4-4c5a-98e5-830a100d5f67`.
-- [ ] **Intervención del propietario:** en Cloudflare Zero Trust → Access controls → Service credentials → Service Tokens, localizar `FinanzasOSS Quick iPhone - staging`; rotar secreto (el secreto inicial se descartó) y copiar ID + secreto en un lugar seguro, sin mostrarlos en GitHub/ChatGPT. Activar esa credencial solamente para pruebas controladas. Verificar Service Auth sin modificar la política humana. `ALLOW_SHORTCUT_WRITES=false` hasta superar las pruebas negativas.
+- [x] **Intervención del propietario:** rotó y guardó en privado los secretos de `FinanzasOSS Quick iPhone - staging` sin compartirlos; la credencial quedó habilitada. Prueba en iPhone `GET /healthz` con headers Service Auth recibió JSON `status:ok` (evidencia por captura, sin mostrar secretos).
+- [x] `ALLOW_SHORTCUT_WRITES=true` activado exclusivamente en staging mediante PATCH de bindings. Versión activa `58611aae-ee89-4ac1-8f14-dc42ef37a52f`. D1 siguió con 1 cuenta, 2 entradas, 0 dispositivos.
+- [ ] Vincular iPhone con la acción `Generar token para mi iPhone` en la página protegida mediante sesión humana. Copiar `fosq_...` una vez, sin enviarlo al chat. Hasta ese paso, `POST /api/quick/shortcut/expense` sin bearer se rechaza por diseño.
+- [ ] Probar respuesta HTTP 401 desde Atajos para POST sin bearer y 201 con bearer ficticio, verificando D1/historial y revocación.
 - [ ] Habilitación temporal, prueba física con datos sintéticos, validación de errores, revocación y rollback. Mantener la app de Safari operativa mientras tanto.
 
 ## Comportamiento
