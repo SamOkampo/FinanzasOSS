@@ -28,6 +28,14 @@ jobs:
           npx --yes esbuild@0.25.12 apps/quick-worker/src/index.ts --bundle --platform=browser --format=esm --target=es2022 --minify --outfile=/tmp/finanzasoss-quick-worker.mjs
           test -s /tmp/finanzasoss-quick-worker.mjs
           # Do not print bundled source, user data or credentials to CI logs.
+      - name: Upload compiled Quick Worker for reviewed staging deployment
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finanzasoss-quick-worker-reviewed
+          path: /tmp/finanzasoss-quick-worker.mjs
+          retention-days: 1
+          if-no-files-found: error
 
   quick-db-integration:
     runs-on: ubuntu-latest
