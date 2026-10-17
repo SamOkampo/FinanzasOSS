@@ -116,7 +116,7 @@ export const BUDGET_JS = `(() => {
       if(newSpend>=limit)notices.push("Límite "+names[period]+" alcanzado o superado");
       else if(newSpend*100>=limit*80)notices.push("Alcanzarías el 80 % del límite "+names[period]);
     }
-    return notices.length?"\nAviso de presupuesto: "+notices.join("; ")+". Puedes registrar el gasto igualmente.":"";
+    return notices.length?"\\nAviso de presupuesto: "+notices.join("; ")+". Puedes registrar el gasto igualmente.":"";
   };
   document.addEventListener("finanzasoss:data",()=>{void reload();});
   window.addEventListener("pageshow",()=>{void reload();});
