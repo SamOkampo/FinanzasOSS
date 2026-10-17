@@ -13,6 +13,7 @@ sqlite.exec(sql);
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0002_shortcut_devices.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0003_accountless_shortcut_expenses.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0004_staging_reset_challenges.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0005_scoped_reset_confirmation.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
@@ -507,99 +508,115 @@ const bAfterBrowser = await call("/api/quick/dashboard/movements", "GET", undefi
 assert.ok(!bAfterBrowser.body.entries.some(x=>x.id===createdPwa.body.entryId));
 
 
-// Reset is deliberately disabled without an explicit staging flag.
-const resetEnv = { ...env, ALLOW_RESET_WRITES: "true" };
-const previewPath = "/api/quick/studio/reset/prepare";
-const confirmPath = "/api/quick/studio/reset/confirm";
-const prepare = (user = A, options = {}) =>
-  call(previewPath, "POST", { acknowledged: true }, user,
-    { env: resetEnv, ...options });
-const complete = (challengeId, user = A, options = {}) =>
-  call(confirmPath, "POST", { challengeId, phrase:"RESTABLECER TODO", confirmed:true },
-    user, { env: resetEnv, ...options });
-const forbiddenOtherHost = await handleQuickRequest(
-  new Request("https://unrelated.example/api/quick/studio/reset/prepare",{
+// Scoped reset test: never touches account metadata or Shortcut authorization.
+const resetEnv={...env,ALLOW_RESET_WRITES:"true"};
+const resetPrepare="/api/quick/studio/reset/prepare",resetConfirm="/api/quick/studio/reset/confirm";
+const prepareReset=(scope="month",who=A,opts={})=>call(resetPrepare,"POST",
+  {acknowledged:true,scope},who,{env:resetEnv,...opts});
+const confirmReset=(id,scope="month",who=A,opts={})=>call(resetConfirm,"POST",{
+  challengeId:id,scope,confirmed:true,
+  phrase:scope==="month"?"BORRAR ESTE MES":"BORRAR TODOS LOS MESES",
+},who,{env:resetEnv,...opts});
+assert.equal((await call(resetPrepare,"POST",{acknowledged:true,scope:"month"})).status,403,
+  "Reset forbidden by default without separate flag");
+assert.equal((await prepareReset("month",missing)).status,401);
+assert.equal((await prepareReset("month",A,{origin:"https://evil.invalid"})).status,403);
+assert.equal((await prepareReset("invalid")).status,422);
+assert.equal((await call(resetConfirm,"POST",{
+  confirmed:true,challengeId:crypto.randomUUID(),scope:"month",phrase:"BORRAR ESTE MES",
+},A,{env:resetEnv})).status,409);
+const resetOtherHost=await handleQuickRequest(new Request(
+  "https://unrelated.example/api/quick/studio/reset/prepare",{
     method:"POST",headers:{"Content-Type":"application/json","Origin":"https://unrelated.example"},
-    body:JSON.stringify({acknowledged:true}),
+    body:JSON.stringify({acknowledged:true,scope:"month"}),
   }),resetEnv,A);
-assert.equal(forbiddenOtherHost.status,403,"Staging reset cannot be used from another host");
-assert.equal((await call(previewPath, "POST", { acknowledged:true })).status, 403,
-  "Reset must be disabled in all environments by default");
-assert.equal((await call(previewPath, "POST", { acknowledged:true }, missing,
-  { env:resetEnv })).status, 401);
-assert.equal((await prepare(A, { origin:"https://evil.invalid" })).status, 403);
-assert.equal((await call(previewPath, "POST", { acknowledged:false }, A,
-  { env:resetEnv })).status, 422);
-assert.equal((await call(confirmPath, "POST",
-  { challengeId:crypto.randomUUID(),phrase:"RESTABLECER TODO",confirmed:true },
-  A, { env:resetEnv })).status, 409);
-const beforeReset = await call("/api/quick/dashboard/movements", "GET", undefined, A);
-const otherOwnerBefore = await call("/api/quick/dashboard/movements", "GET", undefined, B);
-const unrelatedOwnerBefore = await call("/api/quick/dashboard/movements", "GET", undefined, C);
-const preview = await prepare();
-assert.equal(preview.status, 200);
-assert.equal(preview.body.counts.manualEntries > 0, true);
-assert.equal(preview.body.counts.directExpenses > 0, true);
-assert.equal(preview.body.counts.manualAccounts > 0, true);
-assert.equal(preview.body.confirmationPhrase, "RESTABLECER TODO");
-assert.equal((await complete(preview.body.challengeId, B)).status, 409,
-  "A confirmation may not be used by a different owner");
-assert.equal((await call(confirmPath,"POST",
-  { challengeId:preview.body.challengeId,phrase:"RESTABLECER TODO",confirmed:false },
-  A,{env:resetEnv})).status,422);
-assert.equal((await call(confirmPath,"POST",
-  { challengeId:preview.body.challengeId,phrase:"BORRAR",confirmed:true },
-  A,{env:resetEnv})).status,422);
-assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,A)).body.entries.length,
-  beforeReset.body.entries.length, "No changes before final confirmation");
-// If new activity arrives after preview, counts must be re-reviewed.
-sqlite.prepare("INSERT INTO quick_shortcut_expenses (id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant) VALUES (?,?,?,?,?,?,?,?,?)").run(
-  "change-while-previewing", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-  "ios-change-while-preview", 10000, "COP", "cash", "purchase",
-  "2026-10-17T15:00:00.000Z", "Race-prevention test");
-assert.equal((await complete(preview.body.challengeId)).status,409,
-  "Financial changes after preview invalidate the confirmation");
-const reviewed = await prepare();
-assert.equal(reviewed.status,200);
-// Insert active service token to verify a full reset revokes the iPhone too.
-const laterShortcutEnv = { ...env, ALLOW_SHORTCUT_WRITES: "true" };
-const renewed = await call("/api/quick/shortcut/enroll","POST",
-  {label:"iPhone a revocar",confirmed:true},A,{env:laterShortcutEnv});
-assert.equal(renewed.status,201);
-// Authorizations changed since preview: must review again.
-assert.equal((await complete(reviewed.body.challengeId)).status,409);
-const finalPreview = await prepare();
-assert.equal(finalPreview.body.counts.shortcutDevices,1);
-const erased = await complete(finalPreview.body.challengeId);
-assert.equal(erased.status,200);
-assert.equal(erased.body.reset,true);
-assert.equal(erased.body.shortcutAuthorizationRevoked,true);
-assert.equal((await complete(finalPreview.body.challengeId)).status,409,
-  "Destructive confirmation must be one-time");
-for(const [table,field] of [
-  ["quick_manual_entries","owner_id"],
-  ["quick_shortcut_expenses","owner_id"],
-  ["quick_manual_accounts","owner_id"],
-  ["quick_shortcut_devices","owner_id"],
-]){
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM "+table+" WHERE "+field+"=?")
-    .get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").n,0,table+" scoped wipe");
-}
-assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,A)).body.entries.length,0);
-assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,B)).body.entries.length,
-  otherOwnerBefore.body.entries.length, "Reset must not remove other users");
-assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,C)).body.entries.length,
-  unrelatedOwnerBefore.body.entries.length,"Separate user must remain intact");
-assert.equal((await direct({ ...shortcutDraft,clientEntryId:"ios-post-reset-revoked" },
-  renewed.body.token)).status,401,"Reset must revoke old iPhone token");
-const zeroPreview = await prepare();
-assert.deepEqual(zeroPreview.body.counts,{
-  manualEntries:0,directExpenses:0,manualAccounts:0,shortcutDevices:0,
-});
-// Re-enrollment remains possible without deleting Cloudflare Access identity.
-const canReenroll = await call("/api/quick/shortcut/enroll","POST",
-  {label:"Nuevo iPhone",confirmed:true},A,{env:laterShortcutEnv});
-assert.equal(canReenroll.status,201,"Human Access login survives a data reset");
+assert.equal(resetOtherHost.status,403);
+const ownerReset="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const ownerCount=(table,who=ownerReset)=>sqlite.prepare(
+  "SELECT COUNT(*) AS n FROM "+table+" WHERE owner_id=?").get(who).n;
+const accountCount=ownerCount("quick_manual_accounts");
+const shortcutAuth=await call("/api/quick/shortcut/enroll","POST",
+  {label:"Dispositivo conservado",confirmed:true},A,{env:shortcutEnv});
+assert.equal(shortcutAuth.status,201);
+const token=shortcutAuth.body.token;
+const deviceCount=ownerCount("quick_shortcut_devices");
+const otherB=(await call("/api/quick/dashboard/movements","GET",undefined,B)).body.entries.length;
+const otherC=(await call("/api/quick/dashboard/movements","GET",undefined,C)).body.entries.length;
+const dateParts=Object.fromEntries(new Intl.DateTimeFormat("en-US",{
+  timeZone:"America/Bogota",year:"numeric",month:"2-digit",
+}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+const thisMonth=dateParts.year+"-"+dateParts.month;
+const previousMonth=new Date(Date.UTC(Number(dateParts.year),
+  Number(dateParts.month)-2,10,14)).toISOString().slice(0,7);
+const inject=(id,date)=>sqlite.prepare("INSERT INTO quick_shortcut_expenses ("+
+  "id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant) "+
+  "VALUES(?,?,?,?,?,?,?,?,?)").run(id,ownerReset,id,10000,"COP",
+  "cash","purchase",date+"T12:00:00.000Z","Prueba controlada");
+inject("staging-prev-month-test",previousMonth+"-10");
+inject("staging-this-month-test",thisMonth+"-10");
+const preview=await prepareReset("month");
+assert.equal(preview.status,200);
+assert.equal(preview.body.scope,"month");
+assert.equal(preview.body.monthKey,thisMonth);
+assert.equal(preview.body.confirmationPhrase,"BORRAR ESTE MES");
+assert.ok(preview.body.counts.directExpenses>0);
+assert.equal(preview.body.preservesShortcuts,true);
+assert.equal((await confirmReset(preview.body.challengeId,"all")).status,422,
+  "Scope or typed phrase must not expand period");
+assert.equal((await confirmReset(preview.body.challengeId,"month",B)).status,409,
+  "Challenge belongs to exactly one Access owner");
+assert.equal((await call(resetConfirm,"POST",{
+  challengeId:preview.body.challengeId,scope:"month",phrase:"wrong",confirmed:true,
+},A,{env:resetEnv})).status,422);
+inject("staging-extra-this-month-test",thisMonth+"-11");
+assert.equal((await confirmReset(preview.body.challengeId)).status,409,
+  "Incoming movement invalidates preview");
+const currentPreview=await prepareReset("month");
+assert.equal(currentPreview.body.counts.directExpenses,preview.body.counts.directExpenses+1);
+const monthResult=await confirmReset(currentPreview.body.challengeId);
+assert.equal(monthResult.status,200);
+assert.equal(monthResult.body.scope,"month");
+assert.equal(monthResult.body.shortcutAuthorizationRevoked,false);
+assert.equal(monthResult.body.accountsRetained,true);
+assert.equal((await confirmReset(currentPreview.body.challengeId)).status,409,
+  "Challenge cannot be replayed");
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses "+
+  "WHERE owner_id=? AND substr(datetime(occurred_at,'-5 hours'),1,7)=?").get(
+  ownerReset,thisMonth).n,0);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_entries "+
+  "WHERE owner_id=? AND substr(datetime(occurred_at,'-5 hours'),1,7)=?").get(
+  ownerReset,thisMonth).n,0);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_shortcut_expenses "+
+  "WHERE owner_id=? AND client_entry_id=?").get(
+  ownerReset,"staging-prev-month-test").n,1,"Previous month must remain");
+assert.equal(ownerCount("quick_manual_accounts"),accountCount);
+assert.equal(ownerCount("quick_shortcut_devices"),deviceCount);
+assert.equal((await direct({...shortcutDraft,clientEntryId:"ios-after-month-reset-01"},
+  token,A,shortcutEnv)).status,201,"iPhone token remains authorized");
+const allPreview=await prepareReset("all");
+assert.equal(allPreview.status,200);
+assert.equal(allPreview.body.confirmationPhrase,"BORRAR TODOS LOS MESES");
+const allResult=await confirmReset(allPreview.body.challengeId,"all");
+assert.equal(allResult.status,200);
+assert.equal(allResult.body.externalBankBalancesUnaffected,true);
+assert.equal(ownerCount("quick_manual_entries"),0);
+assert.equal(ownerCount("quick_shortcut_expenses"),0);
+assert.equal(ownerCount("quick_manual_accounts"),accountCount);
+assert.equal(ownerCount("quick_shortcut_devices"),deviceCount);
+assert.equal((await confirmReset(allPreview.body.challengeId,"all")).status,409);
+assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,B)).body.entries.length,otherB);
+assert.equal((await call("/api/quick/dashboard/movements","GET",undefined,C)).body.entries.length,otherC);
+assert.equal((await direct({...shortcutDraft,clientEntryId:"ios-after-all-reset-001"},
+  token,A,shortcutEnv)).status,201,"Even full reset retains the iPhone");
+const uiReset=await (await handleQuickRequest(new Request(origin+"/dashboard"),env,A)).text();
+assert.match(uiReset,/Restablecer movimientos y saldos/);
+assert.match(uiReset,/name="reset-scope" value="month"/);
+assert.match(uiReset,/name="reset-scope" value="all"/);
+assert.doesNotMatch(uiReset,/↗/,"Use CSS-native arrows not emoji arrows");
+const clientReset=await (await handleQuickRequest(new Request(origin+"/studio.js"),env,A)).text();
+assert.match(clientReset,/BORRAR ESTE MES/);
+assert.match(clientReset,/BORRAR TODOS LOS MESES/);
+assert.doesNotThrow(()=>new Function(clientReset));
 
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();
