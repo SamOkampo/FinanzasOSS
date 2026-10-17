@@ -599,6 +599,25 @@ var Je=Object.freeze({automaticActivationAllowed:!1,automaticChargingAllowed:!1,
 .more-foot{color:var(--ink-muted);font:italic 15px Georgia,serif;padding-top:12px;text-align:center}
 .theme-night .more-dialog{background:var(--paper)}
 @media(max-width:720px){.more-dialog{width:min(96vw,450px);padding:21px 20px}.more-top h2{font-size:32px}}
+
+/* Accessibility + complete dark theme after cross-device visual QA. */
+.icon-button{width:44px;height:44px;min-width:44px;min-height:44px}
+.new-button,.period-btn{min-height:44px}
+body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4;--ink-muted:#aebfb2;--rule:#364841;--copper:#d7a17f;--forest:#1e3c36;--forest-2:#305449;background:var(--paper);color:var(--ink);color-scheme:dark}
+.studio.theme-night{color:var(--ink)}
+.theme-night .page-intro>p:last-child,.theme-night .hero-sub{color:#b5c9bb}
+.theme-night .hero-status,.theme-night .metric p,.theme-night .footnote,.theme-night .history-note,.theme-night .history-bottom p{color:#aec3b5}
+.theme-night .table-panel td,.theme-night .history-kind,.theme-night .history-method,.theme-night .flow-target span,.theme-night .guidance p{color:#b7c8bd}
+.theme-night .intro-index,.theme-night .module-no,.theme-night .micro-label{color:#dfac8b}
+.theme-night .method-row,.theme-night .metric-top,.theme-night .panel-footer{color:#aebfb4}
+.theme-night .insight-row,.theme-night .bar-value,.theme-night .bar-label{color:#b4c6b9}
+.theme-night .site-footer{color:#a2b5a8}
+.theme-night .state-pill{background:#345045;color:#e0eee0}
+.theme-night .state-pill.pending{background:#634633;color:#ffe8d0}
+.theme-night .expense-review{background:#34483e;border-color:#ddaa82;color:#f3f1e5}
+.theme-night .expense-dialog>form>p,.theme-night .dialog-foot,.theme-night .more-foot{color:#b6c5b9}
+.theme-night .expense-dialog input::placeholder{color:#aeb9ad}
+@media(max-width:720px){.masthead .icon-button{width:44px;height:44px;min-width:44px;min-height:44px}.masthead{min-height:66px}.mobile-item{min-height:50px}}
 `;var R=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
