@@ -320,5 +320,86 @@ assert.equal((await call("/api/quick/shortcut/revoke", "POST", { confirmed: true
 assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-revoked-token-001" }, tokenRotate.body.token)).status, 401);
 assert.equal((await call("/api/quick/shortcut/devices")).body.devices.length, 0);
 assert.equal((await call("/api/quick/entries", "GET", undefined, B)).body.entries.length, 1);
+
+// Dashboard PWA must be gated by the SAME verified human Access principal,
+// never by the iPhone service token or a public assets endpoint.
+for (const p of ["/dashboard", "/dashboard.css", "/dashboard.js",
+  "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
+  "/dashboard-sw.js", "/api/quick/dashboard/overview",
+  "/api/quick/dashboard/movements"]) {
+  assert.equal((await call(p, "GET", undefined, missing)).status, 401, "No public dashboard route: " + p);
+  const allowed = await handleQuickRequest(new Request(origin + p), env, A);
+  assert.equal(allowed.status, 200, p);
+  assert.equal(allowed.headers.get("Cache-Control"), "no-store, private", p);
+  if (p === "/dashboard") {
+    const html = await allowed.text();
+    assert.match(html, /id="kpi-total"/);
+    assert.match(html, /id="history-body"/);
+    assert.match(html, /href="\/dashboard.webmanifest"/);
+    assert.match(allowed.headers.get("Content-Security-Policy"), /manifest-src 'self'/);
+    assert.doesNotMatch(html, /<script(?![^>]*src=)/i);
+  }
+  if (p === "/dashboard.css") assert.match(await allowed.text(), /@media\(max-width:720px\)/);
+  if (p === "/dashboard.js") {
+    const code = await allowed.text();
+    assert.doesNotThrow(() => new Function(code));
+    assert.match(code, /America\/Bogota/);
+    assert.doesNotMatch(code, /localStorage|sessionStorage|innerHTML/);
+    assert.match(code, /dashboard\/overview/);
+  }
+  if (p === "/dashboard.webmanifest") {
+    const manifest = await allowed.json();
+    assert.equal(manifest.display, "standalone");
+    assert.equal(manifest.start_url, "/dashboard");
+    assert.ok(manifest.icons.length >= 2);
+  }
+  if (p === "/dashboard-icon-180.png") {
+    const icon = new Uint8Array(await allowed.arrayBuffer());
+    assert.deepEqual([...icon.slice(0, 8)], [137,80,78,71,13,10,26,10]);
+  }
+  if (p === "/dashboard-sw.js") {
+    const sw = await allowed.text();
+    assert.match(sw, /respondWith\(fetch\(event.request\)\)/);
+    assert.doesNotMatch(sw, /caches\.open|localStorage|sessionStorage/);
+  }
+}
+const dash = await call("/api/quick/dashboard/overview", "GET", undefined, A);
+assert.equal(dash.status, 200);
+assert.equal(dash.body.currency, "COP");
+assert.equal(dash.body.timezone, "America/Bogota");
+assert.equal(dash.body.movementCount, 8, "A's manual + account-free expenses");
+assert.equal(dash.body.truncated, false);
+assert.equal(dash.body.daily.reduce((n, row) => n + row.count, 0), 8);
+assert.ok(dash.body.daily.some((day) => day.method === "credit_card"));
+assert.ok(dash.body.daily.some((day) => day.method === "bank_transfer"));
+const bDash = await call("/api/quick/dashboard/overview", "GET", undefined, B);
+assert.equal(bDash.body.movementCount, 1);
+assert.equal(bDash.body.transfersAndInvestments, 1);
+assert.equal(bDash.body.daily.length, 0, "Investment transfers are not expenses");
+assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, C)).body.movementCount, 2);
+const historyA = await call("/api/quick/dashboard/movements", "GET", undefined, A);
+assert.equal(historyA.body.entries.length, 8);
+assert.equal(historyA.body.hasMore, false);
+assert.ok(historyA.body.entries.some((x) => x.account_id === null));
+assert.equal((await call("/api/quick/dashboard/movements", "GET", undefined, B)).body.entries.length, 1);
+assert.equal((await call("/api/quick/dashboard/movements?page=not-a-page", "GET", undefined, A)).status, 422);
+assert.equal((await call("/api/quick/dashboard/movements?page=0&owner_id=anything", "GET", undefined, A)).status, 422);
+// More than one page must be reachable; do not limit the dashboard to 100 movements.
+const add = sqlite.prepare("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant) VALUES(?,?,?,?,?,?,?,?,?)");
+for (let i = 0; i < 45; i++) {
+  add.run("extra-" + i, "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "ios-extra-" + String(i).padStart(6, "0"), 10000, "COP", "cash", "purchase",
+    "2026-10-17T12:00:00.000Z", "Prueba de paginación");
+}
+const firstPage = await call("/api/quick/dashboard/movements?page=0", "GET", undefined, C);
+assert.equal(firstPage.body.entries.length, 40);
+assert.equal(firstPage.body.hasMore, true);
+const secondPage = await call("/api/quick/dashboard/movements?page=1", "GET", undefined, C);
+assert.equal(secondPage.body.entries.length, 7);
+assert.equal(secondPage.body.hasMore, false);
+assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, C)).body.movementCount, 47);
+assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, A)).body.movementCount, 8,
+  "Pagination cannot leak other owner movements");
+
 console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
 sqlite.close();
