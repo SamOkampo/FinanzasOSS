@@ -35,12 +35,25 @@ FinanzasOSS Quick (D1 + Cloudflare Access + Atajos) es **captura de gastos** y n
 4. Cableado seguro de importación con preview y confirmación; luego métricas patrimoniales con fuentes verificadas.
 5. Restablecimiento de datos de prueba **solo con confirmación específica del propietario**, nunca asumir autorización por un rediseño.
 
-## Corrección Safari / restablecimiento total (17 oct 2026)
+## Safari, iconografía y restablecimiento por período (17 de octubre de 2026)
 
-- iOS/Safari: se quitó el listener `fetch` del Service Worker: ninguna solicitud financiera es interceptada por la PWA. El SW antiguo puede conservar el control de la pestaña hasta recargar o volver a abrir Safari; el nuevo activa `skipWaiting` y no usa `respondWith`. Los errores de red se muestran con texto claro y no con excepciones internas.
-- Diseño: reemplazar todos los `↗` del HTML por iconos dibujados con CSS, evitando que iOS los convierta en cuadrados de emoji azules. Control de recarga también dibujado con CSS; modo sin hover evita pestañas iluminadas tras tocar en iPhone.
-- `Ajustes > Restablecer todo`: la acción de apertura **no borra nada**. `POST /api/quick/studio/reset/prepare` requiere Access humano autenticado, Origin del Worker y `ALLOW_RESET_WRITES=true` (solo staging). Entrega conteos y desafío ligado al propietario que expira en 5 minutos. `POST /api/quick/studio/reset/confirm` exige frase exacta `RESTABLECER TODO`, `confirmed:true`, desafío de un solo uso y totales sin cambios desde la revisión.
-- El borrado ejecuta un lote transaccional D1 `batch()` con owner derivado exclusivamente de Cloudflare Access; elimina: `quick_manual_entries`, `quick_shortcut_expenses`, `quick_manual_accounts` y `quick_shortcut_devices` de **ese usuario**. Conserva los datos de otras personas y las políticas externas de Cloudflare Access. Revocar las autorizaciones del iPhone hace necesario reenrolar el Atajo.
-- Antes de habilitar el backend en staging se verificó el bookmark D1 y los conteos; publicar la funcionalidad **no ejecuta ningún borrado**.
-- Las regresiones prueban en SQLite real, con D1-shaped `batch` transaccional, aislamiento por owner, caducidad lógica, desafío repetido, diferencias entre snapshot y estado actual, confirmación explícita, conservación de otros usuarios, revocación de token iPhone y posibilidad de volver a activar el acceso humano.
-- **Límite de QA:** prueba local/CI de lógica y endpoints más integridad de D1 en remoto; el acto destructivo real de D1 **no se ejecuta sin intervención del usuario**. Revisar la experiencia visual en Safari físico antes de dar por cerrada la UX.
+## Safari + PWA
+- El Service Worker de la PWA **no intercepta solicitudes**. Eliminado `fetch/respondWith` para no transformar fallos de red/Access en errores internos de iOS. El nuevo Worker activa `skipWaiting` y usa solo red nativa para los datos. Puede ser necesario cerrar y abrir la PWA después de actualizarse.
+- Los errores de consulta se muestran en lenguaje comprensible. Las API financieras siguen protegidas con Cloudflare Access y no se almacenan datos en caché.
+- Los enlaces de navegación `↗` fueron reemplazados por flechas trazadas en CSS para evitar su renderización como emoji azules de iOS. El botón de recarga también utiliza un icono CSS.
+
+## Ajustes → «Restablecer movimientos y saldos»
+- Botón con opciones **Este mes** y **Todos los meses**. «Este mes» usa el mes calendario vigente en `America/Bogota` y filtra `occurred_at` de las dos tablas del ledger. «Todos los meses» elimina todos los movimientos de ese propietario. Los acumulados visibles del panel se calculan de nuevo a partir de los movimientos restantes.
+- En el sistema Quick **no hay saldo bancario real persistido**. La operación no modifica saldos en Bancolombia, Nequi, Hapi, Binance ni otras instituciones. Tampoco borra cuentas manuales, autorización del Atajo, token del iPhone ni cuenta de Cloudflare Access.
+- Borrar solo la última parte del historial **no reconstruye saldos externos** ni balances contables previos. No presentar balances reales inventados. La acción actual solo modifica movimientos de staging.
+- El botón nunca borra por sí mismo: primero se elige alcance, después se solicitan conteos mediante `POST /api/quick/studio/reset/prepare`, y finalmente se exige casilla de consentimiento, frase exacta `BORRAR ESTE MES` o `BORRAR TODOS LOS MESES` y confirmación final nativa.
+- Los desafíos duran 5 minutos, pertenecen a la identidad humana de Cloudflare Access y solo sirven una vez. `prepare/confirm` requieren `Origin` del propio Worker, activación separada `ALLOW_RESET_WRITES=true` y host de staging exactamente autorizado. El núcleo que recibe el token del Atajo **no** puede llamar estas rutas.
+- La migración `0005_scoped_reset_confirmation.sql` agrega campos a la tabla `quick_reset_challenges` ya creada en `0004`. No borra registros financieros.
+- La confirmación usa `D1.batch()` atómico con prueba única de confirmación y recuento vuelto a comprobar dentro de la transacción; no existe un borrado por lote parcial. En conflicto/caducidad, el usuario debe volver a revisar los conteos.
+- El borrado solo afecta a `quick_manual_entries` y `quick_shortcut_expenses` del propietario autenticado y del alcance escogido; ninguna sentencia SQL modifica bancos, cuentas ni dispositivos.
+- La prueba automatizada de SQLite cubre ambos ámbitos, conservaciones, aislamiento multiusuario, intento de reuso de desafíos, CSRF, error de datos cambiados y uso de token del Atajo antes/después del restablecimiento. **No ejecutar el borrado de los registros reales de staging hasta que el usuario pulse y confirme por su cuenta.**
+
+## Riesgos y pasos antes de producción
+- Es función de staging y permanece bloqueada en otros Workers. Antes del despliegue se confirma bookmark de D1, migración y conservar 100 % del tráfico dentro de staging.
+- Las pruebas de navegador sintéticas y CI no garantizan todas las variantes de Safari físico; obtener validación de usuario en iPhone.
+- Para un producto financiero completo, la limpieza de saldos necesitará diseñarse con cuentas, conciliación, transferencias e importaciones cuando existan fuentes oficiales verificadas.
