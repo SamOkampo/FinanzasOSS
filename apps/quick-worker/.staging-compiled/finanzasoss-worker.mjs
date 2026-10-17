@@ -961,6 +961,9 @@ var Je=Object.freeze({automaticActivationAllowed:!1,automaticChargingAllowed:!1,
       if (overview.truncated) throw new Error("El historial supera el m\xE1ximo de agregaciones permitido. Contacta soporte para una consulta completa.");
       state.overview = overview;
       renderDashboard();
+      // Transient, same-origin in-memory handoff for late-loaded Studio interactions.
+      // Never persisted in storage or a financial cache.
+      window.__finanzasossLatestOverview = overview;
       document.dispatchEvent(new CustomEvent("finanzasoss:data", {detail:{overview}}));
       if (overview.excludedUsd && $("testing")) {
         $("testing").textContent = "ENTORNO STAGING \xB7 " + overview.excludedUsd +
