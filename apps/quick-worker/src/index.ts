@@ -255,7 +255,7 @@ export async function handleQuickRequest(
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (pathname === "/healthz" && request.method === "GET") {
-    return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true" });
+    return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true", shortcutsConfigured: env.ALLOW_SHORTCUT_WRITES === "true" });
   }
   const isUiPath = pathname === "/" || pathname === "/quick.css" || pathname === "/quick.js";
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
