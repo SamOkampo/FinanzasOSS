@@ -384,5 +384,9 @@ export const DASH_JS = `(() => {
   $("reload").addEventListener("click", () => void refresh());
   $("refresh-history").addEventListener("click", () => void loadHistory(true));
   $("today").textContent = fmtFull.format(new Date());
+  // Installability without offline financial data storage or analytics.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard" }).catch(() => {});
+  }
   void refresh();
 })();`;
