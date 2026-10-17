@@ -328,8 +328,15 @@ export const DASH_JS = `(() => {
     $("load-more").hidden = !state.hasMore;
   }
   async function fetchJson(url) {
-    const r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
-      headers: { Accept: "application/json" } });
+    let r;
+    try {
+      r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
+        headers: { Accept: "application/json" } });
+    } catch {
+      // On Safari, failed service-worker fetches used to bubble up as raw
+      // "FetchEvent.respondWith ... Load failed" errors.
+      throw new Error("No se pudieron cargar los datos. Comprueba tu conexión, abre la PWA desde Safari y toca Actualizar.");
+    }
     if (r.status === 401 || r.status === 403) throw new Error(
       "La sesión privada expiró. Abre esta página en Safari y vuelve a iniciar sesión con Cloudflare Access.");
     if (!r.ok) throw new Error("No se pudieron consultar los datos (HTTP " + r.status + ").");
@@ -390,7 +397,11 @@ export const DASH_JS = `(() => {
   $("today").textContent = fmtFull.format(new Date());
   // Installability without offline financial data storage or analytics.
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard" }).catch(() => {});
+    // Replace legacy intercepting workers with a network-neutral worker.
+    // It exists for installability, but NEVER handles fetch events.
+    navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard",
+      updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
+
   }
   void refresh();
 })();`;
