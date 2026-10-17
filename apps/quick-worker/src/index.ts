@@ -1,5 +1,6 @@
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
+import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -15,6 +16,7 @@ export interface QuickWorkerEnv {
   readonly DB: QuickD1;
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
+  readonly ALLOW_SHORTCUT_WRITES?: string;
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -183,7 +185,7 @@ async function listEntries(db: QuickD1, owner: string): Promise<Response> {
   ).bind(owner).all<ManualEntry>();
   return respond({ entries: data.results.map((x) => ({ ...x, amount_minor: String(x.amount_minor) })) });
 }
-async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+async function confirmEntry(db: QuickD1, owner: string, body: unknown, ignoreReplayTime = false): Promise<Response> {
   const data = strictObject(body, [
     "accountId", "clientEntryId", "amount", "currency", "paymentMethod", "classification",
     "occurredAt", "merchant", "bankLabel", "confirmed",
@@ -241,7 +243,7 @@ async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<
   if (!prior) return respond({ error: "Unable to verify write" }, 503);
   if (prior.account_id !== accountId || prior.amount_minor !== minor ||
       prior.currency !== draft.money.currency || prior.payment_method !== draft.paymentMethod ||
-      prior.kind !== draft.kind || prior.occurred_at !== draft.occurredAt ||
+      prior.kind !== draft.kind || (!ignoreReplayTime && prior.occurred_at !== draft.occurredAt) ||
       prior.merchant !== draft.merchant || prior.bank_label !== draft.bankLabel) {
     return respond({ error: "Entry idempotency key reused with different data" }, 409);
   }
@@ -259,6 +261,11 @@ export async function handleQuickRequest(
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
   }
+  // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
+  if (pathname === "/api/quick/shortcut/expense" && request.method === "POST") {
+    try { return await shortcutExpense(request, env, ctx, confirmEntry); }
+    catch (error) { return shortcutFailure(error); }
+  }
   const owner = await principal(ctx, env);
   if (!owner) return respond({ error: "Cloudflare Access required" }, 401);
   if (!env.DB) return respond({ error: "Database not configured" }, 503);
@@ -274,13 +281,19 @@ export async function handleQuickRequest(
       const data = await parseJson(request);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
+      if (pathname === "/api/quick/shortcut/enroll") {
+        if (env.ALLOW_SHORTCUT_WRITES !== "true") return respond({ error: "Direct shortcuts disabled" }, 503);
+        return await enrollShortcut(env.DB, owner, data);
+      }
+      if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
+      if (pathname === "/api/quick/shortcut/devices") return await shortcutStatus(env.DB, owner);
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
