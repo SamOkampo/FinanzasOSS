@@ -405,9 +405,9 @@ assert.equal((await call("/api/quick/dashboard/overview", "GET", undefined, A)).
 // Unified Studio: policy-backed capabilities, access-controlled assets,
 // deliberate non-active banking features, browser/Shortcut shared ledger.
 for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
-  const noAccess = await call(path, "GET", undefined, missing);
+  const noAccess = await handleQuickRequest(new Request(origin + path), env, missing);
   assert.equal(noAccess.status, 401, path + " must not be public");
-  const secured = await call(path, "GET", undefined, A);
+  const secured = await handleQuickRequest(new Request(origin + path), env, A);
   assert.equal(secured.status, 200);
   assert.equal(secured.headers.get("Cache-Control"), "no-store, private");
   if (path === "/studio.js") {
@@ -429,7 +429,7 @@ for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
     assert.equal(model.pwa.cacheFinancialData, false);
   }
 }
-const unifiedShell = await call("/dashboard");
+const unifiedShell = await handleQuickRequest(new Request(origin + "/dashboard"), env, A);
 assert.equal(unifiedShell.status, 200);
 const unifiedHtml = await (await handleQuickRequest(new Request(origin + "/dashboard"), env, A)).text();
 for(const name of ["space-today","space-movement","space-portfolio","space-plan","space-map",
