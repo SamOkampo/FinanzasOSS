@@ -1,9 +1,17 @@
 // Personal iPhone Shortcut endpoint. Deliberately disabled without explicit flags.
 // Requires Cloudflare Access Service Auth at the edge AND a separate, revocable device token.
 import type { QuickD1, QuickWorkerEnv, QuickWorkerContext } from "./index.js";
+import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 
-type Account = { id: string; label: string; account_kind: string; bank_label: string | null };
-type Confirm = (db: QuickD1, owner: string, body: unknown, ignoreReplayTime?: boolean) => Promise<Response>;
+type StoredExpense = {
+  id: string;
+  amount_minor: number;
+  currency: string;
+  payment_method: string;
+  kind: string;
+  merchant: string | null;
+  bank_label: string | null;
+};
 const TOKEN_RE = /^fosq_[0-9a-f]{64}$/;
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const METHODS = new Set(["cash", "debit_card", "credit_card", "bank_transfer", "digital_wallet", "other"]);
@@ -64,14 +72,6 @@ async function digestToken(token: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), (n) => n.toString(16).padStart(2, "0")).join("");
 }
 function requiresBank(method: string): boolean { return BANK_METHODS.has(method); }
-function acceptsKind(kind: string, method: string): boolean {
-  if (method === "cash") return kind === "cash";
-  if (method === "credit_card") return kind === "credit_manual";
-  if (method === "debit_card" || method === "bank_transfer") return kind === "bank_manual" || kind === "wallet_manual";
-  if (method === "digital_wallet") return kind === "wallet_manual";
-  return true;
-}
-function normalized(value: string): string { return value.trim().toLocaleLowerCase("es-CO"); }
 
 export async function enrollShortcut(db: QuickD1, owner: string, body: unknown): Promise<Response> {
   const data = strict(body, ["label", "confirmed"]);
@@ -105,8 +105,23 @@ export async function revokeShortcut(db: QuickD1, owner: string, body: unknown):
   return reply({ revoked: true });
 }
 
+function replayOrConflict(
+  prior: StoredExpense,
+  expected: {
+    amountMinor: number; paymentMethod: string; kind: string;
+    merchant: string | null; bankLabel: string | null;
+  },
+): Response {
+  if (prior.amount_minor !== expected.amountMinor || prior.currency !== "COP" ||
+    prior.payment_method !== expected.paymentMethod || prior.kind !== expected.kind ||
+    prior.merchant !== expected.merchant || prior.bank_label !== expected.bankLabel) {
+    return reply({ error: "Entry idempotency key reused with different data" }, 409);
+  }
+  return reply({ entryId: prior.id, replayed: true });
+}
+
 export async function shortcutExpense(
-  request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext, confirm: Confirm,
+  request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
 ): Promise<Response> {
   // A Cloudflare Access *Service Auth* policy must validate the separate
   // CF-Access-Client-Id/Secret headers. Never configure a Bypass policy here.
@@ -136,25 +151,48 @@ export async function shortcutExpense(
     throw new ShortcutInputError("Bank is required for cards/transfers only");
   }
 
-  const accounts = await env.DB.prepare(
-    "SELECT id,label,account_kind,bank_label FROM quick_manual_accounts WHERE owner_id=? " +
-    "AND currency='COP' LIMIT 100",
-  ).bind(row.owner_id).all<Account>();
-  const candidates = accounts.results.filter((account) =>
-    acceptsKind(account.account_kind, method) &&
-    (!requiresBank(method) || normalized(account.label) === normalized(bankLabel!) ||
-      (account.bank_label !== null && normalized(account.bank_label) === normalized(bankLabel!))));
-  if (candidates.length !== 1) {
-    return reply({ error: "No unique matching COP account. Configure a matching account in FinanzasOSS." }, 409);
-  }
-  // Explicit invocation of the Shortcut is authorization to add an EXPENSE.
-  // The caller cannot choose a transfer/investment classification or owner.
-  // Server timestamp is ignored only on idempotent replay with identical fields.
-  return confirm(env.DB, row.owner_id, {
-    accountId: candidates[0]!.id, clientEntryId: key, amount: data.amount,
+
+  // Do not require, infer or secretly create an account: the user explicitly
+  // wants account-free expense capture. Keep the method and optional bank.
+  const draft = prepareQuickEntry({
+    tenantId: row.owner_id, actorId: row.owner_id,
+    clientEntryId: key, amount: data.amount,
     currency: "COP", paymentMethod: method, classification: "expense",
-    occurredAt: new Date().toISOString(), merchant: concept, bankLabel, confirmed: true,
-  }, true);
+    occurredAt: new Date().toISOString(), merchant: concept, bankLabel,
+  });
+  const minor = Number(draft.money.amountMinor);
+  if (!Number.isSafeInteger(minor)) throw new ShortcutInputError("Invalid amount");
+  const fields = {
+    ownerId: row.owner_id, clientEntryId: key,
+    amountMinor: minor, paymentMethod: draft.paymentMethod,
+    kind: draft.kind, merchant: draft.merchant, bankLabel: draft.bankLabel,
+  };
+  // Compatibility for retrying an expense sent before the account-free
+  // migration: return the existing entry rather than creating a duplicate.
+  const legacy = await env.DB.prepare(
+    "SELECT id,amount_minor,currency,payment_method,kind,merchant,bank_label " +
+    "FROM quick_manual_entries WHERE owner_id=? AND client_entry_id=? LIMIT 1",
+  ).bind(fields.ownerId, key).first<StoredExpense>();
+  if (legacy) return replayOrConflict(legacy, fields);
+
+  // Append-only, account-free table; owner-scoped idempotency is enforced in
+  // SQLite atomically, not with a preflight race-prone SELECT.
+  const inserted = await env.DB.prepare(
+    "INSERT INTO quick_shortcut_expenses(" +
+    "id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) " +
+    "VALUES(?,?,?,?,?,?,?,?,?,?) " +
+    "ON CONFLICT(owner_id,client_entry_id) DO NOTHING RETURNING id",
+  ).bind(
+    crypto.randomUUID(), fields.ownerId, key, minor, "COP", draft.paymentMethod,
+    draft.kind, draft.occurredAt, draft.merchant, draft.bankLabel,
+  ).first<{ id: string }>();
+  if (inserted) return reply({ entryId: inserted.id, replayed: false }, 201);
+  const prior = await env.DB.prepare(
+    "SELECT id,amount_minor,currency,payment_method,kind,merchant,bank_label " +
+    "FROM quick_shortcut_expenses WHERE owner_id=? AND client_entry_id=? LIMIT 1",
+  ).bind(fields.ownerId, key).first<StoredExpense>();
+  if (!prior) return reply({ error: "Unable to verify write" }, 503);
+  return replayOrConflict(prior, fields);
 }
 
 export function shortcutFailure(error: unknown): Response {
