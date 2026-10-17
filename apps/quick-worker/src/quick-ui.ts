@@ -235,7 +235,7 @@ export const QUICK_JS = `"use strict";
         const movementKind = item.kind === "investment_transfer"
           ? "APORTE A INVERSIÓN" : item.kind === "transfer"
             ? "TRANSFERENCIA PROPIA" : "GASTO";
-        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual") + (item.bank_label ? " · " + item.bank_label : "");
+        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + (item.account_id === null ? "" : " · " + (account ? account.label : "Cuenta manual")) + (item.bank_label ? " · " + item.bank_label : "") + " · " + item.payment_method;
         left.append(concept, meta);
         const amount = document.createElement("div");
         amount.className = "entry-amount";
