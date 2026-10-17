@@ -157,8 +157,9 @@ export async function shortcutExpense(
   const draft = prepareQuickEntry({
     tenantId: row.owner_id, actorId: row.owner_id,
     clientEntryId: key, amount: data.amount,
-    currency: "COP", paymentMethod: method, classification: "expense",
-    occurredAt: new Date().toISOString(), merchant: concept, bankLabel,
+    currency: "COP", paymentMethod: method as "cash" | "debit_card" | "credit_card" | "bank_transfer" | "digital_wallet" | "other",
+    classification: "expense", occurredAt: new Date().toISOString(), merchant: concept,
+    ...(bankLabel === null ? {} : { bankLabel }),
   });
   const minor = Number(draft.money.amountMinor);
   if (!Number.isSafeInteger(minor)) throw new ShortcutInputError("Invalid amount");
