@@ -1137,6 +1137,7 @@ var Je=Object.freeze({automaticActivationAllowed:!1,automaticChargingAllowed:!1,
     applyPrivacyToNewNodes();
   }
   document.addEventListener("finanzasoss:data",(event)=>updatePlanAndMap(event.detail.overview));
+  if (window.__finanzasossLatestOverview) updatePlanAndMap(window.__finanzasossLatestOverview);
   // Amounts inserted during pagination must follow the privacy preference.
   const movementTarget=byId("history-body");
   new MutationObserver(()=> {
