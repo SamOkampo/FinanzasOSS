@@ -1078,6 +1078,7 @@ var Je=Object.freeze({automaticActivationAllowed:!1,automaticChargingAllowed:!1,
   });
   byId("theme-setting").addEventListener("click",()=>{
     const night = studio.classList.toggle("theme-night");
+    document.body.classList.toggle("theme-night", night);
     document.querySelector('meta[name="theme-color"]').setAttribute("content",night?"#111c1c":"#172c2c");
     byId("theme-setting").textContent=night?"Modo claro":"Modo oscuro";
   });
