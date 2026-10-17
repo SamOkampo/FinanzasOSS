@@ -1612,7 +1612,7 @@ body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4
         pushOn=Boolean((await statusResponse.json()).registered);
       }else pushOn=false;
       pushButton.disabled=false;pushButton.textContent=pushOn?"Desactivar avisos":"Activar avisos";
-      pushStatus.textContent=pushOn?"Activo \xB7 recordatorio diario a las 8:30 p. m.":
+      pushStatus.textContent=pushOn?(pushOptions.deliveryEnabled?"Activo \xB7 recordatorio diario a las 8:30 p. m.":"Permiso registrado. El env\xEDo de avisos a\xFAn no est\xE1 habilitado."):
         "Desactivado. Solo recibir\xE1s avisos si aceptas.";
     }catch{
       pushButton.disabled=true;pushButton.textContent="No disponible";
