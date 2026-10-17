@@ -15,6 +15,7 @@ sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0003_accountle
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0004_staging_reset_challenges.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0005_scoped_reset_confirmation.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0006_push_subscriptions.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0007_spending_limits.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
