@@ -8,6 +8,7 @@ import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from 
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
+import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, PushInputError } from "./push.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -27,6 +28,11 @@ export interface QuickWorkerEnv {
   readonly ALLOW_WRITES?: string;
   readonly ALLOW_SHORTCUT_WRITES?: string;
   readonly ALLOW_RESET_WRITES?: string;
+  readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
+  readonly ALLOW_PUSH_SEND?: string;
+  readonly VAPID_PUBLIC_KEY?: string;
+  readonly VAPID_PRIVATE_JWK?: string;
+  readonly VAPID_SUBJECT?: string;
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -313,6 +319,9 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
       if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
+      if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
+      if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
+      if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
@@ -333,6 +342,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
       if (pathname === "/api/quick/studio/capabilities") return studioCapabilities();
+      if (pathname === "/api/quick/push/config") return pushConfig(env);
       if (pathname === "/api/quick/dashboard/movements") {
         return await dashboardMovements(env.DB, owner, new URL(request.url));
       }
@@ -340,7 +350,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
@@ -353,5 +363,9 @@ export async function handleQuickRequest(
 export default {
   fetch(request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext) {
     return handleQuickRequest(request, env, ctx);
+  },
+  async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
+    if(controller.cron!=="30 1 * * *") return;
+    await sendDailyReminders(env,controller.scheduledTime);
   },
 };

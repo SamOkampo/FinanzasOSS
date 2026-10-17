@@ -5,6 +5,7 @@ on:
     branches:
       - feature/quick-iphone-direct-expense
       - feature/finanzasoss-unified-studio
+      - feature/studio-mobile-web-push-20261017
     paths:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
@@ -15,7 +16,7 @@ permissions:
 
 jobs:
   reviewed-staging-bundle:
-    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio'
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

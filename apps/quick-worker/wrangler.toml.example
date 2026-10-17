@@ -19,3 +19,16 @@ binding = "DB"
 database_name = "finanzasoss-staging"
 database_id = "REPLACE_WITH_NEW_D1_DATABASE_ID"
 migrations_dir = "migrations"
+
+# PWA generic Web Push reminders (explicit staging-only opt-in).
+# Do not enable before applying migration 0006 and verifying Access + physical device.
+ALLOW_PUSH_SUBSCRIPTIONS = "false"
+ALLOW_PUSH_SEND = "false"
+# VAPID_PUBLIC_KEY = "paste-valid-public-uncompressed-P256-base64url"
+# VAPID_SUBJECT = "mailto:verified-admin-address@example.com"
+# VAPID_PRIVATE_JWK must be installed as a Cloudflare secret, NEVER in this TOML.
+
+# Cron triggers use UTC. 01:30 UTC = 20:30 in Bogotá (previous day).
+# Add only after end-to-end physical verification and explicit opt-in.
+# [triggers]
+# crons = ["30 1 * * *"]

@@ -2,7 +2,7 @@
 export const DASH_MANIFEST = JSON.stringify({
   id: "/dashboard", name: "FinanzasOSS · Mi panel", short_name: "FinanzasOSS",
   description: "Consulta tus movimientos y gastos desde tu iPhone de forma privada.",
-  start_url: "/dashboard", scope: "/", display: "standalone",
+  start_url: "/dashboard", scope: "/", display: "standalone", orientation: "portrait-primary",
   background_color: "#f5f3ee", theme_color: "#172c2c",
   lang: "es-CO", categories: ["finance", "productivity"],
   icons: [
@@ -19,4 +19,29 @@ export const DASH_SW = `
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 // Intentionally NO fetch event handler; every request uses the native browser network stack.
+self.addEventListener("push", (event) => {
+  // Empty payload only. Do not reveal any amount, bank or account on locked screens.
+  event.waitUntil(self.registration.showNotification("FinanzasOSS", {
+    body:"¿Registraste tus gastos de hoy?",
+    icon:"/dashboard-icon-180.png",
+    badge:"/dashboard-icon-180.png",
+    tag:"finanzasoss-daily",
+    data:{url:"/dashboard#movement"},
+  }));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const target=new URL("/dashboard#movement",self.location.origin).href;
+    const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});
+    for(const window of windows) {
+      if(new URL(window.url).origin===self.location.origin){
+        await window.focus();
+        if("navigate" in window) await window.navigate(target);
+        return;
+      }
+    }
+    await self.clients.openWindow(target);
+  })());
+});
 `;
