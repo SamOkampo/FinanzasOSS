@@ -1,15 +1,16 @@
 # FinanzasOSS Quick — Registro de gastos directo desde Atajos (PROPUESTA STAGING)
 
-**Estado:** implementación en PR, **NO** desplegada, **NO** habilitada. Requiere Cloudflare Access Service Auth, nueva migración D1, prueba física de iPhone y aceptación explícita antes del despliegue. Exclusivamente datos ficticios. No modifica el Atajo web anterior.
+**Estado:** código del PR #174 desplegado en el **staging privado** y verificado por la API de Cloudflare, pero **registro directo DESHABILITADO** (`ALLOW_SHORTCUT_WRITES=false`, credencial Service Auth deshabilitada). No está fusionado a `main`; no hay pruebas físicas con iPhone ni autorización para datos reales. Se conserva el flujo web anterior.
 
 ## Estado real de staging — 16 oct 2026 (Bogotá)
 
 - [x] **Cloudflare D1 solo de staging:** aplicada la migración `0002_shortcut_devices.sql`; tabla e índice confirmados. Antes y después: 1 cuenta, 2 movimientos, 0 tokens de dispositivo. Punto de recuperación D1 registrado antes de modificar el esquema.
 - [x] **Cloudflare Access:** creada política `FinanzasOSS iPhone staging device Service Auth` sobre **la misma aplicación Access**; conserva intacta la política original del propietario.
 - [x] **Credencial de servicio:** creada como `FinanzasOSS Quick iPhone - staging` y **DESHABILITADA**. El secreto inicial se descartó; para usarla, el propietario debe **rotar el secreto desde Zero Trust, copiar ambos encabezados de forma privada en el iPhone y habilitar el token**. No introducir secretos en GitHub ni en conversaciones.
-- [x] PR #174 con CI `38987153771` aprobado. **Este código no está desplegado.**
-- [ ] Build del Worker desde la rama del PR y carga controlada conservando exactamente `ACCESS_AUD`, `ALLOW_WRITES`, D1 y la protección Access. No desplegar código TypeScript sin compilar.
-- [ ] Probar Service Auth real con el token del propietario sin cambiar las políticas humanas. Inicialmente `ALLOW_SHORTCUT_WRITES=false` o ausente.
+- [x] PR #174 con CI `38987153771` y `38987980179` aprobados. Artefacto compilado por GitHub Actions SHA-256 verificado. **Versión 8 desplegada al 100 % en staging privado el 16 oct 2026, con registros directos desactivados.**
+- [x] Build de Worker mediante GitHub Actions, versión compilada cargada y desplegada con los bindings `ACCESS_AUD`, `ALLOW_WRITES`, `DB` intactos y `ALLOW_SHORTCUT_WRITES=false`.
+- [x] Tras despliegue, verificados: versión activa `376cc38d-ee41-43f6-9311-83df545ea0f7` con 100 % tráfico, política humana intacta, política Service Auth limitada a credencial deshabilitada y D1 con 1 cuenta, 2 entradas, 0 dispositivos. Reversión posible a versión previa `9d7f151b-0dc4-4c5a-98e5-830a100d5f67`.
+- [ ] **Intervención del propietario:** en Cloudflare Zero Trust → Access controls → Service credentials → Service Tokens, localizar `FinanzasOSS Quick iPhone - staging`; rotar secreto (el secreto inicial se descartó) y copiar ID + secreto en un lugar seguro, sin mostrarlos en GitHub/ChatGPT. Activar esa credencial solamente para pruebas controladas. Verificar Service Auth sin modificar la política humana. `ALLOW_SHORTCUT_WRITES=false` hasta superar las pruebas negativas.
 - [ ] Habilitación temporal, prueba física con datos sintéticos, validación de errores, revocación y rollback. Mantener la app de Safari operativa mientras tanto.
 
 ## Comportamiento
