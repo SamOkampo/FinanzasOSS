@@ -86,7 +86,8 @@ assert.equal(noWrite.status,503);
 for(const path of ["/movement-editor.js","/dashboard.js","/studio.js"]){
  const source=await handleQuickRequest(new Request(base+path),env,owner(A));
  assert.equal(source.status,200);
- assert.doesNotThrow(()=>new Function(await source.text()),path);
+ const body=await source.text();
+ assert.doesNotThrow(()=>new Function(body),path);
 }
 const html=await (await handleQuickRequest(new Request(base+"/dashboard"),env,owner(A))).text();
 assert.match(html,/movement-edit-dialog/);
