@@ -13,6 +13,8 @@ on:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
       - packages/finance-core/src/**
+      - tests/quick-dark-theme.mjs
+      - package.json
 
 permissions:
   contents: write
