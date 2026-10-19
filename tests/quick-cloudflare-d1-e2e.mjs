@@ -447,7 +447,10 @@ for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
     assert.equal(model.banks.connected, 0);
     assert.equal(model.banks.automaticSync, false);
     assert.equal(model.investments.connected, 0);
-    assert.equal(model.imports.liveUpload, false);
+    assert.equal(model.imports.liveUpload, true);
+    assert.deepEqual(model.imports.formats,["CSV"]);
+    assert.equal(model.imports.requiresExplicitMapping,true);
+    assert.equal(model.imports.maxRowsPerFile,50);
     assert.equal(model.quick.accountRequired, false);
     assert.equal(model.pwa.cacheFinancialData, false);
   }
