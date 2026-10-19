@@ -39,17 +39,18 @@ for(const key of ["ink","ink-2","ink-muted","copper"]){
   "Insufficient contrast for "+key+" against card surface");
 }
 
-// Parse and execute just the appearance behavior with stubbed platform objects.
-const start=STUDIO_JS.indexOf('  const themeKey="finanzasoss:appearance";');
+// Exercise theme selection with a stubbed DOM; no browser storage allowed.
+assert.doesNotMatch(STUDIO_JS,/localStorage|sessionStorage|innerHTML/);
+const start=STUDIO_JS.indexOf("  // No browser storage by policy:");
 const end=STUDIO_JS.indexOf("  // Gesture policy mirrored",start);
 assert.ok(start>0&&end>start);
 const source=STUDIO_JS.slice(start,end);
 assert.doesNotThrow(()=>new Function("window","studio","document","byId",source));
-function themeHarness(stored,systemDark){
- let remembered=stored,click=()=>{};
+function themeHarness(systemDark){
+ let click=()=>{};
  const studio={classes:new Set(),classList:{
   toggle(c,v){if(v)studio.classes.add(c);else studio.classes.delete(c);},
-  contains(c){return studio.classes.has(c);},
+  contains(c){return studio.classes.has(c);}
  }};
  const body={classes:new Set(),classList:{
   toggle(c,v){if(v)body.classes.add(c);else body.classes.delete(c);}
@@ -57,24 +58,23 @@ function themeHarness(stored,systemDark){
  const meta={value:"",setAttribute(_,v){this.value=v;}};
  const button={textContent:"",aria:"",setAttribute(_,v){this.aria=v;},
   addEventListener(_,handler){click=handler;}};
- const browser={localStorage:{getItem(key){assert.equal(key,"finanzasoss:appearance");return remembered;},
-  setItem(key,v){assert.equal(key,"finanzasoss:appearance");remembered=v;}},
-  matchMedia(query){assert.equal(query,"(prefers-color-scheme: dark)");return {matches:systemDark};}};
+ const browser={matchMedia(query){
+  assert.equal(query,"(prefers-color-scheme: dark)");return {matches:systemDark};
+ }};
  const initialize=new Function("window","studio","document","byId",source);
  initialize(browser,studio,{body,querySelector(){return meta;}},()=>button);
- return {studio,body,button,meta,click:()=>click(),stored:()=>remembered};
+ return {studio,body,button,meta,click:()=>click()};
 }
-const a=themeHarness(null,true);
-assert.ok(a.studio.classes.has("theme-night"),"System dark fallback not active");
+const a=themeHarness(true);
+assert.ok(a.studio.classes.has("theme-night"),"System dark should activate dark");
 assert.ok(a.body.classes.has("theme-night"));
 assert.equal(a.button.textContent,"Modo claro");
 assert.equal(a.meta.value,"#111b1d");
 a.click();
 assert.ok(!a.studio.classes.has("theme-night"));
-assert.equal(a.stored(),"light","Only theme preference should persist");
-const b=themeHarness("light",true);
-assert.ok(!b.studio.classes.has("theme-night"),"Stored light overrides system dark");
+assert.equal(a.button.textContent,"Modo oscuro");
+const b=themeHarness(false);
+assert.ok(!b.studio.classes.has("theme-night"),"System light should stay light");
 b.click();
-assert.equal(b.stored(),"dark");
 assert.ok(b.studio.classes.has("theme-night"));
-console.log("Dark theme palette contrast, six critical surfaces, system/remembered mode: OK");
+console.log("Dark theme palette contrast, six critical surfaces, system mode and reversible user override: OK");
