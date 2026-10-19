@@ -857,17 +857,18 @@ body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4
 
 /* Keep payment METHOD separate from the optional BANK on every viewport.
    Do not style bank names like a method or let them displace the method. */
-.history-method{color:var(--ink-2);min-width:105px}
+.history-method{color:var(--ink-2);min-width:152px;line-height:1.35}
 .history-payment-method-label{display:block;font-size:12px;font-weight:750;
-  line-height:1.4;white-space:normal;overflow-wrap:normal;color:inherit}
-.history-bank-detail{display:block;font-size:10px;line-height:1.4;
-  color:var(--ink-muted);margin-top:5px;font-weight:500;overflow-wrap:anywhere}
+  line-height:1.4;white-space:normal;color:inherit}
+.history-bank-detail{display:block;font-size:11px;line-height:1.5;
+  color:var(--forest);margin-top:6px;font-weight:650;
+  white-space:normal;overflow-wrap:anywhere}
 @media(max-width:600px){
-  .history-method{min-width:88px}
+  .history-method{min-width:133px}
   .history-payment-method-label{font-size:11px;line-height:1.35}
-  .history-bank-detail{font-size:10px}
+  .history-bank-detail{font-size:11px;line-height:1.4}
 }
-.theme-night .history-bank-detail{color:#aebfb4}
+.theme-night .history-bank-detail{color:#c6dfd1}
 `;var Y=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1174,20 +1175,21 @@ body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4
         : x.kind === "investment_transfer" ? "Aporte a inversi\xF3n \xB7 no es gasto" : "Movimiento";
       const desc = document.createElement("div");
       desc.append(concept, kind);
-      // A bank is extra context, never the payment method: don't mix them
-      // in the M\xC9TODO column on narrow mobile screens.
-      if (x.bank_label) {
-        const bank = document.createElement("small");
-        bank.className = "history-bank-detail";
-        bank.textContent = "Banco: " + x.bank_label;
-        desc.appendChild(bank);
-      }
       const method = document.createElement("div");
       method.className = "history-method";
       const methodLabel = document.createElement("strong");
       methodLabel.className = "history-payment-method-label";
       methodLabel.textContent = LABELS[x.payment_method] || "M\xE9todo sin identificar";
       method.appendChild(methodLabel);
+      // Keep both fields independently labelled, but in the SAME visible
+      // column. The bank below the concept was easy to miss on mobile.
+      const bankName = typeof x.bank_label === "string" ? x.bank_label.trim() : "";
+      if (bankName) {
+        const bank = document.createElement("small");
+        bank.className = "history-bank-detail";
+        bank.textContent = "Banco: " + bankName;
+        method.appendChild(bank);
+      }
       const amount = document.createElement("strong");
       amount.className = "history-amount";
       amount.textContent = (x.kind === "purchase" ? "\u2212 " : "\u2194 ") +
