@@ -854,6 +854,20 @@ body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4
  .movement-editor{width:calc(100vw - 18px);padding:19px 18px;
  max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)}
 }
+
+/* Keep payment METHOD separate from the optional BANK on every viewport.
+   Do not style bank names like a method or let them displace the method. */
+.history-method{color:var(--ink-2);min-width:105px}
+.history-payment-method-label{display:block;font-size:12px;font-weight:750;
+  line-height:1.4;white-space:normal;overflow-wrap:normal;color:inherit}
+.history-bank-detail{display:block;font-size:10px;line-height:1.4;
+  color:var(--ink-muted);margin-top:5px;font-weight:500;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .history-method{min-width:88px}
+  .history-payment-method-label{font-size:11px;line-height:1.35}
+  .history-bank-detail{font-size:10px}
+}
+.theme-night .history-bank-detail{color:#aebfb4}
 `;var Y=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1160,15 +1174,20 @@ body.theme-night{--paper:#111c1c;--surface:#192725;--ink:#e5e8dd;--ink-2:#c1cec4
         : x.kind === "investment_transfer" ? "Aporte a inversi\xF3n \xB7 no es gasto" : "Movimiento";
       const desc = document.createElement("div");
       desc.append(concept, kind);
-      const method = document.createElement("div");
-      method.className = "history-method";
-      method.textContent = LABELS[x.payment_method] || "Otro";
+      // A bank is extra context, never the payment method: don't mix them
+      // in the M\xC9TODO column on narrow mobile screens.
       if (x.bank_label) {
         const bank = document.createElement("small");
-        bank.className = "method-sub";
-        bank.textContent = x.bank_label;
-        method.appendChild(bank);
+        bank.className = "history-bank-detail";
+        bank.textContent = "Banco: " + x.bank_label;
+        desc.appendChild(bank);
       }
+      const method = document.createElement("div");
+      method.className = "history-method";
+      const methodLabel = document.createElement("strong");
+      methodLabel.className = "history-payment-method-label";
+      methodLabel.textContent = LABELS[x.payment_method] || "M\xE9todo sin identificar";
+      method.appendChild(methodLabel);
       const amount = document.createElement("strong");
       amount.className = "history-amount";
       amount.textContent = (x.kind === "purchase" ? "\u2212 " : "\u2194 ") +
