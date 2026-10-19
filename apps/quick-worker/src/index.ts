@@ -9,6 +9,7 @@ import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from 
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
 import { readBudgets, writeBudget, BudgetInputError } from "./spending-limits.js";
+import { changeMovement, MovementInputError } from "./movement-edit.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, PushInputError } from "./push.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
@@ -200,10 +201,10 @@ async function listEntries(db: QuickD1, owner: string): Promise<Response> {
   // expenses, without assigning a fake bank/cash account to the latter.
   const data = await db.prepare(
     "SELECT id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at," +
-    "merchant,bank_label,created_at FROM quick_manual_entries WHERE owner_id=? " +
+    "merchant,bank_label,created_at FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL " +
     "UNION ALL SELECT id,NULL AS account_id,client_entry_id,amount_minor,currency," +
     "payment_method,kind,occurred_at,merchant,bank_label,created_at " +
-    "FROM quick_shortcut_expenses WHERE owner_id=? " +
+    "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL " +
     "ORDER BY occurred_at DESC,id DESC LIMIT 100",
   ).bind(owner, owner).all<ManualEntry>();
   return respond({ entries: data.results.map((x) => ({ ...x, amount_minor: String(x.amount_minor) })) });
@@ -323,6 +324,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
       if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
@@ -355,7 +357,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
