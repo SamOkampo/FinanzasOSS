@@ -7,6 +7,7 @@ on:
       - feature/finanzasoss-unified-studio
       - feature/studio-mobile-web-push-20261017
       - feature/studio-spending-limits-20261017
+      - feature/studio-edit-delete-movements-20261018
     paths:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   reviewed-staging-bundle:
-    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017'
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017' || github.ref == 'refs/heads/feature/studio-edit-delete-movements-20261018'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
