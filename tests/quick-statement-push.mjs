@@ -46,7 +46,10 @@ const preview="/api/quick/import/preview",commit="/api/quick/import/commit";
 assert.equal((await call(preview,"POST",data,{})).status,401);
 assert.equal((await call(preview,"POST",data,owner(A),{origin:"https://evil.example"})).status,403);
 assert.equal((await call(preview,"POST",{...data,ownerId:B})).status,422);
-assert.equal((await call(preview,"POST",{...data,rows:[{...data.rows[0],importe:"=SUM(1)"}]})).status,422);
+const activeContent=await call(preview,"POST",{...data,rows:[{...data.rows[0],importe:"=SUM(1)"}]});
+assert.equal(activeContent.status,200);
+assert.equal(activeContent.body.ready.length,0);
+assert.equal(activeContent.body.skipped.length,1);
 // The first preview must show eligible purchases and a non-expense credit excluded.
 const p=await call(preview,"POST",data);
 assert.equal(p.status,200);assert.equal(p.body.ready.length,2);
