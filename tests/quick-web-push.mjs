@@ -6,6 +6,7 @@ import {sendDailyReminders} from "../dist/apps/quick-worker/src/push.js";
 
 const sqlite=new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0006_push_subscriptions.sql",import.meta.url),"utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0009_push_test.sql",import.meta.url),"utf8"));
 const db={prepare(query){let args=[];return {
   bind(...values){args=values;return this;},
   async first(){return sqlite.prepare(query).get(...args)??null;},
