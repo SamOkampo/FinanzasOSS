@@ -290,7 +290,7 @@ export const DASH_JS = `(() => {
     if (!state.history.length) {
       const tr = document.createElement("tr");
       const cell = td("Aún no hay movimientos. Registra uno desde Atajos y actualiza aquí.", "empty-row");
-      cell.colSpan = 4;
+      cell.colSpan = 5;
       tr.appendChild(cell);
       body.appendChild(tr);
     }
@@ -320,7 +320,27 @@ export const DASH_JS = `(() => {
       amount.textContent = (x.kind === "purchase" ? "− " : "↔ ") +
         (x.currency === "COP" ? asCOP(x.amount_minor) :
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "USD" }).format(Number(x.amount_minor) / 100));
-      tr.append(td(desc), td(fmtFull.format(new Date(x.occurred_at))), td(method), td(amount, "align-right"));
+      const actions=document.createElement("div");
+      actions.className="history-actions";
+      const edit=document.createElement("button");
+      edit.type="button";edit.className="history-action-edit";
+      edit.textContent="Editar";
+      edit.setAttribute("aria-label","Editar "+(x.merchant||"movimiento"));
+      edit.disabled=x.kind!=="purchase"||x.currency!=="COP";
+      if(edit.disabled)edit.title="Por seguridad, solo se editan gastos COP";
+      const remove=document.createElement("button");
+      remove.type="button";remove.className="history-action-remove";
+      remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
+      remove.setAttribute("title","Eliminar movimiento");
+      const symbol=document.createElement("span");symbol.className="history-trash-icon";
+      symbol.setAttribute("aria-hidden","true");remove.appendChild(symbol);
+      edit.addEventListener("click",()=>document.dispatchEvent(new CustomEvent("finanzasoss:movement-action",
+        {detail:{action:"edit",entry:x}})));
+      remove.addEventListener("click",()=>document.dispatchEvent(new CustomEvent("finanzasoss:movement-action",
+        {detail:{action:"delete",entry:x}})));
+      actions.append(edit,remove);
+      tr.append(td(desc), td(fmtFull.format(new Date(x.occurred_at))), td(method),
+        td(amount, "align-right"),td(actions,"history-actions-cell"));
       body.appendChild(tr);
     });
     $("history-status").textContent = "Mostrando " + state.history.length.toLocaleString("es-CO") +
