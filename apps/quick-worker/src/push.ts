@@ -127,3 +127,40 @@ export async function sendDailyReminders(env:QuickWorkerEnv,now=Date.now(),
   }
   return {sent,retired,skipped:false};
 }
+
+export async function sendOwnerTestPush(
+ db:QuickD1,owner:string,env:QuickWorkerEnv,body:unknown,
+ now=Date.now(),send:typeof fetch=fetch,
+):Promise<Response>{
+ if(!enabled(env))return reply({error:"Push is not configured"},503);
+ const obj=strict(body,["endpoint","confirmed"]);
+ if(obj.confirmed!==true)throw new PushInputError("Explicit test confirmation required");
+ const endpoint=endpointOf(obj.endpoint),hash=await digest(endpoint);
+ const row=await db.prepare("SELECT endpoint,last_test_at FROM quick_push_subscriptions "+
+   "WHERE owner_id=? AND endpoint_hash=?").bind(owner,hash)
+   .first<{endpoint:string;last_test_at:string|null}>();
+ if(!row||row.endpoint!==endpoint)return reply({error:"Authorize this device before testing"},403);
+ // DB-enforced 10-minute cooldown; do not let retries send many notifications.
+ const cutoff=new Date(now-600000).toISOString(),stamp=new Date(now).toISOString();
+ const claimed=await db.prepare("UPDATE quick_push_subscriptions SET last_test_at=? "+
+  "WHERE owner_id=? AND endpoint_hash=? AND (last_test_at IS NULL OR last_test_at<=?) "+
+  "RETURNING endpoint_hash").bind(stamp,owner,hash,cutoff).first<{endpoint_hash:string}>();
+ if(!claimed)return reply({error:"Wait 10 minutes between tests"},429);
+ try{
+   const token=await jwt(env,new URL(endpoint).origin,now);
+   const result=await send(endpoint,{method:"POST",headers:{
+     Authorization:"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
+     TTL:"3600",Urgency:"normal",
+   }});
+   if(result.status===404||result.status===410){
+     await db.prepare("DELETE FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=? "+
+       "RETURNING endpoint_hash").bind(owner,hash).first();
+     return reply({error:"Subscription expired; re-enable notifications"},409);
+   }
+   if(!result.ok)return reply({error:"Push provider did not accept the test"},502);
+   // Provider accepted the request. Final delivery must be confirmed on device.
+   return reply({providerAccepted:true,deliveryConfirmed:false});
+ }catch{
+   return reply({error:"Unable to contact push provider"},502);
+ }
+}
