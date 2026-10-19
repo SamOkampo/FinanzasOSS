@@ -16,6 +16,7 @@ on:
       - packages/finance-core/src/**
       - tests/quick-dark-theme.mjs
       - tests/quick-statement-push.mjs
+      - tests/quick-cloudflare-d1-e2e.mjs
       - apps/quick-worker/migrations/**
       - package.json
 
