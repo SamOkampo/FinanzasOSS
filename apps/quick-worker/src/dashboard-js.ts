@@ -314,10 +314,11 @@ export const DASH_JS = `(() => {
       method.appendChild(methodLabel);
       // Keep both fields independently labelled, but in the SAME visible
       // column. The bank below the concept was easy to miss on mobile.
-      if (typeof x.bank_label === "string" && x.bank_label.trim()) {
+      const bankName = typeof x.bank_label === "string" ? x.bank_label.trim() : "";
+      if (bankName) {
         const bank = document.createElement("small");
         bank.className = "history-bank-detail";
-        bank.textContent = "Banco: " + x.bank_label.trim();
+        bank.textContent = "Banco: " + bankName;
         method.appendChild(bank);
       }
       const amount = document.createElement("strong");
