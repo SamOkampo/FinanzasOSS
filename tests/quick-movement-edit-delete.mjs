@@ -111,12 +111,14 @@ const labels={cash:"Efectivo",debit_card:"Tarjeta débito",credit_card:"Tarjeta 
 for(const [code,name] of Object.entries(labels)){
  const {desc,method}=renderMethod(doc,labels,{payment_method:code,bank_label:"Bancolombia"},
    node("div"),node("small"));
- assert.equal(method.children.length,1,"Method cell must have no bank text");
+ assert.equal(method.children.length,2,"Method cell visibly stacks method then bank");
  assert.equal(method.children[0].textContent,name,"Method label must show payment type");
- assert.equal(desc.children[2].textContent,"Banco: Bancolombia","Bank shown only as secondary concept detail");
+ assert.equal(method.children[1].textContent,"Banco: Bancolombia","Bank must be visibly labelled beside payment method");
+ assert.equal(desc.children.length,2,"Bank no longer hidden below the concept");
 }
 const noBank=renderMethod(doc,labels,{payment_method:"cash",bank_label:null},node("div"),node("small"));
 assert.equal(noBank.desc.children.length,2,"No invented bank on cash payments");
 assert.equal(noBank.method.children[0].textContent,"Efectivo");
+assert.equal(noBank.method.children.length,1,"No bank row when bank is absent");
 console.log("Edit/delete: owner-scoped soft deletion, revisions, ledger totals, UI, CSRF passed");
 sql.close();
