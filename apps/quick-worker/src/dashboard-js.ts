@@ -306,20 +306,20 @@ export const DASH_JS = `(() => {
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
       const desc = document.createElement("div");
       desc.append(concept, kind);
-      // A bank is extra context, never the payment method: don't mix them
-      // in the MÉTODO column on narrow mobile screens.
-      if (x.bank_label) {
-        const bank = document.createElement("small");
-        bank.className = "history-bank-detail";
-        bank.textContent = "Banco: " + x.bank_label;
-        desc.appendChild(bank);
-      }
       const method = document.createElement("div");
       method.className = "history-method";
       const methodLabel = document.createElement("strong");
       methodLabel.className = "history-payment-method-label";
       methodLabel.textContent = LABELS[x.payment_method] || "Método sin identificar";
       method.appendChild(methodLabel);
+      // Keep both fields independently labelled, but in the SAME visible
+      // column. The bank below the concept was easy to miss on mobile.
+      if (typeof x.bank_label === "string" && x.bank_label.trim()) {
+        const bank = document.createElement("small");
+        bank.className = "history-bank-detail";
+        bank.textContent = "Banco: " + x.bank_label.trim();
+        method.appendChild(bank);
+      }
       const amount = document.createElement("strong");
       amount.className = "history-amount";
       amount.textContent = (x.kind === "purchase" ? "− " : "↔ ") +
