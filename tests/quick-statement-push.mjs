@@ -86,7 +86,8 @@ assert.equal(sql.prepare("SELECT last_sent_day FROM quick_push_subscriptions").g
 for(const path of ["/statement-import.js","/studio.js"]){
  const js=await handleQuickRequest(new Request(base+path),env,owner(A));
  assert.equal(js.status,200);
- assert.doesNotThrow(()=>new Function(await js.text()),path);
+ const browserCode=await js.text();
+ assert.doesNotThrow(()=>new Function(browserCode),path);
 }
 const html=await (await handleQuickRequest(new Request(base+"/dashboard"),env,owner(A))).text();
 assert.match(html,/import-file/);assert.match(html,/push-test/);
