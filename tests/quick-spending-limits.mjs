@@ -5,7 +5,7 @@ import {handleQuickRequest} from "../dist/apps/quick-worker/src/index.js";
 import {readBudgets} from "../dist/apps/quick-worker/src/spending-limits.js";
 
 const sqlite=new DatabaseSync(":memory:");
-for(const name of ["0001_quick_d1","0003_accountless_shortcut_expenses","0007_spending_limits"]){
+for(const name of ["0001_quick_d1","0003_accountless_shortcut_expenses","0007_spending_limits","0008_movement_edit_soft_delete"]){
  sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+name+".sql",import.meta.url),"utf8"));
 }
 const db={prepare(query){let params=[];return {
