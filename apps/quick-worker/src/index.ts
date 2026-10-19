@@ -12,7 +12,8 @@ import { studioCapabilities } from "./studio-capabilities.js";
 import { readBudgets, writeBudget, BudgetInputError } from "./spending-limits.js";
 import { changeMovement, MovementInputError } from "./movement-edit.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
-import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, PushInputError } from "./push.js";
+import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
+import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -126,16 +127,16 @@ function strictObject(value: unknown, allowed: readonly string[]): JsonRecord {
   }
   return obj;
 }
-async function parseJson(request: Request): Promise<unknown> {
+async function parseJson(request: Request, maxChars=4096): Promise<unknown> {
   if (request.headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
     throw new InputError("Content-Type must be application/json", 415);
   }
   const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (!Number.isFinite(length) || length < 0 || length > 4096) {
+  if (!Number.isFinite(length) || length < 0 || length > maxChars) {
     throw new InputError("Request body exceeds limit", 413);
   }
   const raw = await request.text();
-  if (raw.length > 4096) throw new InputError("Request body exceeds limit", 413);
+  if (raw.length > maxChars) throw new InputError("Request body exceeds limit", 413);
   try { return JSON.parse(raw); } catch { throw new InputError("Invalid JSON"); }
 }
 function requireSameOrigin(request: Request): void {
@@ -321,7 +322,7 @@ export async function handleQuickRequest(
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true") return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
-      const data = await parseJson(request);
+      const data = await parseJson(request, pathname.startsWith("/api/quick/import/")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
       if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
@@ -330,6 +331,9 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
+      if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
+      if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/import/commit") return await commitStatement(env.DB, owner, data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
@@ -359,7 +363,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError || error instanceof StatementInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
