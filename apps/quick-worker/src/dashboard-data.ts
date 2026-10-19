@@ -7,12 +7,12 @@ type AggregateRow = { day: string; payment_method: string; amount_minor: number;
 type MovementRow = {
   id: string; account_id: string | null; amount_minor: number; currency: string;
   payment_method: string; kind: string; occurred_at: string;
-  merchant: string | null; bank_label: string | null;
+  merchant: string | null; bank_label: string | null; revision:number;
 };
-const accountBound = "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label " +
-  "FROM quick_manual_entries WHERE owner_id=?";
-const accountFree = "SELECT id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label " +
-  "FROM quick_shortcut_expenses WHERE owner_id=?";
+const accountBound = "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
+  "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL";
+const accountFree = "SELECT id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
+  "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 const allMovementSql = accountBound + " UNION ALL " + accountFree;
 
 function reply(data: unknown): Response {
@@ -66,7 +66,7 @@ export async function dashboardMovements(db: QuickD1, owner: string, url: URL): 
   const page = Number(raw);
   const size = 40;
   const data = await db.prepare(
-    "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label " +
+    "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
     "FROM (" + allMovementSql + ") ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?",
   ).bind(owner, owner, size + 1, page * size).all<MovementRow>();
   return reply({
