@@ -92,5 +92,31 @@ for(const path of ["/movement-editor.js","/dashboard.js","/studio.js"]){
 const html=await (await handleQuickRequest(new Request(base+"/dashboard"),env,owner(A))).text();
 assert.match(html,/movement-edit-dialog/);
 assert.match(html,/movement-editor.js/);
+
+assert.match(html,/<th>MÉTODO DE PAGO<\/th>/);
+// Regression: bank label must never replace the selected payment method.
+// Exercise the real DOM-building fragment from dashboard.js with representative entries.
+const dashboardJs=await (await handleQuickRequest(new Request(base+"/dashboard.js"),env,owner(A))).text();
+const snippetStart=dashboardJs.indexOf('      const desc = document.createElement("div");');
+const snippetEnd=dashboardJs.indexOf('      const amount = document.createElement("strong");',snippetStart);
+assert.ok(snippetStart>0 && snippetEnd>snippetStart,"Movement rendering fragment exists");
+const renderMethod=new Function("document","LABELS","x","concept","kind",
+  dashboardJs.slice(snippetStart,snippetEnd)+"\nreturn {desc,method};");
+const node=tag=>({tag,children:[],textContent:"",className:"",
+ append(...items){this.children.push(...items);},
+ appendChild(item){this.children.push(item);}});
+const doc={createElement:node};
+const labels={cash:"Efectivo",debit_card:"Tarjeta débito",credit_card:"Tarjeta crédito",
+ bank_transfer:"Transferencia",digital_wallet:"Billetera digital",other:"Otro"};
+for(const [code,name] of Object.entries(labels)){
+ const {desc,method}=renderMethod(doc,labels,{payment_method:code,bank_label:"Bancolombia"},
+   node("div"),node("small"));
+ assert.equal(method.children.length,1,"Method cell must have no bank text");
+ assert.equal(method.children[0].textContent,name,"Method label must show payment type");
+ assert.equal(desc.children[2].textContent,"Banco: Bancolombia","Bank shown only as secondary concept detail");
+}
+const noBank=renderMethod(doc,labels,{payment_method:"cash",bank_label:null},node("div"),node("small"));
+assert.equal(noBank.desc.children.length,2,"No invented bank on cash payments");
+assert.equal(noBank.method.children[0].textContent,"Efectivo");
 console.log("Edit/delete: owner-scoped soft deletion, revisions, ledger totals, UI, CSRF passed");
 sql.close();
