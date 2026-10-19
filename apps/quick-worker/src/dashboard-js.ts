@@ -306,15 +306,20 @@ export const DASH_JS = `(() => {
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
       const desc = document.createElement("div");
       desc.append(concept, kind);
-      const method = document.createElement("div");
-      method.className = "history-method";
-      method.textContent = LABELS[x.payment_method] || "Otro";
+      // A bank is extra context, never the payment method: don't mix them
+      // in the MÉTODO column on narrow mobile screens.
       if (x.bank_label) {
         const bank = document.createElement("small");
-        bank.className = "method-sub";
-        bank.textContent = x.bank_label;
-        method.appendChild(bank);
+        bank.className = "history-bank-detail";
+        bank.textContent = "Banco: " + x.bank_label;
+        desc.appendChild(bank);
       }
+      const method = document.createElement("div");
+      method.className = "history-method";
+      const methodLabel = document.createElement("strong");
+      methodLabel.className = "history-payment-method-label";
+      methodLabel.textContent = LABELS[x.payment_method] || "Método sin identificar";
+      method.appendChild(methodLabel);
       const amount = document.createElement("strong");
       amount.className = "history-amount";
       amount.textContent = (x.kind === "purchase" ? "− " : "↔ ") +
