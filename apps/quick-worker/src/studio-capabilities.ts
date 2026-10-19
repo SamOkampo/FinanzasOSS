@@ -8,7 +8,7 @@ import { motionDurations, premiumMotionPolicy } from "../../../packages/ui/src/m
 const importReadiness = buildSourceOnboarding({
   providerName: "Entidades financieras",
   providerAccessStage: "not_verified",
-  manualImportPreviewAvailable: false, // Import engine not wired to live D1.
+  manualImportPreviewAvailable: true, // Reviewed CSV debits only; not automatic banking.
 });
 export function studioCapabilities(): Response {
   return new Response(JSON.stringify({
@@ -22,7 +22,10 @@ export function studioCapabilities(): Response {
     banks: { connected: 0, automaticSync: false, status: "pending_official_authorization" },
     investments: { connected: 0, actualHoldings: false, status: "awaiting_authorized_sources" },
     imports: {
-      formats: importReadiness.importCard.acceptedFormats,
+      formats: ["CSV"],
+      engineFormatsNotYetLive: importReadiness.importCard.acceptedFormats.filter(x=>x!=="CSV"),
+      maxRowsPerFile:50,
+      requiresExplicitMapping:true,
       liveUpload: importReadiness.importCard.action.enabled,
       previewAndConfirmationRequired: importReadiness.importCard.action.requiresUserConfirmation,
     },

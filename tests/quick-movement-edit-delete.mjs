@@ -5,7 +5,7 @@ import { handleQuickRequest } from "../dist/apps/quick-worker/src/index.js";
 const sql=new DatabaseSync(":memory:");
 for(const n of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortcut_expenses",
   "0004_staging_reset_challenges","0005_scoped_reset_confirmation",
-  "0006_push_subscriptions","0007_spending_limits","0008_movement_edit_soft_delete"]){
+  "0006_push_subscriptions","0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test"]){
  sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+n+".sql",import.meta.url),"utf8"));
 }
 const db={prepare(q){let args=[];return {bind(...v){args=v;return this;},

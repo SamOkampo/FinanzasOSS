@@ -17,6 +17,7 @@ sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0005_scoped_re
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0006_push_subscriptions.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0007_spending_limits.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0008_movement_edit_soft_delete.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0009_push_test.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
@@ -446,7 +447,10 @@ for (const path of ["/studio.js", "/api/quick/studio/capabilities"]) {
     assert.equal(model.banks.connected, 0);
     assert.equal(model.banks.automaticSync, false);
     assert.equal(model.investments.connected, 0);
-    assert.equal(model.imports.liveUpload, false);
+    assert.equal(model.imports.liveUpload, true);
+    assert.deepEqual(model.imports.formats,["CSV"]);
+    assert.equal(model.imports.requiresExplicitMapping,true);
+    assert.equal(model.imports.maxRowsPerFile,50);
     assert.equal(model.quick.accountRequired, false);
     assert.equal(model.pwa.cacheFinancialData, false);
   }

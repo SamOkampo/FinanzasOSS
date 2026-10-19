@@ -9,11 +9,15 @@ on:
       - feature/studio-spending-limits-20261017
       - feature/studio-edit-delete-movements-20261018
       - feature/studio-dark-theme-polish-20261019
+      - feature/studio-push-test-import-csv-20261019
     paths:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
       - packages/finance-core/src/**
       - tests/quick-dark-theme.mjs
+      - tests/quick-statement-push.mjs
+      - tests/quick-cloudflare-d1-e2e.mjs
+      - apps/quick-worker/migrations/**
       - package.json
 
 permissions:
@@ -21,7 +25,7 @@ permissions:
 
 jobs:
   reviewed-staging-bundle:
-    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017' || github.ref == 'refs/heads/feature/studio-edit-delete-movements-20261018' || github.ref == 'refs/heads/feature/studio-dark-theme-polish-20261019'
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017' || github.ref == 'refs/heads/feature/studio-edit-delete-movements-20261018' || github.ref == 'refs/heads/feature/studio-dark-theme-polish-20261019' || github.ref == 'refs/heads/feature/studio-push-test-import-csv-20261019'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
