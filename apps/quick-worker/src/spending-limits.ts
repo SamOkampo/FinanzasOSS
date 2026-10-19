@@ -42,9 +42,9 @@ export async function readBudgets(db:QuickD1,owner:string,now=Date.now()):Promis
       "COALESCE(SUM(CASE WHEN day>=? THEN amount_minor ELSE 0 END),0) AS month_minor,"+
       "COALESCE(SUM(CASE WHEN day>=? THEN amount_minor ELSE 0 END),0) AS year_minor "+
       "FROM (SELECT amount_minor,substr(datetime(occurred_at,'-5 hours'),1,10) AS day "+
-      "FROM quick_manual_entries WHERE owner_id=? AND kind='purchase' AND currency='COP' "+
+      "FROM quick_manual_entries WHERE owner_id=? AND kind='purchase' AND currency='COP' AND deleted_at IS NULL "+
       "UNION ALL SELECT amount_minor,substr(datetime(occurred_at,'-5 hours'),1,10) AS day "+
-      "FROM quick_shortcut_expenses WHERE owner_id=? AND kind='purchase' AND currency='COP') "+
+      "FROM quick_shortcut_expenses WHERE owner_id=? AND kind='purchase' AND currency='COP' AND deleted_at IS NULL) "+
       "WHERE day<=?"
     ).bind(b.day,b.week,b.month,b.year,owner,owner,b.today).first<Totals>(),
   ]);
