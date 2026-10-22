@@ -304,7 +304,7 @@ export async function handleQuickRequest(
     // all routes and data access continue requiring ctx.access identity.
     if (request.method === "GET" && (pathname === "/" || pathname === "/dashboard") &&
         request.headers.get("Accept")?.includes("text/html")) {
-      return respondAsset(
+      const loginPage = respondAsset(
         '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
         '<meta name="viewport" content="width=device-width,initial-scale=1">' +
         '<meta name="theme-color" content="#111b1d"><title>Iniciar sesión · FinanzasOSS</title>' +
@@ -323,6 +323,10 @@ export async function handleQuickRequest(
         '</main></body></html>',
         "text/html"
       );
+      loginPage.headers.set("Content-Security-Policy",
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; " +
+        "form-action 'none'; frame-ancestors 'none'");
+      return loginPage;
     }
     return respond({ error: "Cloudflare Access required" }, 401);
   }
