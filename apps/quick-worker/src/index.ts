@@ -298,7 +298,38 @@ export async function handleQuickRequest(
     catch (error) { return shortcutFailure(error); }
   }
   const owner = await principal(ctx, env);
-  if (!owner) return respond({ error: "Cloudflare Access required" }, 401);
+  if (!owner) {
+    // A browser with an expired Access cookie should see a usable sign-in
+    // page, never a raw JSON error. This does NOT bypass authentication:
+    // all routes and data access continue requiring ctx.access identity.
+    if (request.method === "GET" && (pathname === "/" || pathname === "/dashboard") &&
+        request.headers.get("Accept")?.includes("text/html")) {
+      const loginPage = respondAsset(
+        '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<meta name="theme-color" content="#111b1d"><title>Iniciar sesión · FinanzasOSS</title>' +
+        '<style>body{background:#111b1d;color:#edf1ea;font:16px system-ui,sans-serif;' +
+        'min-height:100dvh;display:grid;place-items:center;margin:0;padding:20px;' +
+        'box-sizing:border-box}main{width:min(100%,400px);padding:32px;' +
+        'background:#1d2c2a;border:1px solid #3c5149;border-radius:16px}' +
+        'h1{font-size:26px;margin:0 0 12px}p{color:#cfddd3;line-height:1.6}' +
+        'a{display:block;background:#d8e7da;color:#19352c;padding:15px 20px;' +
+        'border-radius:8px;text-align:center;font-weight:750;margin-top:24px;' +
+        'text-decoration:none}a:focus-visible{outline:3px solid #e1ae8c;' +
+        'outline-offset:4px}</style></head><body><main><h1>FinanzasOSS</h1>' +
+        '<p>Tu sesión necesita una nueva verificación. Tus gastos y presupuestos siguen guardados.</p>' +
+        '<a href="/cdn-cgi/access/login?redirect_url=%2Fdashboard">' +
+        'Iniciar sesión de forma segura</a><p>Vuelve a abrir FinanzasOSS desde el icono de tu iPhone después de entrar.</p>' +
+        '</main></body></html>',
+        "text/html"
+      );
+      loginPage.headers.set("Content-Security-Policy",
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; " +
+        "form-action 'none'; frame-ancestors 'none'");
+      return loginPage;
+    }
+    return respond({ error: "Cloudflare Access required" }, 401);
+  }
   if (!env.DB) return respond({ error: "Database not configured" }, 503);
   if (request.method === "GET" && isUiPath) {
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
