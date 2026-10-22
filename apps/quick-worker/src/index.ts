@@ -383,6 +383,16 @@ export async function handleQuickRequest(
       }
       if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
+      if (pathname === "/api/quick/profile") {
+        // Cloudflare Access supplies the authenticated identity. Never trust
+        // an email or owner ID from URL parameters, headers or request bodies.
+        const identity = await ctx.access?.getIdentity();
+        if (!identity || typeof identity.email !== "string" ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identity.email)) {
+          return respond({ error: "Authenticated email unavailable" }, 401);
+        }
+        return respond({ email: identity.email, profile: "personal" });
+      }
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
