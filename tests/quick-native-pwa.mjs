@@ -62,7 +62,7 @@ function harness(reducedMotion=false){
   attrs:{},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},
   addEventListener(k,fn){this[k]=fn;}
  }));
- const dom={querySelectorAll(){return controls;}};
+ const dom={querySelectorAll(selector){return selector===".space[data-space]" ? screens.map(x=>ids.get("space-"+x)) : controls;}};
  const studio={dataset:{}};
  const history={replaceState(...args){events.push("url:"+args[2]);}};
  const win={scrollTo(...args){events.push("scroll:"+args.join(","));}};
