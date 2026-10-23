@@ -70,10 +70,10 @@ function harness(reducedMotion=false){
  let active="today",ownReduced=false;
  const initialize=new Function("byId","studio","spaces","active","ownReduced","reduced","document",
   "history","window","names","announce",source+
-  "\nreturn {controls,moreDialog,buttons:byId,readActive:()=>active};");
+  "\nreturn {moreDialog,buttons:byId,readActive:()=>active};");
  const app=initialize(k=>ids.get(k),studio,screens,active,ownReduced,{matches:reducedMotion},
   dom,history,win,Object.fromEntries(screens.map(x=>[x,x.toUpperCase()])),announce);
- return {...app,studio,ids,events};
+ return {...app,studio,ids,events,controls};
 }
 const app=harness();
 const planButton=app.controls.find(x=>x.dataset.view==="plan");
