@@ -95,7 +95,7 @@ export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
    const automatic=validCategory(x.auto_category,x.auto_subcategory);
    const cat=manual?x.category:automatic?x.auto_category:suggestion.category;
    const sub=manual?x.subcategory:automatic?x.auto_subcategory:suggestion.subcategory;
-   if(x.kind==="purchase"&&x.currency==="COP")total.set(cat,(total.get(cat)||0)+x.amount_minor);
+   if(x.kind==="purchase"&&x.currency==="COP")total.set(String(cat),(total.get(String(cat))||0)+x.amount_minor);
    return {id:x.id,source:x.source,day:isoDay(x.occurred_at),concept:x.merchant||"Sin concepto",
     amountCOP:(x.amount_minor/100).toFixed(2),category:cat,subcategory:sub,
     confidence:manual?"confirmada":automatic?(x.auto_confidence??0):suggestion.confidence,
