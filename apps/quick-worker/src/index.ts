@@ -41,6 +41,8 @@ export interface QuickWorkerEnv {
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
   readonly ALLOW_PUSH_SEND?: string;
+  readonly ALLOW_CATEGORY_PUSH_SEND?: string;
+  readonly ALLOW_DAILY_REMINDERS?: string;
   readonly VAPID_PUBLIC_KEY?: string;
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
@@ -464,6 +466,8 @@ export default {
     if(controller.cron!=="30 1 * * *") return;
     try{await runScheduledCategoryBackfill(env);}
     catch{ /* Existing financial reminders must still execute after any AI failure. */ }
-    await sendDailyReminders(env,controller.scheduledTime);
+    // Daily expense reminders are separate from Qwen's opt-in category questions.
+    if(env.ALLOW_DAILY_REMINDERS==="true")
+      await sendDailyReminders(env,controller.scheduledTime);
   },
 };
