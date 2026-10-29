@@ -196,3 +196,27 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
   return reply({processed:enriched.length,pending,remaining:await countRemaining(db,owner),
     aiUsed,aiEnabled:allowAI,quota:"Maximo cinco solicitudes Qwen al dia y por perfil"});
 }
+
+/**
+ * Piggyback on the existing daily cron without creating extra periodic tasks.
+ * Only explicit owner opt-in profiles are scanned. Bound inference to one
+ * batch of eight movements per owner per day, max ten owners per invocation.
+ */
+export async function runScheduledCategoryBackfill(env:QuickWorkerEnv):Promise<{owners:number;processed:number}>{
+ if (!env.DB || env.ALLOW_WRITES!=="true" || env.ALLOW_AI_SUGGESTIONS!=="true" || !env.AI)
+   return {owners:0,processed:0};
+ const owners=await env.DB.prepare(
+   "SELECT owner_id FROM quick_category_ai_settings WHERE enabled=1 ORDER BY updated_at ASC LIMIT 10"
+ ).all<{owner_id:string}>();
+ let processed=0;
+ for(const row of owners.results){
+   try{
+     const result=await runCategoryAutomation(env.DB,row.owner_id,env);
+     if(result.ok){
+       const data=await result.json() as {processed?:number};
+       processed+=Number(data.processed||0);
+     }
+   }catch{ /* Daily reminders continue even if category inference is unavailable. */ }
+ }
+ return {owners:owners.results.length,processed};
+}
