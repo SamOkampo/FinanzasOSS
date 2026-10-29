@@ -403,7 +403,7 @@ export const QUICK_JS = `"use strict";
     try {
       const result = await post("/api/quick/categories/reconcile", {});
       message("category-message", "Qwen revisó " + result.reviewed +
-        " movimientos. " + result.pending + " requieren tu respuesta. Puedes ejecutar otra ronda.");
+        " movimientos. " + result.pending + " requieren tu respuesta. Quedan " + result.remaining + " por revisar; vuelve a pulsar para continuar.");
       await entries();
     } catch (e) {
       message("category-message", "Error al actualizar categorías: " + safe(e), true);
@@ -415,10 +415,12 @@ export const QUICK_JS = `"use strict";
         !("PushManager" in window) || !("Notification" in window)) {
         throw new Error("Las notificaciones push requieren una PWA compatible. En iPhone, agrega la app a la pantalla de inicio.");
       }
+      // iOS requires permission to be requested immediately from a user tap.
+      const permissionPromise = Notification.requestPermission();
       const config = await jsonFetch("/api/quick/push/config");
       if (!config.enabled || !config.publicKey) throw new Error("Falta configurar VAPID en el servidor.");
       const registration = await navigator.serviceWorker.register("/sw.js");
-      const permission = await Notification.requestPermission();
+      const permission = await permissionPromise;
       if (permission !== "granted") throw new Error("No se otorgó permiso para notificaciones.");
       const key = config.publicKey.replace(/-/g, "+").replace(/_/g, "/");
       const raw = atob(key + "=".repeat((4 - key.length % 4) % 4));
