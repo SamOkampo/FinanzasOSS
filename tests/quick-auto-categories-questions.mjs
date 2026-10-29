@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { handleQuickRequest } from "../dist/apps/quick-worker/src/index.js";
 import { sendOwnerCategoryQuestion } from "../dist/apps/quick-worker/src/push.js";
-import { runScheduledCategoryBackfill } from "../dist/apps/quick-worker/src/category-automation.js";
+import { runScheduledCategoryBackfill, runCategoryAutomation } from "../dist/apps/quick-worker/src/category-automation.js";
 
 const sqlite=new DatabaseSync(":memory:");
 for(const file of [
@@ -127,7 +127,7 @@ assert.ok((await call("/api/quick/categories/automation/status")).data.remaining
  sqlite.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,5) "+
  "ON CONFLICT(owner_id,day) DO UPDATE SET hits=5").run(A,new Date().toISOString().slice(0,10));
  const quotaFallback=save(A,"Otro concepto después de cuota");
- const fallbackResponse=await call("/api/quick/categories/automation/run","POST",{});
+ const fallbackResponse=await runCategoryAutomation(db,A,env,{source:"accountless",id:quotaFallback});
  assert.equal(fallbackResponse.status,200);
  const pendingFallback=sqlite.prepare("SELECT classification_source FROM quick_auto_categories WHERE movement_id=?")
    .get(quotaFallback);
