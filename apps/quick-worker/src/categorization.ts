@@ -107,11 +107,12 @@ export async function setCategory(db:QuickD1,owner:string,body:unknown):Promise<
  const stamp=new Date().toISOString();
  await db.prepare("INSERT INTO quick_movement_categories(owner_id,source,movement_id,category,subcategory,classification_source,updated_at) "+
  "VALUES(?,?,?,?,?,'manual',?) ON CONFLICT(owner_id,source,movement_id) DO UPDATE "+
- "SET category=excluded.category,subcategory=excluded.subcategory,classification_source='manual',updated_at=excluded.updated_at")
+ "SET category=excluded.category,subcategory=excluded.subcategory,classification_source='manual',updated_at=excluded.updated_at RETURNING movement_id")
  .bind(owner,source,id,x.category as string,x.subcategory as string,stamp).first();
  return reply({saved:true,source,id,category:x.category,subcategory:x.subcategory});
 }
-const mask=(s:string)=>s.replace(/\b[0-9]{3,}\b/g,"[numero]")
+const mask=(s:string)=>/transferencia|bre-b|nequi|paso plata|pasó plata|daviplata|pago a |a la llave/i.test(s)?
+ "Transferencia a otra persona (destinatario omitido)":s.replace(/\b[0-9]{3,}\b/g,"[numero]")
  .replace(/@[a-z0-9._-]+/gi,"[llave]").replace(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,"[correo]")
  .slice(0,100);
 export async function qwenSuggestions(db:QuickD1,owner:string,env:QuickWorkerEnv,body:unknown):Promise<Response>{
