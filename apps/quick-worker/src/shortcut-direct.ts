@@ -1,3 +1,4 @@
+import { runCategoryAutomation } from "./category-automation.js";
 // Personal iPhone Shortcut endpoint. Deliberately disabled without explicit flags.
 // Requires Cloudflare Access Service Auth at the edge AND a separate, revocable device token.
 import type { QuickD1, QuickWorkerEnv, QuickWorkerContext } from "./index.js";
@@ -140,7 +141,14 @@ export async function shortcutExpense(
   ).bind(await digestToken(token), new Date().toISOString()).first<{ owner_id: string }>();
   if (!row) return reply({ error: "Device authorization expired or revoked" }, 401);
   const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel"]);
-  return saveAccountlessExpense(env.DB, row.owner_id, data);
+  const response=await saveAccountlessExpense(env.DB, row.owner_id, data);
+  if(response.status===201){
+    try{
+      const created=await response.clone().json() as {entryId?:string};
+      if(created.entryId)await runCategoryAutomation(env.DB,row.owner_id,env,{source:"accountless",id:created.entryId});
+    }catch{ /* Never convert successful iPhone Shortcut expense into a retry. */ }
+  }
+  return response;
 }
 
 // The browser flow reuses the SAME append-only write routine as iOS Atajos.

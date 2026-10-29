@@ -2,6 +2,7 @@
 // AI sends only minimized merchant labels after an explicit tap; no amounts,
 // bank details, Access identity, transaction IDs, or full statements leave D1.
 import type {QuickD1,QuickWorkerEnv} from "./index.js";
+import { learnCategory } from "./category-automation.js";
 
 export class CategoryInputError extends Error {
  constructor(message:string,readonly status=422){super(message);}
@@ -22,7 +23,9 @@ export const TAXONOMY={
 type Category=keyof typeof TAXONOMY;
 type Source="manual"|"accountless";
 type Movement={id:string;source:Source;amount_minor:number;currency:string;kind:string;merchant:string|null;payment_method:string;
- occurred_at:string;bank_label:string|null;category:string|null;subcategory:string|null;classification_source:string|null};
+ occurred_at:string;bank_label:string|null;category:string|null;subcategory:string|null;classification_source:string|null;
+ auto_category:string|null;auto_subcategory:string|null;auto_confidence:number|null;
+ auto_needs_review:number|null;auto_question:string|null;auto_source:string|null};
 const EXP=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isoDay=(value:string)=>value.slice(0,10);
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{
@@ -75,32 +78,41 @@ export function ruleCategory(merchant:string):{category:Category;subcategory:str
 const fromEntries="SELECT id,'manual' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL "+
  "UNION ALL SELECT id,'accountless' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 export async function ownerMovements(db:QuickD1,owner:string,limit=500):Promise<Movement[]>{
- const query="SELECT m.id,m.source,m.amount_minor,m.currency,m.kind,m.merchant,m.occurred_at,m.bank_label,m.payment_method,c.category,c.subcategory,c.classification_source "+
+ const query="SELECT m.id,m.source,m.amount_minor,m.currency,m.kind,m.merchant,m.occurred_at,m.bank_label,m.payment_method,c.category,c.subcategory,c.classification_source,"+
+ "a.category AS auto_category,a.subcategory AS auto_subcategory,a.confidence AS auto_confidence,"+
+ "a.needs_review AS auto_needs_review,a.question AS auto_question,a.classification_source AS auto_source "+
  "FROM ("+fromEntries+") m LEFT JOIN quick_movement_categories c ON c.owner_id=? AND c.source=m.source AND c.movement_id=m.id "+
+ "LEFT JOIN quick_auto_categories a ON a.owner_id=? AND a.source=m.source AND a.movement_id=m.id "+
  "ORDER BY m.occurred_at DESC,m.id DESC LIMIT ?";
- const result=await db.prepare(query).bind(owner,owner,owner,limit).all<Movement>();
+ const result=await db.prepare(query).bind(owner,owner,owner,owner,limit).all<Movement>();
  return result.results;
 }
 export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
  const entries=await ownerMovements(db,owner,500);
  const total=new Map<string,number>(),items=entries.map(x=>{
    const suggestion=ruleCategory(x.merchant||"");
-   const cat=validCategory(x.category,x.subcategory)?x.category:suggestion.category;
-   const sub=validCategory(x.category,x.subcategory)?x.subcategory:suggestion.subcategory;
-   if(x.kind==="purchase"&&x.currency==="COP")total.set(cat,(total.get(cat)||0)+x.amount_minor);
+   const manual=validCategory(x.category,x.subcategory);
+   const automatic=validCategory(x.auto_category,x.auto_subcategory);
+   const cat=manual?x.category:automatic?x.auto_category:suggestion.category;
+   const sub=manual?x.subcategory:automatic?x.auto_subcategory:suggestion.subcategory;
+   if(x.kind==="purchase"&&x.currency==="COP")total.set(String(cat),(total.get(String(cat))||0)+x.amount_minor);
    return {id:x.id,source:x.source,day:isoDay(x.occurred_at),concept:x.merchant||"Sin concepto",
     amountCOP:(x.amount_minor/100).toFixed(2),category:cat,subcategory:sub,
-    confidence:x.category?"confirmada":suggestion.confidence,manual:x.classification_source==="manual"};
+    confidence:manual?"confirmada":automatic?(x.auto_confidence??0):suggestion.confidence,
+    manual:x.classification_source==="manual",automatic:automatic?x.auto_source:null,
+    needsReview:manual?false:automatic?x.auto_needs_review===1:suggestion.confidence!=="alta",
+    question:manual?null:automatic?x.auto_question:"¿Qué fue esta compra? Elige la categoría correcta."};
  });
  return reply({taxonomy:TAXONOMY,entries:items,summary:[...total].map(([category,minor])=>({
    category,amountCOP:(minor/100).toFixed(2)})),limitedTo:500,
    notice:"Las reglas son sugerencias: verifica los conceptos antes de aceptar."});
 }
 export async function setCategory(db:QuickD1,owner:string,body:unknown):Promise<Response>{
- const x=origin(body,["source","id","category","subcategory","confirmed"]);
+ const x=origin(body,["source","id","category","subcategory","confirmed","rememberMerchant"]);
  const source=sourceOf(x.source),id=idOf(x.id);
  if(x.confirmed!==true)throw new CategoryInputError("Confirm classification");
  if(!validCategory(x.category,x.subcategory))throw new CategoryInputError("Invalid category or subcategory");
+ if(x.rememberMerchant!==undefined && typeof x.rememberMerchant!=="boolean")throw new CategoryInputError("Invalid merchant preference");
  const table=source==="manual"?"quick_manual_entries":"quick_shortcut_expenses";
  const existing=await db.prepare("SELECT id FROM "+table+" WHERE owner_id=? AND id=? AND deleted_at IS NULL").bind(owner,id).first<{id:string}>();
  if(!existing)return reply({error:"Movement unavailable in this profile"},404);
@@ -109,7 +121,8 @@ export async function setCategory(db:QuickD1,owner:string,body:unknown):Promise<
  "VALUES(?,?,?,?,?,'manual',?) ON CONFLICT(owner_id,source,movement_id) DO UPDATE "+
  "SET category=excluded.category,subcategory=excluded.subcategory,classification_source='manual',updated_at=excluded.updated_at RETURNING movement_id")
  .bind(owner,source,id,x.category as string,x.subcategory as string,stamp).first();
- return reply({saved:true,source,id,category:x.category,subcategory:x.subcategory});
+ if(x.rememberMerchant===true)await learnCategory(db,owner,source,id,x.category,x.subcategory,true);
+ return reply({saved:true,source,id,category:x.category,subcategory:x.subcategory,learned:x.rememberMerchant===true});
 }
 const mask=(s:string)=>/transferencia|bre-b|nequi|paso plata|pasó plata|daviplata|pago a |a la llave/i.test(s)?
  "Transferencia a otra persona (destinatario omitido)":s.replace(/\b[0-9]{3,}\b/g,"[numero]")
