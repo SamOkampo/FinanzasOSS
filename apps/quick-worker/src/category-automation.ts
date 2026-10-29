@@ -139,8 +139,8 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
     const quota=await db.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,1) " +
       "ON CONFLICT(owner_id,day) DO UPDATE SET hits=hits+1 WHERE hits<5 RETURNING hits")
       .bind(owner,day).first<{hits:number}>();
-    if(!quota) return reply({processed:0,pending:0,remaining:await countRemaining(db,owner),
-      quotaExhausted:true,notice:"Se alcanzó el límite diario de Qwen. Las reglas locales siguen mostrando sugerencias; vuelve a actualizar mañana."},429);
+    // Always save a provisional rule-based category when the daily AI quota is exhausted.
+    // No extra model invocation is allowed, but a financial entry still receives metadata.
     if(quota) {
       try {
         const payload=unresolved.map((x,i)=>({index:i,concept:protect(x.movement.merchant||"")}));
