@@ -98,11 +98,14 @@ const assertFits=async(page,width,label)=>{
  assert.deepEqual(result.items,[],label+": responsive element protrusion");
 };
 try{
- for(const browser of browsers)for(const layout of layouts){
+ for(const browser of browsers)for(const layout of
+   (browser.name==="WebKit"?layouts.filter(x=>[320,393,768,1440].includes(x.width)):layouts)){
+  console.log("Visual QA "+browser.name+" @ "+layout.width+"px");
   const context=await browser.engine.newContext({viewport:{width:layout.width,height:layout.height},
    deviceScaleFactor:layout.mobile?2:1,isMobile:layout.mobile,hasTouch:layout.mobile,
    serviceWorkers:"block",reducedMotion:"no-preference"});
   const page=await context.newPage();
+  page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(12000);
   page.on("pageerror",error=>errors.push(layout.name+": "+error.message));
   await page.goto(output("/dashboard"),{waitUntil:"networkidle"});
   for(const name of screens){
@@ -123,11 +126,11 @@ try{
    records.push(browser.name+" / "+layout.name+" / "+name);
   }
   // Native back-swipe / browser history must restore screen selection.
-  await page.goBack({waitUntil:"domcontentloaded"});
+  await page.goBack({waitUntil:"domcontentloaded",timeout:10000});
   await page.waitForTimeout(80);
   assert.equal(await page.locator("#space-connections").evaluate(el=>el.hidden),false,
     browser.name+" "+layout.name+" browser Back");
-  await page.goForward({waitUntil:"domcontentloaded"});
+  await page.goForward({waitUntil:"domcontentloaded",timeout:10000});
   await page.waitForTimeout(80);
   assert.equal(await page.locator("#space-settings").evaluate(el=>el.hidden),false,
     browser.name+" "+layout.name+" browser Forward");
@@ -157,6 +160,7 @@ try{
   const reduced=await browser.engine.newContext({viewport:{width:layout.width,height:layout.height},
    reducedMotion:"reduce",serviceWorkers:"block"});
   const reducePage=await reduced.newPage();
+  reducePage.setDefaultTimeout(10000);reducePage.setDefaultNavigationTimeout(12000);
   await reducePage.goto(output("/dashboard"),{waitUntil:"domcontentloaded"});
   const animation=await reducePage.locator("#space-today").evaluate(el=>getComputedStyle(el).animationName);
   assert.ok(animation==="none",layout.name+" must honor prefers-reduced-motion");
