@@ -2,9 +2,32 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { handleQuickRequest } from "../dist/apps/quick-worker/src/index.js";
+import { categorizeMerchant, protectedDecision, merchantKey } from "../dist/apps/quick-worker/src/category-intelligence.js";
+import { pushEndpoint } from "../dist/apps/quick-worker/src/push-notifications.js";
 
 // Real SQLite with a D1-shaped binding. It does NOT simulate Cloudflare Access
 // middleware, so deployment requires independent Access policy validation.
+// Qwen response validation is tested with stubs; no live AI charges.
+assert.equal(merchantKey("  Uber   EATS "), "uber eats");
+assert.equal(protectedDecision("investment_transfer").category, "investment");
+const confidentAI = { async run(model, input) {
+  assert.match(model, /qwen3/);
+  assert.equal(input.messages[1].content.includes("account"), false);
+  return { response: JSON.stringify({ category: "restaurants", confidence: 0.97, question: "" }) };
+}};
+const uncertainAI = { async run() {
+  return { response: JSON.stringify({ category: "shopping", confidence: 0.45, question: "¿Qué compraste?" }) };
+}};
+const unsafeAI = { async run() {
+  return { response: JSON.stringify({ category: "investment", confidence: 1, question: "" }) };
+}};
+assert.equal((await categorizeMerchant("Restaurante", confidentAI)).category, "restaurants");
+assert.equal((await categorizeMerchant("Comercio ambiguo", uncertainAI)).needsReview, true);
+assert.equal((await categorizeMerchant("Comercio ambiguo", unsafeAI)).category, null);
+assert.equal((await categorizeMerchant("Restaurante", confidentAI, "groceries")).source, "learned");
+assert.throws(() => pushEndpoint("https://attacker.invalid/endpoint-token"), /Unsupported/);
+assert.equal(pushEndpoint("https://web.push.apple.com/QAAAAAAAAAA"), "https://web.push.apple.com/QAAAAAAAAAA");
+
 const sql = readFileSync(
   new URL("../apps/quick-worker/migrations/0001_quick_d1.sql", import.meta.url), "utf8",
 );
