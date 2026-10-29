@@ -149,7 +149,7 @@ assert.equal((await call("/api/quick/categories/answer","POST",{
 const pair=await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
 const key=await crypto.subtle.exportKey("jwk",pair.privateKey);
 const publicBytes=new Uint8Array(await crypto.subtle.exportKey("raw",pair.publicKey));
-const pushEnv={...env,ALLOW_PUSH_SUBSCRIPTIONS:"true",ALLOW_PUSH_SEND:"true",
+const pushEnv={...env,ALLOW_PUSH_SUBSCRIPTIONS:"true",ALLOW_CATEGORY_PUSH_SEND:"true",ALLOW_PUSH_SEND:"false",
  VAPID_PUBLIC_KEY:Buffer.from(publicBytes).toString("base64url"),
  VAPID_PRIVATE_JWK:JSON.stringify(key),VAPID_SUBJECT:"mailto:tests@example.invalid"};
 const endpoint="https://web.push.apple.com/"+ "a".repeat(60);
