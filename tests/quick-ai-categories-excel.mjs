@@ -114,6 +114,6 @@ assert.equal(anonymous.status,401);
 const page=await (await call("/dashboard")).text();
 assert.match(page,/id="categories-list"/);assert.match(page,/Exportar Excel/);
 const js=await call("/insights.js");
-assert.equal(js.status,200);assert.doesNotThrow(()=>new Function(await js.text()));
+assert.equal(js.status,200);const code=await js.text();assert.doesNotThrow(()=>new Function(code));
 console.log("Qwen consent/redaction/quotas, isolated categories and valid owner-specific XLSX: OK");
 sql.close();
