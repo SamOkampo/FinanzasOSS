@@ -32,3 +32,10 @@ ALLOW_PUSH_SEND = "false"
 # Add only after end-to-end physical verification and explicit opt-in.
 # [triggers]
 # crons = ["30 1 * * *"]
+
+# AI classification uses Qwen only after the human confirms each model request.
+# Enabling Workers AI incurs usage charges. Keep off unless consent + tests pass.
+# [ai]
+# binding = "AI"
+# ALLOW_AI_SUGGESTIONS = "false" (encrypted or plain_text binding, default off)
+# Google Sheets automatic sync requires a separate Google OAuth flow per profile.

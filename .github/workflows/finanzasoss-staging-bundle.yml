@@ -13,6 +13,7 @@ on:
       - fix/studio-access-login-recovery-20261022
       - feature/studio-second-private-profile-20261022
       - feature/studio-native-pwa-layout-motion-20261023
+      - feature/studio-qwen-categories-excel-20261028
     paths:
       - .github/workflows/finanzasoss-staging-bundle.yml
       - apps/quick-worker/src/**
@@ -21,6 +22,7 @@ on:
       - tests/quick-statement-push.mjs
       - tests/quick-access-login-recovery.mjs
       - tests/quick-native-pwa.mjs
+      - tests/quick-ai-categories-excel.mjs
       - tests/quick-cloudflare-d1-e2e.mjs
       - apps/quick-worker/migrations/**
       - package.json
@@ -30,7 +32,7 @@ permissions:
 
 jobs:
   reviewed-staging-bundle:
-    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017' || github.ref == 'refs/heads/feature/studio-edit-delete-movements-20261018' || github.ref == 'refs/heads/feature/studio-dark-theme-polish-20261019' || github.ref == 'refs/heads/feature/studio-push-test-import-csv-20261019' || github.ref == 'refs/heads/fix/studio-access-login-recovery-20261022' || github.ref == 'refs/heads/feature/studio-second-private-profile-20261022' || github.ref == 'refs/heads/feature/studio-native-pwa-layout-motion-20261023'
+    if: github.ref == 'refs/heads/feature/quick-iphone-direct-expense' || github.ref == 'refs/heads/feature/finanzasoss-unified-studio' || github.ref == 'refs/heads/feature/studio-mobile-web-push-20261017' || github.ref == 'refs/heads/feature/studio-spending-limits-20261017' || github.ref == 'refs/heads/feature/studio-edit-delete-movements-20261018' || github.ref == 'refs/heads/feature/studio-dark-theme-polish-20261019' || github.ref == 'refs/heads/feature/studio-push-test-import-csv-20261019' || github.ref == 'refs/heads/fix/studio-access-login-recovery-20261022' || github.ref == 'refs/heads/feature/studio-second-private-profile-20261022' || github.ref == 'refs/heads/feature/studio-native-pwa-layout-motion-20261023' || github.ref == 'refs/heads/feature/studio-qwen-categories-excel-20261028'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
