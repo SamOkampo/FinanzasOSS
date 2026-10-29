@@ -1,5 +1,12 @@
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
+import {
+  categorizeMerchant, isExpenseCategory, merchantKey, protectedDecision,
+  type AIBinding, type CategoryDecision, type ExpenseCategory,
+} from "./category-intelligence.js";
+import {
+  PUSH_SW, pushEnabled, pushEndpoint, sendCategoryPush, type PushConfig,
+} from "./push-notifications.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -11,8 +18,9 @@ interface PreparedStatement {
 export interface QuickD1 {
   prepare(query: string): PreparedStatement;
 }
-export interface QuickWorkerEnv {
+export interface QuickWorkerEnv extends PushConfig {
   readonly DB: QuickD1;
+  readonly AI?: AIBinding;
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
 }
@@ -31,6 +39,8 @@ type ManualEntry = {
   id: string; account_id: string; client_entry_id: string; amount_minor: number; currency: string;
   payment_method: string; kind: string; occurred_at: string; merchant: string | null;
   bank_label: string | null; created_at: string;
+  category?: string | null; category_source?: string | null;
+  needs_review?: number | null; question?: string | null;
 };
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
@@ -177,13 +187,128 @@ async function createAccount(db: QuickD1, owner: string, body: unknown): Promise
 }
 async function listEntries(db: QuickD1, owner: string): Promise<Response> {
   const data = await db.prepare(
-    "SELECT id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at," +
-    "merchant,bank_label,created_at FROM quick_manual_entries WHERE owner_id=? " +
-    "ORDER BY occurred_at DESC,id DESC LIMIT 100",
+    "SELECT e.id,e.account_id,e.client_entry_id,e.amount_minor,e.currency,e.payment_method," +
+    "e.kind,e.occurred_at,e.merchant,e.bank_label,e.created_at," +
+    "c.category,c.source AS category_source,c.needs_review,c.question " +
+    "FROM quick_manual_entries e LEFT JOIN quick_entry_categories c " +
+    "ON c.entry_id=e.id AND c.owner_id=e.owner_id WHERE e.owner_id=? " +
+    "ORDER BY e.occurred_at DESC,e.id DESC LIMIT 100",
   ).bind(owner).all<ManualEntry>();
-  return respond({ entries: data.results.map((x) => ({ ...x, amount_minor: String(x.amount_minor) })) });
+  return respond({ entries: data.results.map(x => ({ ...x, amount_minor: String(x.amount_minor) })) });
 }
-async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+
+async function categorizeEntry(
+  db: QuickD1, owner: string, entry: Pick<ManualEntry,"id"|"kind"|"merchant">,
+  env: QuickWorkerEnv,
+): Promise<CategoryDecision> {
+  let result = protectedDecision(entry.kind);
+  if (!result) {
+    const key = merchantKey(entry.merchant);
+    const learned = key ? await db.prepare(
+      "SELECT category FROM quick_category_preferences WHERE owner_id=? AND merchant_key=?",
+    ).bind(owner, key).first<{ category: ExpenseCategory }>() : null;
+    result = await categorizeMerchant(entry.merchant, env.AI, learned?.category);
+  }
+  // A user's explicit correction is authoritative even if the AI finished late.
+  await db.prepare(
+    "INSERT INTO quick_entry_categories(entry_id,owner_id,category,source,confidence,needs_review,question) " +
+    "VALUES(?,?,?,?,?,?,?) ON CONFLICT(entry_id) DO UPDATE SET " +
+    "category=excluded.category,source=excluded.source,confidence=excluded.confidence," +
+    "needs_review=excluded.needs_review,question=excluded.question," +
+    "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') " +
+    "WHERE quick_entry_categories.owner_id=excluded.owner_id AND quick_entry_categories.source!='user' " +
+    "RETURNING entry_id",
+  ).bind(entry.id, owner, result.category, result.source, result.confidence,
+    result.needsReview ? 1 : 0, result.question).first<{ entry_id: string }>();
+  return result;
+}
+
+async function notifyCategoryQuestion(db: QuickD1, owner: string, env: QuickWorkerEnv): Promise<void> {
+  if (!pushEnabled(env)) return;
+  const subscriptions = await db.prepare(
+    "SELECT endpoint FROM quick_push_subscriptions WHERE owner_id=? ORDER BY created_at DESC LIMIT 3",
+  ).bind(owner).all<{ endpoint: string }>();
+  await Promise.allSettled(subscriptions.results.map(s => sendCategoryPush(env, s.endpoint)));
+}
+
+async function reviewCategory(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+  const data = strictObject(body, ["entryId","category","applyToMerchant"]);
+  const id = mustUuid(data.entryId, "entryId");
+  if (!isExpenseCategory(data.category)) throw new InputError("Invalid expense category");
+  if (data.applyToMerchant !== undefined && typeof data.applyToMerchant !== "boolean") {
+    throw new InputError("Invalid merchant preference");
+  }
+  const existing = await db.prepare(
+    "SELECT id,kind,merchant FROM quick_manual_entries WHERE id=? AND owner_id=?",
+  ).bind(id, owner).first<Pick<ManualEntry,"id"|"kind"|"merchant">>();
+  if (!existing) return respond({ error: "Entry unavailable" }, 404);
+  if (existing.kind !== "purchase") return respond({ error: "Protected transfers cannot be recategorized" }, 409);
+  await db.prepare(
+    "INSERT INTO quick_entry_categories(entry_id,owner_id,category,source,confidence,needs_review,question) " +
+    "VALUES(?,?,?,'user',1,0,NULL) ON CONFLICT(entry_id) DO UPDATE SET " +
+    "category=excluded.category,source='user',confidence=1,needs_review=0,question=NULL," +
+    "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') " +
+    "WHERE quick_entry_categories.owner_id=excluded.owner_id RETURNING entry_id",
+  ).bind(id, owner, data.category).first<{ entry_id: string }>();
+  const key = merchantKey(existing.merchant);
+  if (data.applyToMerchant && key) {
+    await db.prepare(
+      "INSERT INTO quick_category_preferences(owner_id,merchant_key,category) VALUES(?,?,?) " +
+      "ON CONFLICT(owner_id,merchant_key) DO UPDATE SET category=excluded.category," +
+      "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') RETURNING owner_id",
+    ).bind(owner, key, data.category).first<{ owner_id: string }>();
+    // Reconcile earlier entries from the same exact concept; preserve explicit corrections.
+    await db.prepare(
+      "INSERT INTO quick_entry_categories(entry_id,owner_id,category,source,confidence,needs_review,question) " +
+      "SELECT e.id,e.owner_id,?,'learned',1,0,NULL FROM quick_manual_entries e " +
+      "WHERE e.owner_id=? AND e.kind='purchase' AND lower(trim(e.merchant))=? " +
+      "ON CONFLICT(entry_id) DO UPDATE SET category=excluded.category,source='learned',confidence=1," +
+      "needs_review=0,question=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') " +
+      "WHERE quick_entry_categories.source!='user' RETURNING entry_id",
+    ).bind(data.category, owner, key).all<{ entry_id: string }>();
+  }
+  return respond({ updated: true, category: data.category, learnedMerchant: Boolean(data.applyToMerchant && key) });
+}
+
+async function reconcileCategories(db: QuickD1, owner: string, env: QuickWorkerEnv): Promise<Response> {
+  // Recheck a small batch; never touch manually confirmed classification or financial facts.
+  const entries = await db.prepare(
+    "SELECT e.id,e.kind,e.merchant FROM quick_manual_entries e " +
+    "LEFT JOIN quick_entry_categories c ON c.entry_id=e.id AND c.owner_id=e.owner_id " +
+    "WHERE e.owner_id=? AND (c.entry_id IS NULL OR c.source NOT IN ('user','protected','learned')) " +
+    "ORDER BY e.occurred_at DESC LIMIT 10",
+  ).bind(owner).all<Pick<ManualEntry,"id"|"kind"|"merchant">>();
+  let reviewed = 0, pending = 0;
+  for (const entry of entries.results) {
+    const result = await categorizeEntry(db, owner, entry, env);
+    reviewed++;
+    if (result.needsReview) pending++;
+  }
+  if (pending) await notifyCategoryQuestion(db, owner, env);
+  return respond({ reviewed, pending, batchLimit: 10 });
+}
+
+async function subscribePush(db: QuickD1, owner: string, body: unknown, env: QuickWorkerEnv): Promise<Response> {
+  if (!pushEnabled(env)) return respond({ error: "Push not configured" }, 503);
+  const data = strictObject(body, ["endpoint"]);
+  let endpoint: string;
+  try { endpoint = pushEndpoint(data.endpoint); } catch { throw new InputError("Invalid push subscription"); }
+  await db.prepare(
+    "INSERT INTO quick_push_subscriptions(owner_id,endpoint) VALUES(?,?) " +
+    "ON CONFLICT(owner_id,endpoint) DO NOTHING RETURNING owner_id",
+  ).bind(owner, endpoint).first<{ owner_id: string }>();
+  return respond({ subscribed: true });
+}
+async function unsubscribePush(db: QuickD1, owner: string, body: unknown): Promise<Response> {
+  const data = strictObject(body, ["endpoint"]);
+  let endpoint: string;
+  try { endpoint = pushEndpoint(data.endpoint); } catch { throw new InputError("Invalid push subscription"); }
+  await db.prepare(
+    "DELETE FROM quick_push_subscriptions WHERE owner_id=? AND endpoint=? RETURNING owner_id",
+  ).bind(owner, endpoint).first<{ owner_id: string }>();
+  return respond({ unsubscribed: true });
+}
+async function confirmEntry(db: QuickD1, owner: string, body: unknown, env: QuickWorkerEnv): Promise<Response> {
   const data = strictObject(body, [
     "accountId", "clientEntryId", "amount", "currency", "paymentMethod", "classification",
     "occurredAt", "merchant", "bankLabel", "confirmed",
@@ -233,7 +358,16 @@ async function confirmEntry(db: QuickD1, owner: string, body: unknown): Promise<
     draft.money.currency, draft.paymentMethod, draft.kind, draft.occurredAt,
     draft.merchant, draft.bankLabel,
   ).first<{ id: string }>();
-  if (inserted) return respond({ entryId: inserted.id, replayed: false }, 201);
+  if (inserted) {
+    // Classification metadata is separate from immutable transaction facts.
+    try {
+      const decision = await categorizeEntry(db, owner, {
+        id: inserted.id, kind: draft.kind, merchant: draft.merchant,
+      }, env);
+      if (decision.needsReview) await notifyCategoryQuestion(db, owner, env);
+    } catch { /* The successful financial save must not become an ambiguous retry. */ }
+    return respond({ entryId: inserted.id, replayed: false }, 201);
+  }
   const prior = await db.prepare(
     "SELECT id,account_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label " +
     "FROM quick_manual_entries WHERE owner_id=? AND client_entry_id=?",
@@ -255,7 +389,8 @@ export async function handleQuickRequest(
   if (pathname === "/healthz" && request.method === "GET") {
     return respond({ status: "ok", service: "finanzasoss-quick-staging", writesConfigured: env.ALLOW_WRITES === "true" });
   }
-  const isUiPath = pathname === "/" || pathname === "/quick.css" || pathname === "/quick.js";
+  const isUiPath = pathname === "/" || pathname === "/quick.css" ||
+    pathname === "/quick.js" || pathname === "/sw.js" || pathname === "/manifest.webmanifest";
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
   }
@@ -265,7 +400,12 @@ export async function handleQuickRequest(
   if (request.method === "GET" && isUiPath) {
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
-    return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
+    if (pathname === "/sw.js") return respondAsset(PUSH_SW, "application/javascript");
+    return respondAsset(JSON.stringify({
+      name: "FinanzasOSS", short_name: "FinanzasOSS", start_url: "/",
+      scope: "/", display: "standalone", background_color: "#f4f3f0", theme_color: "#111c25",
+    }), "application/manifest+json");
   }
   try {
     if (request.method === "POST") {
@@ -273,10 +413,17 @@ export async function handleQuickRequest(
       requireSameOrigin(request);
       const data = await parseJson(request);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
-      if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
+      if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data, env);
+      if (pathname === "/api/quick/categories/review") return await reviewCategory(env.DB, owner, data);
+      if (pathname === "/api/quick/categories/reconcile") return await reconcileCategories(env.DB, owner, env);
+      if (pathname === "/api/quick/push/subscribe") return await subscribePush(env.DB, owner, data, env);
+      if (pathname === "/api/quick/push/unsubscribe") return await unsubscribePush(env.DB, owner, data);
     } else if (request.method === "GET") {
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
+      if (pathname === "/api/quick/push/config") return respond({
+        enabled: pushEnabled(env), publicKey: pushEnabled(env) ? env.VAPID_PUBLIC_KEY : null,
+      });
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
