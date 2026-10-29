@@ -19,3 +19,13 @@ binding = "DB"
 database_name = "finanzasoss-staging"
 database_id = "REPLACE_WITH_NEW_D1_DATABASE_ID"
 migrations_dir = "migrations"
+
+# Optional, server-side Qwen inference. Never put model API keys in the PWA.
+[ai]
+binding = "AI"
+
+# Web Push is off until all three values below are configured privately.
+# VAPID_PUBLIC_KEY is public, VAPID_PRIVATE_KEY must be a Worker secret.
+# Use a valid contact e.g. mailto:security@your-domain; do not commit real keys.
+# wrangler secret put VAPID_PRIVATE_KEY
+# Set VAPID_PUBLIC_KEY and VAPID_SUBJECT as Worker environment variables.
