@@ -66,7 +66,7 @@ function respond(body: unknown, status = 200): Response {
 
 function respondAsset(body: string, mediaType: string): Response {
   const csp = mediaType === "text/html"
-    ? "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ? "default-src 'none'; script-src 'self'; worker-src 'self'; manifest-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     : "default-src 'none'; frame-ancestors 'none'";
   return new Response(body, {
     status: 200,
