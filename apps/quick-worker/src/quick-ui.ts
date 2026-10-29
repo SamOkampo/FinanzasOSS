@@ -7,6 +7,7 @@ export const QUICK_HTML = `<!doctype html>
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Quick · FinanzasOSS</title>
 <link rel="stylesheet" href="/quick.css">
+<link rel="manifest" href="/manifest.webmanifest">
 <script src="/quick.js" defer></script>
 </head><body>
 <main class="shell">
@@ -45,6 +46,16 @@ export const QUICK_HTML = `<!doctype html>
   <section class="history" aria-labelledby="history-title">
     <div class="panel-title"><div><div class="eyebrow">03 / HISTORIAL</div><h2 id="history-title">Últimos registros</h2></div><button id="refresh" class="mini" type="button">Actualizar ↻</button></div>
     <div class="history-body" id="history-body"><div class="empty">Consultando D1...</div></div>
+  </section>
+  <section class="panel" id="questions" aria-labelledby="questions-title">
+    <div class="panel-title"><div><div class="eyebrow">04 / INTELIGENCIA</div><h2 id="questions-title">Preguntas de Qwen</h2></div></div>
+    <p class="subline">Cuando Qwen no está seguro de una compra, te pregunta a ti. Tus respuestas tienen prioridad.</p>
+    <div id="questions-body" aria-live="polite"></div>
+    <div class="category-actions">
+      <button type="button" class="secondary" id="reconcile-categories">Actualizar categorías del historial</button>
+      <button type="button" class="secondary" id="push-button">Activar notificaciones</button>
+    </div>
+    <div id="category-message" class="feedback" role="status" aria-live="polite"></div>
   </section>
   <footer>FINANZASOSS / QUICK · PRUEBA DE ALMACENAMIENTO · SIN MOVIMIENTOS BANCARIOS</footer>
 </main>
@@ -197,11 +208,76 @@ export const QUICK_JS = `"use strict";
       buttonEntry.disabled = true;
     }
   }
+  const CATEGORY_LABELS = {
+    groceries:"Mercado", restaurants:"Restaurantes", transport:"Transporte",
+    housing:"Vivienda", utilities:"Servicios", health:"Salud",
+    education:"Educación", entertainment:"Entretenimiento", shopping:"Compras",
+    travel:"Viajes", fees:"Comisiones", taxes:"Impuestos", other:"Otros",
+    transfer:"Transferencia", investment:"Inversión"
+  };
+  const EXPENSE_CATEGORIES = [
+    "groceries","restaurants","transport","housing","utilities","health","education",
+    "entertainment","shopping","travel","fees","taxes","other"
+  ];
+  function renderCategoryQuestions(items) {
+    const root = get("questions-body");
+    root.replaceChildren();
+    const pending = items.filter(item => item.kind === "purchase" &&
+      (item.needs_review === 1 || !item.category));
+    if (!pending.length) {
+      const empty = document.createElement("p");
+      empty.className = "subline";
+      empty.textContent = "No tienes preguntas pendientes entre los movimientos mostrados.";
+      root.append(empty);
+      return;
+    }
+    for (const item of pending) {
+      const wrap = document.createElement("div");
+      wrap.className = "category-question";
+      const question = document.createElement("p");
+      question.textContent = (item.question || "¿Qué tipo de compra fue?") +
+        " — " + (item.merchant || "Movimiento sin concepto");
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "Categoría correcta del movimiento");
+      select.add(new Option("Elige una categoría...", ""));
+      for (const category of EXPENSE_CATEGORIES) select.add(new Option(CATEGORY_LABELS[category], category));
+      const preference = document.createElement("input");
+      preference.type = "checkbox";
+      preference.checked = false;
+      const label = document.createElement("label");
+      label.className = "category-preference";
+      label.append(preference, document.createTextNode(" Recordar para este comercio"));
+      if (!item.merchant) label.hidden = true;
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "secondary";
+      confirm.textContent = "Confirmar categoría";
+      confirm.addEventListener("click", async () => {
+        if (!select.value) {
+          message("category-message", "Selecciona primero la categoría correcta.", true);
+          return;
+        }
+        confirm.disabled = true;
+        try {
+          await post("/api/quick/categories/review", {
+            entryId: item.id, category: select.value, applyToMerchant: preference.checked,
+          });
+          message("category-message", "Categoría corregida. Qwen respetará tu decisión.");
+          await entries();
+        } catch (e) {
+          message("category-message", "No se pudo guardar la respuesta: " + safe(e), true);
+        } finally { confirm.disabled = false; }
+      });
+      wrap.append(question, select, label, confirm);
+      root.append(wrap);
+    }
+  }
   async function entries() {
     try {
       const data = await jsonFetch("/api/quick/entries");
       const list = get("history-body");
       list.replaceChildren();
+      renderCategoryQuestions(Array.isArray(data.entries) ? data.entries : []);
       if (!data.entries || data.entries.length === 0) {
         const placeholder = document.createElement("div");
         placeholder.className = "empty";
@@ -222,7 +298,9 @@ export const QUICK_JS = `"use strict";
         const movementKind = item.kind === "investment_transfer"
           ? "APORTE A INVERSIÓN" : item.kind === "transfer"
             ? "TRANSFERENCIA PROPIA" : "GASTO";
-        meta.textContent = movementKind + " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " + (account ? account.label : "Cuenta manual") + (item.bank_label ? " · " + item.bank_label : "");
+        meta.textContent = movementKind + " · " + (CATEGORY_LABELS[item.category] || "Por identificar") +
+          " · " + new Date(item.occurred_at).toLocaleDateString("es-CO") + " · " +
+          (account ? account.label : "Cuenta manual") + (item.bank_label ? " · " + item.bank_label : "");
         left.append(concept, meta);
         const amount = document.createElement("div");
         amount.className = "entry-amount";
@@ -318,8 +396,47 @@ export const QUICK_JS = `"use strict";
   get("method").addEventListener("change", updateBankField);
   updateBankField();
   get("refresh").addEventListener("click", () => void entries());
+  get("reconcile-categories").addEventListener("click", async () => {
+    const button = get("reconcile-categories");
+    if (!state.writes) return;
+    button.disabled = true;
+    try {
+      const result = await post("/api/quick/categories/reconcile", {});
+      message("category-message", "Qwen revisó " + result.reviewed +
+        " movimientos. " + result.pending + " requieren tu respuesta. Puedes ejecutar otra ronda.");
+      await entries();
+    } catch (e) {
+      message("category-message", "Error al actualizar categorías: " + safe(e), true);
+    } finally { button.disabled = false; }
+  });
+  get("push-button").addEventListener("click", async () => {
+    try {
+      if (typeof navigator === "undefined" || !("serviceWorker" in navigator) ||
+        !("PushManager" in window) || !("Notification" in window)) {
+        throw new Error("Las notificaciones push requieren una PWA compatible. En iPhone, agrega la app a la pantalla de inicio.");
+      }
+      const config = await jsonFetch("/api/quick/push/config");
+      if (!config.enabled || !config.publicKey) throw new Error("Falta configurar VAPID en el servidor.");
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") throw new Error("No se otorgó permiso para notificaciones.");
+      const key = config.publicKey.replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(key + "=".repeat((4 - key.length % 4) % 4));
+      const applicationServerKey = Uint8Array.from(raw, c => c.charCodeAt(0));
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey
+      });
+      await post("/api/quick/push/subscribe", { endpoint: subscription.endpoint });
+      message("category-message", "Notificaciones activadas. Recibirás un aviso privado cuando Qwen necesite una aclaración.");
+      get("push-button").textContent = "Notificaciones activadas";
+    } catch (e) {
+      message("category-message", "No se activaron las notificaciones: " + safe(e), true);
+    }
+  });
   get("account").addEventListener("change", () => {
     buttonEntry.disabled = !state.writes || !get("account").value;
   });
   void (async () => { await health(); await accounts(); applyShortcutDraft(); await entries(); })();
 })();`;
+
+// Category question form and opt-in notifications only; no automatic notification permission prompts.
