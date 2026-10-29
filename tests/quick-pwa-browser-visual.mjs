@@ -11,11 +11,13 @@ import {BUDGET_JS} from "../dist/apps/quick-worker/src/dashboard-budgets-js.js";
 import {MOVEMENT_EDITOR_JS} from "../dist/apps/quick-worker/src/dashboard-movement-editor-js.js";
 import {IMPORT_JS} from "../dist/apps/quick-worker/src/dashboard-import-js.js";
 import {INSIGHTS_JS} from "../dist/apps/quick-worker/src/dashboard-insights-js.js";
+import {DEVICE_QA_JS} from "../dist/apps/quick-worker/src/dashboard-device-qa-js.js";
 const assets={
  "/dashboard":DASH_HTML,"/dashboard.css":DASH_CSS,"/dashboard.js":DASH_JS,
  "/studio.js":STUDIO_JS,"/budgets.js":BUDGET_JS,
  "/movement-editor.js":MOVEMENT_EDITOR_JS,"/statement-import.js":IMPORT_JS,
  "/insights.js":INSIGHTS_JS,
+ "/device-qa.js":DEVICE_QA_JS,
 };
 const entries=[
  {id:"aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa",account_id:null,amount_minor:"129000",
@@ -140,6 +142,33 @@ try{
     browser.name+" "+layout.name+" dark theme");
   await assertFits(page,layout.width,browser.name+" "+layout.name+" dark settings");
   await page.locator("#theme-setting").click();
+  // The on-device diagnostic must scan every section without changing
+  // the active view, polluting browser history, or collecting private data.
+  if(layout.width===393){
+   const previousHash=await page.evaluate(()=>location.hash);
+   const urlBefore=page.url();
+   const dialogOpen=await page.evaluate(()=>[...document.querySelectorAll("dialog")].some(x=>x.open));
+   assert.equal(dialogOpen,false);
+   await page.locator("#qa-run").click();
+   await page.locator("#qa-report").waitFor({state:"attached"});
+   const safeReport=await page.locator("#qa-report").inputValue();
+   const parsed=JSON.parse(safeReport);
+   assert.equal(parsed.result.sectionsInspected,8);
+   assert.equal(parsed.screens.length,8);
+   assert.equal(parsed.result.sectionsWithPossibleOverflow,0,
+    browser.name+" diagnostic unexpected overflow "+safeReport);
+   assert.equal(parsed.device.viewportCSSpx.width,layout.width);
+   for(const secret of ["Refrigerio","Daviplata","test@example.invalid","129000","3000000"])
+    assert.equal(safeReport.includes(secret),false,"Diagnostic disclosed private data");
+   assert.equal(page.url(),urlBefore);
+   assert.equal(await page.evaluate(()=>location.hash),previousHash);
+   assert.equal(await page.locator("#space-settings").evaluate(el=>el.hidden),false);
+   assert.equal(await page.locator("#qa-copy").isDisabled(),false);
+   await page.locator("#qa-keyboard-input").focus();
+   await page.locator("#qa-keyboard-input").fill("prueba");
+   assert.equal(await page.locator("#qa-keyboard-input").inputValue(),"prueba");
+   await assertFits(page,layout.width,browser.name+" QA diagnostic");
+  }
   // Reset dialog must fit even at 320px; no reset action or server write.
   await page.locator("#reset-open").click();
   assert.equal(await page.locator("#reset-dialog").evaluate(el=>el.open),true);
