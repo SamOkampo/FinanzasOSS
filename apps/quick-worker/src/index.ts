@@ -261,11 +261,11 @@ async function reviewCategory(db: QuickD1, owner: string, body: unknown): Promis
     await db.prepare(
       "INSERT INTO quick_entry_categories(entry_id,owner_id,category,source,confidence,needs_review,question) " +
       "SELECT e.id,e.owner_id,?,'learned',1,0,NULL FROM quick_manual_entries e " +
-      "WHERE e.owner_id=? AND e.kind='purchase' AND lower(trim(e.merchant))=? " +
+      "WHERE e.owner_id=? AND e.kind='purchase' AND (e.merchant=? OR lower(trim(e.merchant))=?) " +
       "ON CONFLICT(entry_id) DO UPDATE SET category=excluded.category,source='learned',confidence=1," +
       "needs_review=0,question=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') " +
       "WHERE quick_entry_categories.source!='user' RETURNING entry_id",
-    ).bind(data.category, owner, key).all<{ entry_id: string }>();
+    ).bind(data.category, owner, existing.merchant, key).all<{ entry_id: string }>();
   }
   return respond({ updated: true, category: data.category, learnedMerchant: Boolean(data.applyToMerchant && key) });
 }
@@ -275,7 +275,7 @@ async function reconcileCategories(db: QuickD1, owner: string, env: QuickWorkerE
   const entries = await db.prepare(
     "SELECT e.id,e.kind,e.merchant FROM quick_manual_entries e " +
     "LEFT JOIN quick_entry_categories c ON c.entry_id=e.id AND c.owner_id=e.owner_id " +
-    "WHERE e.owner_id=? AND (c.entry_id IS NULL OR c.source NOT IN ('user','protected','learned')) " +
+    "WHERE e.owner_id=? AND c.entry_id IS NULL " +
     "ORDER BY e.occurred_at DESC LIMIT 10",
   ).bind(owner).all<Pick<ManualEntry,"id"|"kind"|"merchant">>();
   let reviewed = 0, pending = 0;
@@ -285,7 +285,12 @@ async function reconcileCategories(db: QuickD1, owner: string, env: QuickWorkerE
     if (result.needsReview) pending++;
   }
   if (pending) await notifyCategoryQuestion(db, owner, env);
-  return respond({ reviewed, pending, batchLimit: 10 });
+  const remaining = await db.prepare(
+    "SELECT COUNT(*) AS total FROM quick_manual_entries e " +
+    "LEFT JOIN quick_entry_categories c ON c.entry_id=e.id AND c.owner_id=e.owner_id " +
+    "WHERE e.owner_id=? AND c.entry_id IS NULL",
+  ).bind(owner).first<{total:number}>();
+  return respond({ reviewed, pending, remaining: remaining?.total ?? 0, batchLimit: 10 });
 }
 
 async function subscribePush(db: QuickD1, owner: string, body: unknown, env: QuickWorkerEnv): Promise<Response> {
