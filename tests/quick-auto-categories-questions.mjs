@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { handleQuickRequest } from "../dist/apps/quick-worker/src/index.js";
 import { sendOwnerCategoryQuestion } from "../dist/apps/quick-worker/src/push.js";
+import { runScheduledCategoryBackfill } from "../dist/apps/quick-worker/src/category-automation.js";
 
 const sqlite=new DatabaseSync(":memory:");
 for(const file of [
@@ -103,6 +104,24 @@ assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_category_preference
 const manual=(await call("/api/quick/categories")).data.entries.find(x=>x.id===ambiguous);
 assert.equal(manual.category,"Compras");
 assert.equal(manual.subcategory,"Tecnología");
+
+// Existing daily Worker cron must advance opted-in historical batches only.
+for(let i=0;i<17;i++)save(A,"Revisión automática comercio "+i);
+const beforeCron=aiCalls;
+const firstCron=await runScheduledCategoryBackfill(env);
+assert.equal(firstCron.owners,1);
+assert.equal(firstCron.processed,8);
+assert.equal(aiCalls,beforeCron+1);
+assert.ok((await call("/api/quick/categories/automation/status")).data.remaining>=9);
+assert.equal((await runScheduledCategoryBackfill({...env,ALLOW_AI_SUGGESTIONS:"false"})).processed,0);
+const browser=await call("/api/quick/studio/expense","POST",{
+ clientEntryId:"auto-browser-synthetic-000001",amount:"12000",concept:"Comercio QR sin descripción",
+ paymentMethod:"cash",bankLabel:null,confirmed:true
+});
+assert.equal(browser.status,201);
+assert.equal(browser.data.replayed,false);
+assert.ok(sqlite.prepare("SELECT movement_id FROM quick_auto_categories WHERE movement_id=?")
+ .get(browser.data.entryId),"A newly created Studio movement should be categorized immediately");
 
 const pair=await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
 const key=await crypto.subtle.exportKey("jwk",pair.privateKey);
