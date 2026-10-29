@@ -2154,7 +2154,12 @@ dialog[open]{touch-action:pan-y}
   // only single-finger horizontal navigation starting outside interactive elements.
   let touchStart = null;
   studio.addEventListener("touchstart",(event)=>{
-    if (event.touches.length!==1 || event.target.closest("button,a,input,select,dialog,table,.chart-wrap")) {touchStart=null;return;}
+    // Never treat a swipe over a chart, editor, scrollable list or control
+    // as page navigation; these areas keep native touch/scroll behavior.
+    const interactive=event.target.closest(
+      "button,a,input,select,textarea,dialog,table,.chart-wrap,.table-scroll,"+
+      ".period-strip,.import-review-list,.category-list,.history-toolbar,[role=slider]");
+    if(event.touches.length!==1||interactive){touchStart=null;return;}
     touchStart={x:event.touches[0].clientX,y:event.touches[0].clientY};
   },{passive:true});
   studio.addEventListener("touchend",(event)=>{
@@ -2162,12 +2167,13 @@ dialog[open]{touch-action:pan-y}
     const dx=event.changedTouches[0].clientX-touchStart.x;
     const dy=event.changedTouches[0].clientY-touchStart.y;
     touchStart=null;
-    if (Math.abs(dx)<64 || Math.abs(dx)<Math.abs(dy)*1.25) return;
+    if (Math.abs(dx)<Math.max(92,innerWidth*.23) || Math.abs(dx)<Math.abs(dy)*1.6) return;
     const order=["today","movement","portfolio","plan","map"];
     const index=order.indexOf(active);
     const next=order[index+(dx<0?1:-1)];
     if (index>=0 && next) switchTo(next);
   },{passive:true});
+  studio.addEventListener("touchcancel",()=>{touchStart=null;},{passive:true});
   function applyPrivacyToNewNodes() {
     if(privateMode) setPrivacy(true);
   }
