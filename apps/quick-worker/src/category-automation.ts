@@ -29,6 +29,16 @@ const pendingChoice = (merchant: string | null): Choice => {
     question: certain ? null : "¿Qué fue esta compra? Elige la categoría correcta." };
 };
 const pickRows = async (db: QuickD1, owner: string, limit: number, one?: {source:Source; id:string}) => {
+  if (one) {
+    const table=one.source==="manual"?"quick_manual_entries":"quick_shortcut_expenses";
+    const rows=await db.prepare(
+      "SELECT e.id,? AS source,e.kind,e.merchant,e.occurred_at FROM "+table+" e " +
+      "LEFT JOIN quick_movement_categories c ON c.owner_id=e.owner_id AND c.source=? AND c.movement_id=e.id " +
+      "LEFT JOIN quick_auto_categories a ON a.owner_id=e.owner_id AND a.source=? AND a.movement_id=e.id " +
+      "WHERE e.owner_id=? AND e.id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND a.movement_id IS NULL LIMIT 1"
+    ).bind(one.source,one.source,one.source,owner,one.id).all<Movement>();
+    return rows.results;
+  }
   // Scan all active records, not just the 500 most recent. Manual edits ALWAYS take priority.
   const query =
     "SELECT e.id,'manual' AS source,e.kind,e.merchant,e.occurred_at FROM quick_manual_entries e " +
@@ -41,9 +51,7 @@ const pickRows = async (db: QuickD1, owner: string, limit: number, one?: {source
     "WHERE e.owner_id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND a.movement_id IS NULL " +
     "ORDER BY occurred_at DESC,id DESC LIMIT ?";
   const selected = await db.prepare(query).bind(owner,owner,Math.min(limit,8)).all<Movement>();
-  if (!one) return selected.results;
-  // A newly confirmed row can have an older posted date.
-  return selected.results.filter(x=>x.id===one.id && x.source===one.source);
+  return selected.results;
 };
 async function countRemaining(db: QuickD1, owner: string): Promise<number> {
   const sql = "SELECT " +
@@ -131,6 +139,8 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
     const quota=await db.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,1) " +
       "ON CONFLICT(owner_id,day) DO UPDATE SET hits=hits+1 WHERE hits<5 RETURNING hits")
       .bind(owner,day).first<{hits:number}>();
+    if(!quota) return reply({processed:0,pending:0,remaining:await countRemaining(db,owner),
+      quotaExhausted:true,notice:"Se alcanzó el límite diario de Qwen. Las reglas locales siguen mostrando sugerencias; vuelve a actualizar mañana."},429);
     if(quota) {
       try {
         const payload=unresolved.map((x,i)=>({index:i,concept:protect(x.movement.merchant||"")}));
