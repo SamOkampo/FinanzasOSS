@@ -141,7 +141,7 @@ assert.equal(answered.data.category,"Alimentación");
 assert.equal(sqlite.prepare("SELECT needs_review FROM quick_auto_categories WHERE movement_id=?").get(explained).needs_review,0);
 assert.equal((await call("/api/quick/categories/answer","POST",{
  source:"accountless",id:explained,answer:"otra explicación",confirmed:true
-},B)).status,404);
+},B)).status,403);
 assert.equal((await call("/api/quick/categories/answer","POST",{
  source:"accountless",id:explained,answer:"otra explicación",confirmed:false
 })).status,422);
