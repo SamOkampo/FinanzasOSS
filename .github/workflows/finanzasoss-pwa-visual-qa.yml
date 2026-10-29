@@ -1,0 +1,37 @@
+name: FinanzasOSS Native PWA Visual QA
+
+on:
+  push:
+    branches:
+      - feature/studio-native-mobile-qa-20261028
+    paths:
+      - .github/workflows/finanzasoss-pwa-visual-qa.yml
+      - apps/quick-worker/src/**
+      - tests/quick-pwa-browser-visual.mjs
+      - tests/quick-native-pwa.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-viewport-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Build typed Worker frontend with repository dependencies
+        run: |
+          npm install -g typescript@5.8.3
+          npm run lint
+          npm run typecheck
+          npm run build
+      - name: Install isolated browser QA tooling
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --fund=false playwright@1.58.2
+          npx playwright install --with-deps chromium webkit
+      - name: Exercise eight sections at seven screen sizes with synthetic data
+        run: node tests/quick-pwa-browser-visual.mjs

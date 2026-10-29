@@ -64,15 +64,16 @@ function harness(reducedMotion=false){
  }));
  const dom={querySelectorAll(selector){return selector===".space[data-space]" ? screens.map(x=>ids.get("space-"+x)) : controls;}};
  const studio={dataset:{}};
- const history={replaceState(...args){events.push("url:"+args[2]);}};
+ const location={hash:""};
+ const history={pushState(...args){location.hash=args[2];events.push("url:"+args[2]);}};
  const win={scrollTo(...args){events.push("scroll:"+args.join(","));}};
  const announce=text=>events.push("announce:"+text);
  let active="today",ownReduced=false;
  const initialize=new Function("byId","studio","spaces","active","ownReduced","reduced","document",
-  "history","window","names","announce",source+
+  "history","window","names","announce","location",source+
   "\nreturn {moreDialog,buttons:byId,readActive:()=>active};");
  const app=initialize(k=>ids.get(k),studio,screens,active,ownReduced,{matches:reducedMotion},
-  dom,history,win,Object.fromEntries(screens.map(x=>[x,x.toUpperCase()])),announce);
+  dom,history,win,Object.fromEntries(screens.map(x=>[x,x.toUpperCase()])),announce,location);
  return {...app,studio,ids,events,controls};
 }
 const app=harness();
