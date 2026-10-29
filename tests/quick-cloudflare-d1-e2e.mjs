@@ -242,7 +242,8 @@ const another = await call("/api/quick/entries", "POST", {
   ...aEntry, clientEntryId: "quick-charge-00000002", merchant: "Almuerzo",
 });
 assert.equal(another.status, 201);
-const repeated = (await call("/api/quick/entries")).body.entries[0];
+const repeated = (await call("/api/quick/entries")).body.entries.find(x => x.id === another.body.entryId);
+assert.ok(repeated);
 assert.equal(repeated.category, "restaurants");
 assert.equal(repeated.category_source, "learned");
 assert.equal((await call("/api/quick/push/config")).body.enabled, false);
