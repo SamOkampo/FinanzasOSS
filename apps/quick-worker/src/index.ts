@@ -16,7 +16,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
-import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill } from "./category-automation.js";
+import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -401,6 +401,8 @@ export async function handleQuickRequest(
         return await setCategoryAutomation(env.DB,owner,data);
       if (pathname === "/api/quick/categories/automation/run")
         return await runCategoryAutomation(env.DB,owner,env);
+      if (pathname === "/api/quick/categories/answer")
+        return await answerCategoryQuestion(env.DB,owner,env,data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
