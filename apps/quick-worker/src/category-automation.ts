@@ -28,15 +28,23 @@ const pendingChoice = (merchant: string | null): Choice => {
     confidence: certain ? 0.91 : 0.3,
     question: certain ? null : "¿Qué fue esta compra? Elige la categoría correcta." };
 };
-const pickRows = async (db: QuickD1, owner: string, limit: number, one?: {source:Source; id:string}) => {
+const pickRows = async (
+  db: QuickD1, owner: string, limit: number, allowAI: boolean,
+  one?: {source:Source; id:string},
+) => {
+  // Rule-only fallbacks (including purchases saved before opting in) are retried
+  // at most once per UTC day when inference is consented and available.
+  const cutoff = new Date().toISOString().slice(0,10)+"T00:00:00.000Z";
+  const eligible = "a.movement_id IS NULL" +
+    (allowAI ? " OR (a.classification_source='rules' AND a.updated_at<?)" : "");
   if (one) {
     const table=one.source==="manual"?"quick_manual_entries":"quick_shortcut_expenses";
     const rows=await db.prepare(
       "SELECT e.id,? AS source,e.kind,e.merchant,e.occurred_at FROM "+table+" e " +
       "LEFT JOIN quick_movement_categories c ON c.owner_id=e.owner_id AND c.source=? AND c.movement_id=e.id " +
       "LEFT JOIN quick_auto_categories a ON a.owner_id=e.owner_id AND a.source=? AND a.movement_id=e.id " +
-      "WHERE e.owner_id=? AND e.id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND a.movement_id IS NULL LIMIT 1"
-    ).bind(one.source,one.source,one.source,owner,one.id).all<Movement>();
+      "WHERE e.owner_id=? AND e.id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND ("+eligible+") LIMIT 1"
+    ).bind(one.source,one.source,one.source,owner,one.id,...(allowAI?[cutoff]:[])).all<Movement>();
     return rows.results;
   }
   // Scan all active records, not just the 500 most recent. Manual edits ALWAYS take priority.
@@ -44,13 +52,15 @@ const pickRows = async (db: QuickD1, owner: string, limit: number, one?: {source
     "SELECT e.id,'manual' AS source,e.kind,e.merchant,e.occurred_at FROM quick_manual_entries e " +
     "LEFT JOIN quick_movement_categories c ON c.owner_id=e.owner_id AND c.source='manual' AND c.movement_id=e.id " +
     "LEFT JOIN quick_auto_categories a ON a.owner_id=e.owner_id AND a.source='manual' AND a.movement_id=e.id " +
-    "WHERE e.owner_id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND a.movement_id IS NULL " +
+    "WHERE e.owner_id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND ("+eligible+") " +
     "UNION ALL SELECT e.id,'accountless' AS source,e.kind,e.merchant,e.occurred_at FROM quick_shortcut_expenses e " +
     "LEFT JOIN quick_movement_categories c ON c.owner_id=e.owner_id AND c.source='accountless' AND c.movement_id=e.id " +
     "LEFT JOIN quick_auto_categories a ON a.owner_id=e.owner_id AND a.source='accountless' AND a.movement_id=e.id " +
-    "WHERE e.owner_id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND a.movement_id IS NULL " +
+    "WHERE e.owner_id=? AND e.deleted_at IS NULL AND c.movement_id IS NULL AND ("+eligible+") " +
     "ORDER BY occurred_at DESC,id DESC LIMIT ?";
-  const selected = await db.prepare(query).bind(owner,owner,Math.min(limit,8)).all<Movement>();
+  const args = allowAI ? [owner,cutoff,owner,cutoff,Math.min(limit,8)] :
+    [owner,owner,Math.min(limit,8)];
+  const selected = await db.prepare(query).bind(...args).all<Movement>();
   return selected.results;
 };
 async function countRemaining(db: QuickD1, owner: string): Promise<number> {
@@ -115,9 +125,9 @@ export async function learnCategory(
 }
 export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWorkerEnv,
   one?:{source:Source;id:string}): Promise<Response> {
-  const entries=await pickRows(db,owner,8,one);
-  if (!entries.length) return reply({processed:0,pending:0,remaining:await countRemaining(db,owner)});
   const allowAI=env.ALLOW_AI_SUGGESTIONS==="true" && Boolean(env.AI) && await optedIn(db,owner);
+  const entries=await pickRows(db,owner,8,allowAI,one);
+  if (!entries.length) return reply({processed:0,pending:0,remaining:await countRemaining(db,owner)});
   const enriched: Array<{ movement:Movement; decision:Choice; origin:"rules"|"learned"|"protected"|"qwen" }>=[];
   for (const movement of entries) {
     if(movement.kind!=="purchase") {
@@ -179,7 +189,13 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
     if(needsReview)pending++;
     await db.prepare(
       "INSERT INTO quick_auto_categories(owner_id,source,movement_id,category,subcategory,confidence,needs_review,question,classification_source,updated_at) " +
-      "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,source,movement_id) DO NOTHING RETURNING movement_id",
+      "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,source,movement_id) DO UPDATE SET " +
+      "category=excluded.category,subcategory=excluded.subcategory,confidence=excluded.confidence," +
+      "needs_review=excluded.needs_review,question=excluded.question," +
+      "classification_source=excluded.classification_source,updated_at=excluded.updated_at " +
+      "WHERE quick_auto_categories.classification_source='rules' " +
+      "AND NOT EXISTS(SELECT 1 FROM quick_movement_categories c WHERE c.owner_id=excluded.owner_id " +
+      "AND c.source=excluded.source AND c.movement_id=excluded.movement_id) RETURNING movement_id",
     ).bind(owner,item.movement.source,item.movement.id,item.decision.category,item.decision.subcategory,
       item.decision.confidence,needsReview?1:0,item.decision.question,item.origin,
       new Date().toISOString()).first();
