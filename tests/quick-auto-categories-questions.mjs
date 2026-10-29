@@ -123,16 +123,6 @@ assert.equal(firstCron.owners,1);
 assert.equal(firstCron.processed,8);
 assert.equal(aiCalls,beforeCron+1);
 assert.ok((await call("/api/quick/categories/automation/status")).data.remaining>=9);
- // Exhaust AI daily quota: fallback must be stored, not lost.
- sqlite.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,5) "+
- "ON CONFLICT(owner_id,day) DO UPDATE SET hits=5").run(A,new Date().toISOString().slice(0,10));
- const quotaFallback=save(A,"Otro concepto después de cuota");
- const fallbackResponse=await runCategoryAutomation(db,A,env,{source:"accountless",id:quotaFallback});
- assert.equal(fallbackResponse.status,200);
- const pendingFallback=sqlite.prepare("SELECT classification_source FROM quick_auto_categories WHERE movement_id=?")
-   .get(quotaFallback);
- assert.ok(pendingFallback,"new items must get a category even when AI quota is exhausted");
- assert.equal(pendingFallback.classification_source,"rules");
 
 assert.equal((await runScheduledCategoryBackfill({...env,ALLOW_AI_SUGGESTIONS:"false"})).processed,0);
 const browser=await call("/api/quick/studio/expense","POST",{
@@ -181,5 +171,16 @@ const push=await sendOwnerCategoryQuestion(db,A,pushEnv,Date.now(),async (url,op
 assert.equal(push.accepted,1);
 assert.equal(pushes,1);
 assert.equal((await sendOwnerCategoryQuestion(db,B,pushEnv,Date.now(),async()=>{throw Error("leak") })).accepted,0);
+ // Exhaust AI daily quota: fallback must be stored, not lost.
+ sqlite.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,5) "+
+ "ON CONFLICT(owner_id,day) DO UPDATE SET hits=5").run(A,new Date().toISOString().slice(0,10));
+ const quotaFallback=save(A,"Otro concepto después de cuota");
+ const fallbackResponse=await runCategoryAutomation(db,A,env,{source:"accountless",id:quotaFallback});
+ assert.equal(fallbackResponse.status,200);
+ const pendingFallback=sqlite.prepare("SELECT classification_source FROM quick_auto_categories WHERE movement_id=?")
+   .get(quotaFallback);
+ assert.ok(pendingFallback,"new items must get a category even when AI quota is exhausted");
+ assert.equal(pendingFallback.classification_source,"rules");
+
 sqlite.close();
 console.log("FinanzasOSS Studio: auto Qwen, human feedback, merchant memory, owner isolation, safe push PASSED");
