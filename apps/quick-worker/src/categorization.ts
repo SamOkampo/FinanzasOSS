@@ -21,7 +21,7 @@ export const TAXONOMY={
 } as const;
 type Category=keyof typeof TAXONOMY;
 type Source="manual"|"accountless";
-type Movement={id:string;source:Source;amount_minor:number;currency:string;kind:string;merchant:string|null;
+type Movement={id:string;source:Source;amount_minor:number;currency:string;kind:string;merchant:string|null;payment_method:string;
  occurred_at:string;bank_label:string|null;category:string|null;subcategory:string|null;classification_source:string|null};
 const EXP=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isoDay=(value:string)=>value.slice(0,10);
@@ -72,10 +72,10 @@ export function ruleCategory(merchant:string):{category:Category;subcategory:str
    return {category:"Pagos y transferencias",subcategory:"Pagos a terceros",confidence:"baja"};
  return {category:"Otros",subcategory:"Por revisar",confidence:"baja"};
 }
-const fromEntries="SELECT id,'manual' source,amount_minor,currency,kind,merchant,occurred_at,bank_label FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL "+
- "UNION ALL SELECT id,'accountless' source,amount_minor,currency,kind,merchant,occurred_at,bank_label FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
+const fromEntries="SELECT id,'manual' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL "+
+ "UNION ALL SELECT id,'accountless' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 export async function ownerMovements(db:QuickD1,owner:string,limit=500):Promise<Movement[]>{
- const query="SELECT m.id,m.source,m.amount_minor,m.currency,m.kind,m.merchant,m.occurred_at,m.bank_label,c.category,c.subcategory,c.classification_source "+
+ const query="SELECT m.id,m.source,m.amount_minor,m.currency,m.kind,m.merchant,m.occurred_at,m.bank_label,m.payment_method,c.category,c.subcategory,c.classification_source "+
  "FROM ("+fromEntries+") m LEFT JOIN quick_movement_categories c ON c.owner_id=? AND c.source=m.source AND c.movement_id=m.id "+
  "ORDER BY m.occurred_at DESC,m.id DESC LIMIT ?";
  const result=await db.prepare(query).bind(owner,owner,owner,limit).all<Movement>();
