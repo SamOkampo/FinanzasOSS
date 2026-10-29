@@ -15,6 +15,9 @@ import { changeMovement, MovementInputError } from "./movement-edit.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
+import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
+import { excelExport } from "./excel-export.js";
+import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -39,6 +42,8 @@ export interface QuickWorkerEnv {
   readonly VAPID_PUBLIC_KEY?: string;
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
+  readonly ALLOW_AI_SUGGESTIONS?: string;
+  readonly AI?: {run(model:string,input:{messages:{role:string;content:string}[];max_tokens:number;temperature:number;stream:boolean}):Promise<unknown>};
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -287,7 +292,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/budgets.js", "/movement-editor.js", "/statement-import.js",
+    "/dashboard-sw.js", "/studio.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -342,6 +347,7 @@ export async function handleQuickRequest(
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
+    if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
     if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
@@ -367,6 +373,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
       if (pathname === "/api/quick/import/commit") return await commitStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/categories/set") return await setCategory(env.DB, owner, data);
+      if (pathname === "/api/quick/ai/suggest") return await qwenSuggestions(env.DB, owner, env, data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
@@ -396,6 +404,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/categories") return await categoryReview(env.DB, owner);
+      if (pathname === "/api/quick/export.xlsx") return await excelExport(env.DB, owner);
       if (pathname === "/api/quick/budgets") return await readBudgets(env.DB, owner);
       if (pathname === "/api/quick/studio/capabilities") return studioCapabilities();
       if (pathname === "/api/quick/push/config") return pushConfig(env);
@@ -406,7 +416,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError || error instanceof StatementInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
