@@ -19,7 +19,7 @@ self.addEventListener("notificationclick", event => {
 function b64url(bytes: Uint8Array): string {
   let str = "";
   for (const value of bytes) str += String.fromCharCode(value);
-  return btoa(str).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(str).replace(/[+]/g, "-").replace(/[/]/g, "_").replace(/=+$/g, "");
 }
 function decode(value: string): Uint8Array {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid VAPID key");
