@@ -169,7 +169,7 @@ export async function sendOwnerTestPush(
 export async function sendOwnerCategoryQuestion(
  db:QuickD1,owner:string,env:QuickWorkerEnv,now=Date.now(),send:typeof fetch=fetch,
 ):Promise<{accepted:number;configured:boolean}>{
- if(!enabled(env)||env.ALLOW_PUSH_SEND!=="true")return {accepted:0,configured:false};
+ if(!enabled(env)||env.ALLOW_CATEGORY_PUSH_SEND!=="true")return {accepted:0,configured:false};
  const devices=await db.prepare(
   "SELECT endpoint_hash,endpoint FROM quick_push_subscriptions WHERE owner_id=? ORDER BY created_at DESC LIMIT 5"
  ).bind(owner).all<{endpoint_hash:string;endpoint:string}>();
