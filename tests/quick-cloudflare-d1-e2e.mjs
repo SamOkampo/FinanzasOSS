@@ -10,6 +10,7 @@ const sql = readFileSync(
 );
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(sql);
+sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/0002_categories_feedback_push.sql", import.meta.url), "utf8"));
 const db = {
   prepare(query) {
     let args = [];
@@ -168,6 +169,8 @@ assert.equal(aListed.body.entries[0].amount_minor, "2500050");
 assert.equal(aListed.body.entries[0].kind, "purchase");
 assert.equal(aListed.body.entries[0].bank_label, "Banco de prueba");
 assert.equal(aListed.body.entries[0].source, undefined);
+assert.equal(aListed.body.entries[0].needs_review, 1);
+assert.equal(aListed.body.entries[0].category, null);
 assert.equal(aListed.headers.get("Cache-Control"), "no-store, private");
 assert.equal((await call("/api/quick/entries", "GET", undefined, B)).body.entries.length, 0);
 
@@ -192,5 +195,36 @@ assert.throws(() => sqlite.prepare(
   " VALUES(?,?,?,?,?,?,?,?,?)",
 ).run("fake", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", aAccount, "fake-unique-000001", 1, "COP", "cash", "purchase", entry.occurredAt), /FOREIGN KEY/);
 
-console.log("Cloudflare Quick D1: SQLite + Worker E2E isolation, CSRF and idempotency passed");
+// User feedback must persist across reclassification and not leak between tenants.
+assert.equal((await call("/api/quick/categories/review", "POST", {
+  entryId: saved.body.entryId, category: "restaurants", applyToMerchant: true,
+}, B)).status, 404);
+assert.equal((await call("/api/quick/categories/review", "POST", {
+  entryId: bSaved.body.entryId, category: "restaurants",
+}, B)).status, 409, "transfers protected");
+assert.equal((await call("/api/quick/categories/review", "POST", {
+  entryId: saved.body.entryId, category: "fake", applyToMerchant: true,
+})).status, 422);
+const corrected = await call("/api/quick/categories/review", "POST", {
+  entryId: saved.body.entryId, category: "restaurants", applyToMerchant: true,
+});
+assert.equal(corrected.status, 200);
+assert.equal(corrected.body.learnedMerchant, true);
+assert.equal((await call("/api/quick/entries")).body.entries[0].category, "restaurants");
+assert.equal((await call("/api/quick/entries")).body.entries[0].category_source, "user");
+assert.equal((await call("/api/quick/categories/reconcile", "POST", {})).status, 200);
+assert.equal((await call("/api/quick/entries")).body.entries[0].category, "restaurants");
+// A new matching merchant reuses explicit learning, but other tenants do not.
+const another = await call("/api/quick/entries", "POST", {
+  ...aEntry, clientEntryId: "quick-charge-00000002", merchant: "Almuerzo",
+});
+assert.equal(another.status, 201);
+const repeated = (await call("/api/quick/entries")).body.entries[0];
+assert.equal(repeated.category, "restaurants");
+assert.equal(repeated.category_source, "learned");
+assert.equal((await call("/api/quick/push/config")).body.enabled, false);
+assert.equal((await call("/api/quick/push/subscribe", "POST", {
+  endpoint: "https://evil.example/secret",
+})).status, 503);
+console.log("Cloudflare Quick D1: isolation, idempotency, Qwen feedback, learning and protected transfers passed");
 sqlite.close();
