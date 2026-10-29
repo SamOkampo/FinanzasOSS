@@ -62,6 +62,10 @@ assert.equal(ruleOnly.data.processed,1);
 assert.equal(aiCalls,0,"Qwen never runs without owner consent");
 const savedRule=sqlite.prepare("SELECT needs_review FROM quick_auto_categories WHERE movement_id=?").get(first);
 assert.equal(savedRule.needs_review,1);
+// Move the provisional rule to yesterday so the next opted-in Qwen pass can retry it.
+sqlite.prepare("UPDATE quick_auto_categories SET updated_at=? WHERE movement_id=?")
+ .run("2026-10-27T12:00:00.000Z",first);
+
 
 assert.equal((await call("/api/quick/categories/automation/setting","POST",
  {enabled:true,confirmed:true})).data.enabled,true);
@@ -71,7 +75,9 @@ const certain=save(A,"Comida de prueba");
 const otherTenant=save(B,"AMBIGUA comercio sin detalle");
 const classified=await call("/api/quick/categories/automation/run","POST",{});
 assert.equal(classified.status,200);
-assert.equal(classified.data.processed,2);
+assert.equal(classified.data.processed,3);
+assert.equal(sqlite.prepare("SELECT classification_source FROM quick_auto_categories WHERE movement_id=?")
+ .get(first).classification_source,"qwen","previous rule-only categorization must be revisited");
 assert.equal(classified.data.aiUsed,true);
 assert.equal(aiCalls,1);
 assert.ok(!aiText.includes(A) && !aiText.includes(B));
@@ -117,6 +123,17 @@ assert.equal(firstCron.owners,1);
 assert.equal(firstCron.processed,8);
 assert.equal(aiCalls,beforeCron+1);
 assert.ok((await call("/api/quick/categories/automation/status")).data.remaining>=9);
+ // Exhaust AI daily quota: fallback must be stored, not lost.
+ sqlite.prepare("INSERT INTO quick_ai_daily_quotas(owner_id,day,hits) VALUES(?,?,5) "+
+ "ON CONFLICT(owner_id,day) DO UPDATE SET hits=5").run(A,new Date().toISOString().slice(0,10));
+ const quotaFallback=save(A,"Otro concepto después de cuota");
+ const fallbackResponse=await call("/api/quick/categories/automation/run","POST",{});
+ assert.equal(fallbackResponse.status,200);
+ const pendingFallback=sqlite.prepare("SELECT classification_source FROM quick_auto_categories WHERE movement_id=?")
+   .get(quotaFallback);
+ assert.ok(pendingFallback,"new items must get a category even when AI quota is exhausted");
+ assert.equal(pendingFallback.classification_source,"rules");
+
 assert.equal((await runScheduledCategoryBackfill({...env,ALLOW_AI_SUGGESTIONS:"false"})).processed,0);
 const browser=await call("/api/quick/studio/expense","POST",{
  clientEntryId:"auto-browser-synthetic-000001",amount:"12000",concept:"Comercio QR sin descripción",
