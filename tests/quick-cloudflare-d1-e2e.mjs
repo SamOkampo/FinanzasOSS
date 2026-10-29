@@ -250,5 +250,24 @@ assert.equal((await call("/api/quick/push/config")).body.enabled, false);
 assert.equal((await call("/api/quick/push/subscribe", "POST", {
   endpoint: "https://evil.example/secret",
 })).status, 503);
+// Legacy purchases without metadata are reconciled in *advancing* batches.
+const legacyInsert = sqlite.prepare(
+  "INSERT INTO quick_manual_entries(id,owner_id,account_id,client_entry_id,amount_minor," +
+  "currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+);
+for (let i = 0; i < 23; i++) {
+  legacyInsert.run(crypto.randomUUID(), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    aAccount, "old-purchase-000" + i, 1500, "COP", "cash", "purchase",
+    "2025-01-01T00:00:00.000Z", "Café de prueba", null);
+}
+for (const remaining of [13,3,0]) {
+  const response = await call("/api/quick/categories/reconcile", "POST", {});
+  assert.equal(response.status, 200);
+  assert.equal(response.body.remaining, remaining);
+  assert.equal(response.body.reviewed, remaining === 3 ? 10 : remaining === 0 ? 3 : 10);
+}
+assert.equal(sqlite.prepare(
+  "SELECT COUNT(*) AS n FROM quick_entry_categories WHERE owner_id=? AND category='restaurants'",
+).get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").n, 25);
 console.log("Cloudflare Quick D1: isolation, idempotency, Qwen feedback, learning and protected transfers passed");
 sqlite.close();
