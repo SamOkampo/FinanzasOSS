@@ -26,6 +26,10 @@ const env={DB:db,ACCESS_AUD:"test-category-auto",ALLOW_WRITES:"true",ALLOW_AI_SU
    assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");
    aiCalls++;aiText=JSON.stringify(input);
    const parsed=JSON.parse(input.messages[1].content);
+   if(parsed.clarification){
+     assert.ok(!parsed.clarification.includes("12345"),"Qwen must not see long numbers from answers");
+     return {response:JSON.stringify({category:"Alimentación",subcategory:"Restaurantes",confidence:0.95})};
+   }
    return {response:JSON.stringify({suggestions:parsed.movements.map((m,i)=>({
       index:i,category:"Alimentación",subcategory:"Restaurantes",
       confidence:m.concept.includes("AMBIGUA")?0.41:0.96,question:"¿Qué fue esta compra?"
@@ -122,6 +126,25 @@ assert.equal(browser.status,201);
 assert.equal(browser.data.replayed,false);
 assert.ok(sqlite.prepare("SELECT movement_id FROM quick_auto_categories WHERE movement_id=?")
  .get(browser.data.entryId),"A newly created Studio movement should be categorized immediately");
+
+// Qwen should accept plain-language explanations as answers to push questions.
+const explained=save(A,"AMBIGUA café sin detalle");
+const pending=await call("/api/quick/categories/automation/run","POST",{});
+assert.equal(pending.status,200);
+const answered=await call("/api/quick/categories/answer","POST",{
+ source:"accountless",id:explained,answer:"fue un almuerzo con amigos 12345",
+ confirmed:true,rememberMerchant:true,
+});
+assert.equal(answered.status,200);
+assert.equal(answered.data.resolved,true);
+assert.equal(answered.data.category,"Alimentación");
+assert.equal(sqlite.prepare("SELECT needs_review FROM quick_auto_categories WHERE movement_id=?").get(explained).needs_review,0);
+assert.equal((await call("/api/quick/categories/answer","POST",{
+ source:"accountless",id:explained,answer:"otra explicación",confirmed:true
+},B)).status,404);
+assert.equal((await call("/api/quick/categories/answer","POST",{
+ source:"accountless",id:explained,answer:"otra explicación",confirmed:false
+})).status,422);
 
 const pair=await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
 const key=await crypto.subtle.exportKey("jwk",pair.privateKey);
