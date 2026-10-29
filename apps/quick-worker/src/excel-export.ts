@@ -10,7 +10,7 @@ const letter=(n:number)=>{let value=n,s="";do{s=String.fromCharCode(65+value%26)
 function sheet(name:string,columns:string[],data:(string|number)[][]):string{
  let lines='<row r="1">'+columns.map((label,i)=>'<c r="'+letter(i)+'1" s="1" t="inlineStr"><is><t>'+xml(label)+'</t></is></c>').join("")+'</row>';
  for(let row=0;row<data.length;row++){
-   const cols=data[row].map((val,i)=>{
+   const cols=(data[row]??[]).map((val,i)=>{
      const cell=letter(i)+(row+2);
      if(typeof val==="number"&&Number.isFinite(val))return '<c r="'+cell+'" s="2"><v>'+String(val)+'</v></c>';
      return '<c r="'+cell+'" t="inlineStr"><is><t xml:space="preserve">'+xml(String(val))+'</t></is></c>';
