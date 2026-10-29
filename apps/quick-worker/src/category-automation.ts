@@ -81,6 +81,7 @@ export async function learnCategory(
  db:QuickD1, owner:string, source:Source, id:string, category:unknown, subcategory:unknown, remember:boolean,
 ): Promise<void> {
   if (!remember || !valid(category,subcategory)) return;
+  const chosenCategory=category as string,chosenSubcategory=subcategory as string;
   const table=source==="manual"?"quick_manual_entries":"quick_shortcut_expenses";
   const row=await db.prepare("SELECT merchant,kind FROM "+table+" WHERE owner_id=? AND id=? AND deleted_at IS NULL")
    .bind(owner,id).first<{merchant:string|null;kind:string}>();
@@ -90,19 +91,19 @@ export async function learnCategory(
   const stamp=new Date().toISOString();
   await db.prepare("INSERT INTO quick_category_preferences(owner_id,merchant_key,category,subcategory,updated_at) VALUES(?,?,?,?,?) " +
     "ON CONFLICT(owner_id,merchant_key) DO UPDATE SET category=excluded.category,subcategory=excluded.subcategory,updated_at=excluded.updated_at RETURNING owner_id")
-    .bind(owner,key,category,subcategory,stamp).first();
+    .bind(owner,key,chosenCategory,chosenSubcategory,stamp).first();
   // Revise automatic categories for exactly this merchant; never change a manual choice.
   await db.prepare("UPDATE quick_auto_categories SET category=?,subcategory=?,confidence=1,needs_review=0,question=NULL,classification_source='learned',updated_at=? " +
     "WHERE owner_id=? AND NOT EXISTS(SELECT 1 FROM quick_movement_categories c WHERE c.owner_id=quick_auto_categories.owner_id " +
     "AND c.source=quick_auto_categories.source AND c.movement_id=quick_auto_categories.movement_id) AND " +
     "EXISTS(SELECT 1 FROM quick_manual_entries e WHERE e.owner_id=? AND e.id=quick_auto_categories.movement_id AND quick_auto_categories.source='manual' " +
     "AND lower(trim(e.merchant))=?) " +
-    "RETURNING movement_id").bind(category,subcategory,stamp,owner,owner,key).all();
+    "RETURNING movement_id").bind(chosenCategory,chosenSubcategory,stamp,owner,owner,key).all();
   await db.prepare("UPDATE quick_auto_categories SET category=?,subcategory=?,confidence=1,needs_review=0,question=NULL,classification_source='learned',updated_at=? " +
     "WHERE owner_id=? AND source='accountless' AND NOT EXISTS(SELECT 1 FROM quick_movement_categories c WHERE c.owner_id=quick_auto_categories.owner_id " +
     "AND c.source=quick_auto_categories.source AND c.movement_id=quick_auto_categories.movement_id) " +
     "AND EXISTS(SELECT 1 FROM quick_shortcut_expenses e WHERE e.owner_id=? AND e.id=quick_auto_categories.movement_id " +
-    "AND lower(trim(e.merchant))=?) RETURNING movement_id").bind(category,subcategory,stamp,owner,owner,key).all();
+    "AND lower(trim(e.merchant))=?) RETURNING movement_id").bind(chosenCategory,chosenSubcategory,stamp,owner,owner,key).all();
 }
 export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWorkerEnv,
   one?:{source:Source;id:string}): Promise<Response> {
@@ -155,7 +156,7 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
               !/[\u0000-\u001f]/.test(item.question) && item.question.trim()?item.question.trim():
               "¿Qué fue esta compra? Elige la categoría correcta.";
             const x=unresolved[i]!;
-            x.decision={category:item.category,subcategory:item.subcategory,confidence,question:certain?null:question};
+            x.decision={category:item.category,subcategory:item.subcategory as string,confidence,question:certain?null:question};
             x.origin="qwen";aiUsed=true;
           }
         }
