@@ -2,7 +2,7 @@
 // account, browser cookie, Cloudflare key, customer information or remote network.
 import assert from "node:assert/strict";
 import {createServer} from "node:http";
-import {chromium} from "playwright";
+import {chromium,webkit} from "playwright";
 import {DASH_HTML} from "../dist/apps/quick-worker/src/dashboard-html.js";
 import {DASH_CSS} from "../dist/apps/quick-worker/src/dashboard-css.js";
 import {DASH_JS} from "../dist/apps/quick-worker/src/dashboard-js.js";
@@ -57,7 +57,10 @@ const server=createServer((req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const port=server.address().port;
-const browser=await chromium.launch({headless:true,args:["--disable-dev-shm-usage"]});
+const browsers=[
+ {name:"Chromium",engine:await chromium.launch({headless:true,args:["--disable-dev-shm-usage"]})},
+ {name:"WebKit",engine:await webkit.launch({headless:true})},
+ ];
 const screens=["today","movement","portfolio","plan","map","imports","connections","settings"];
 const layouts=[
  {name:"iPhone SE 320",width:320,height:568,mobile:true},
@@ -95,8 +98,8 @@ const assertFits=async(page,width,label)=>{
  assert.deepEqual(result.items,[],label+": responsive element protrusion");
 };
 try{
- for(const layout of layouts){
-  const context=await browser.newContext({viewport:{width:layout.width,height:layout.height},
+ for(const browser of browsers)for(const layout of layouts){
+  const context=await browser.engine.newContext({viewport:{width:layout.width,height:layout.height},
    deviceScaleFactor:layout.mobile?2:1,isMobile:layout.mobile,hasTouch:layout.mobile,
    serviceWorkers:"block",reducedMotion:"no-preference"});
   const page=await context.newPage();
@@ -117,8 +120,28 @@ try{
    assert.equal(await page.locator("#space-"+name).evaluate(el=>el.hidden),false,
     layout.name+" cannot navigate to "+name);
    await assertFits(page,layout.width,layout.name+" "+name);
-   records.push(layout.name+" / "+name);
+   records.push(browser.name+" / "+layout.name+" / "+name);
   }
+  // Native back-swipe / browser history must restore screen selection.
+  await page.goBack({waitUntil:"domcontentloaded"});
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator("#space-connections").evaluate(el=>el.hidden),false,
+    browser.name+" "+layout.name+" browser Back");
+  await page.goForward({waitUntil:"domcontentloaded"});
+  await page.waitForTimeout(80);
+  assert.equal(await page.locator("#space-settings").evaluate(el=>el.hidden),false,
+    browser.name+" "+layout.name+" browser Forward");
+  // Dark theme has to preserve layout and accessible colors.
+  await page.locator("#theme-setting").click();
+  assert.equal(await page.locator("#studio").evaluate(el=>el.classList.contains("theme-night")),true,
+    browser.name+" "+layout.name+" dark theme");
+  await assertFits(page,layout.width,browser.name+" "+layout.name+" dark settings");
+  await page.locator("#theme-setting").click();
+  // Reset dialog must fit even at 320px; no reset action or server write.
+  await page.locator("#reset-open").click();
+  assert.equal(await page.locator("#reset-dialog").evaluate(el=>el.open),true);
+  await assertFits(page,layout.width,browser.name+" "+layout.name+" reset modal");
+  await page.locator("#reset-close").click();
   if(layout.width<=980){
    await page.locator("#add-mobile").click();
    assert.equal(await page.locator("#expense-dialog").evaluate(el=>el.open),true);
@@ -131,7 +154,7 @@ try{
    await assertFits(page,layout.width,layout.name+" expense inputs");
    await page.locator("#close-expense").click();
   }
-  const reduced=await browser.newContext({viewport:{width:layout.width,height:layout.height},
+  const reduced=await browser.engine.newContext({viewport:{width:layout.width,height:layout.height},
    reducedMotion:"reduce",serviceWorkers:"block"});
   const reducePage=await reduced.newPage();
   await reducePage.goto(output("/dashboard"),{waitUntil:"domcontentloaded"});
@@ -141,9 +164,9 @@ try{
   await context.close();
  }
  assert.deepEqual(errors,[],"Browser runtime errors");
- console.log("Chromium PWA visual QA: "+records.length+" screen/viewport combinations, all responsive.");
- console.log("Modal, touch controls, browser JS and reduced-motion checks passed.");
+ console.log("Chromium + WebKit PWA visual QA: "+records.length+" screen/viewport combinations, all responsive.");
+ console.log("Dark theme, native back/forward, expense & reset sheets, touch controls and reduced motion passed.");
 }finally{
- await browser.close();
+ for(const browser of browsers)await browser.engine.close();
  await new Promise(resolve=>server.close(resolve));
 }
