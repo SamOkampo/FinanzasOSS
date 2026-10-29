@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/studio-native-mobile-qa-20261028
+      - feature/studio-on-device-ios-qa-20261028
     paths:
       - .github/workflows/finanzasoss-pwa-visual-qa.yml
       - apps/quick-worker/src/**
