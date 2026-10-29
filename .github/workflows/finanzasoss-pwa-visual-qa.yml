@@ -32,6 +32,6 @@ jobs:
       - name: Install isolated browser QA tooling
         run: |
           npm install --no-save --ignore-scripts --no-audit --fund=false playwright@1.58.2
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
       - name: Exercise eight sections at seven screen sizes with synthetic data
         run: node tests/quick-pwa-browser-visual.mjs
