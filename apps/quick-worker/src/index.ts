@@ -16,7 +16,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
-import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation } from "./category-automation.js";
+import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -460,6 +460,8 @@ export default {
   },
   async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
     if(controller.cron!=="30 1 * * *") return;
+    try{await runScheduledCategoryBackfill(env);}
+    catch{ /* Existing financial reminders must still execute after any AI failure. */ }
     await sendDailyReminders(env,controller.scheduledTime);
   },
 };
