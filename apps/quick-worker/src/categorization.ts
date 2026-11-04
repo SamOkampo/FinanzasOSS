@@ -185,13 +185,13 @@ export async function qwenSuggestions(db:QuickD1,owner:string,env:QuickWorkerEnv
  const system="Eres clasificador de consumos en Colombia. Nunca inventes un gasto, importe ni comercio. "+
   "Devuelve exclusivamente JSON {suggestions:[{index:0,category:'...',subcategory:'...'}]}. "+
   "Usa SOLO el catálogo dado. Si no puedes saber la intención o es una transferencia sin contexto, "+
-  "elige Pagos y transferencias/Pagos a terceros o Otros/Por revisar. No des asesoría financiera.";
+  "elige Pagos y transferencias/Transferencias o Otros/Por revisar. No des asesoría financiera. /no_think";
  const catalog=JSON.stringify(TAXONOMY);
  let response:unknown;
  try{
    response=await env.AI.run("@cf/qwen/qwen3-30b-a3b-fp8",{
      messages:[{role:"system",content:system},{role:"user",content:JSON.stringify({catalog,movements:modelInputs})}],
-     max_tokens:350,temperature:0.1,stream:false,
+     max_tokens:900,temperature:0.1,stream:false,
    });
  }catch{return reply({error:"Qwen temporarily unavailable. Manual categories still work."},502);}
  const record=response as {response?:string;choices?:Array<{message?:{content?:string}}>};
