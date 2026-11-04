@@ -210,9 +210,7 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
               expected==="debt_payment"?isDebt:
               expected==="investment_flow"?isInvestment:
               expected==="expense"?!unspecifiedTransfer:true;
-            const certain=confidence>=0.9 && evidence &&
-              !(item.category==="Otros" && item.subcategory==="Por revisar") &&
-              !(expected==="review");
+            const certain=confidence>=0.9 && evidence && expected!=="review";
             const question=typeof item.question==="string" && item.question.length<=150 &&
               !/[\u0000-\u001f]/.test(item.question) && item.question.trim()?item.question.trim():
               "¿Qué tipo de movimiento fue? Elige la categoría correcta.";
