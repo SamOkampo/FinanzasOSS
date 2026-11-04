@@ -17,7 +17,7 @@ export const TAXONOMY={
  "Salud":["Farmacia","Consultas","Bienestar","Otros"],
  "Educación":["Universidad","Libros y cursos","Otros"],
  "Compras":["Ropa","Tecnología","Hogar","Otros"],
- "Pagos y transferencias":["Pagos a terceros","Transferencias","Otros"],
+ "Pagos y transferencias":["Pagos a terceros","Transferencias","Entre cuentas propias","Otros"],
  "Deudas y obligaciones":["Abonos a préstamos","Tarjetas de crédito","Otros"],
  "Vivienda y servicios":["Arriendo","Servicios públicos","Internet y telefonía","Otros"],
  "Otros":["Por revisar","Otros"],
