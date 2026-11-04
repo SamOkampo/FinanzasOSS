@@ -15,7 +15,7 @@ assert.equal(kind("Transferencia a un tercero","bank_transfer","Pagos y transfer
 assert.equal(kind("Chokis","debit_card"),"expense");
 assert.equal(classifyQuickEconomicMovement({kind:"investment_transfer",merchant:"Comida",paymentMethod:"other"}),"investment_flow");
 assert.equal(ruleCategory("Expresso 1").subcategory,"Café y bebidas");
-assert.equal(ruleCategory("Helado Chococono").subcategory,"Onces");
+assert.equal(ruleCategory("Helado Chococono").subcategory,"Snacks y dulces");
 assert.equal(ruleCategory("Plan Móvil Virgin Mobile").subcategory,"Internet y telefonía");
 
 const sql = new DatabaseSync(":memory:");
