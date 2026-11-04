@@ -10,6 +10,8 @@ for(const name of ["0001_quick_d1","0003_accountless_shortcut_expenses","0007_sp
 }
 // The budget query honors explicitly confirmed per-owner classifications.
 sqlite.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
+// Optional AI classifications are joined read-only in expense reports.
+sqlite.exec("CREATE TABLE quick_auto_categories (owner_id TEXT, source TEXT, movement_id TEXT,category TEXT,subcategory TEXT,confidence REAL,needs_review INTEGER)");
 const db={prepare(query){let params=[];return {
   bind(...args){params=args;return this;},
   async first(){return sqlite.prepare(query).get(...params)??null;},
