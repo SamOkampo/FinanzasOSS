@@ -1,4 +1,5 @@
 import type { QuickD1 } from "./index.js";
+import { quickEconomicGroupSql } from "./economic-review.js";
 
 // Finance dashboard: read-only, tenant-scoped, never infer an account,
 // and never count transfers as purchases. Colombia is UTC-05 year-round.
@@ -9,11 +10,14 @@ type MovementRow = {
   payment_method: string; kind: string; occurred_at: string;
   merchant: string | null; bank_label: string | null; revision:number;
 };
-const accountBound = "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
+const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
   "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL";
-const accountFree = "SELECT id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
+const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
   "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 const allMovementSql = accountBound + " UNION ALL " + accountFree;
+const classifiedMovements = "SELECT m.*," + quickEconomicGroupSql() + " AS economic_group FROM (" +
+  allMovementSql + ") m LEFT JOIN quick_movement_categories c ON " +
+  "c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id";
 
 function reply(data: unknown): Response {
   return new Response(JSON.stringify(data), {
@@ -34,21 +38,25 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
     db.prepare(
       "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
       "payment_method, SUM(amount_minor) AS amount_minor, COUNT(*) AS quantity " +
-      "FROM (" + allMovementSql + ") " +
-      "WHERE currency='COP' AND kind='purchase' " +
+      "FROM (" + classifiedMovements + ") " +
+      "WHERE currency='COP' AND economic_group='expense' " +
       "GROUP BY day,payment_method ORDER BY day DESC LIMIT 40001",
     ).bind(owner, owner).all<AggregateRow>(),
     db.prepare(
       "SELECT COUNT(*) AS total," +
       "COALESCE(SUM(CASE WHEN currency='USD' THEN 1 ELSE 0 END),0) AS usd," +
-      "COALESCE(SUM(CASE WHEN kind!='purchase' THEN 1 ELSE 0 END),0) AS non_expenses " +
-      "FROM (" + allMovementSql + ")",
-    ).bind(owner, owner).first<{ total: number; usd: number; non_expenses: number }>(),
+      "COALESCE(SUM(CASE WHEN economic_group!='expense' THEN 1 ELSE 0 END),0) AS non_expenses," +
+      "COALESCE(SUM(CASE WHEN economic_group='review' AND currency='COP' THEN amount_minor ELSE 0 END),0) AS review_minor," +
+      "COALESCE(SUM(CASE WHEN economic_group='debt_payment' AND currency='COP' THEN amount_minor ELSE 0 END),0) AS debt_minor " +
+      "FROM (" + classifiedMovements + ")",
+    ).bind(owner, owner).first<{ total: number; usd: number; non_expenses: number; review_minor: number; debt_minor: number }>(),
   ]);
   const truncated = daily.results.length > 40000;
   return reply({
     timezone: "America/Bogota", currency: "COP", movementCount: counts?.total ?? 0,
     excludedUsd: counts?.usd ?? 0, transfersAndInvestments: counts?.non_expenses ?? 0,
+    pendingTransferReviewMinor: String(counts?.review_minor ?? 0),
+    debtPaymentsMinor: String(counts?.debt_minor ?? 0),
     truncated, daily: daily.results.slice(0, 40000).map((r) => ({
       day: r.day, method: r.payment_method, minor: String(r.amount_minor), count: r.quantity,
     })),
