@@ -38,6 +38,7 @@ export function classifyQuickEconomicMovement(m: QuickEconomicMovement): QuickEc
   if (m.kind !== "purchase") return "other";
   const concept=fold(m.merchant || "");
   if (m.manualCategory) {
+    if (m.manualCategory === "Otros") return "review";
     if (m.manualCategory === "Deudas y obligaciones") return "debt_payment";
     if (m.manualCategory === "Inversiones") return "investment_flow";
     if (m.manualCategory === "Pagos y transferencias") {
@@ -101,6 +102,7 @@ export function quickEconomicGroupSql(): string {
     "WHEN c.category='Pagos y transferencias' AND c.subcategory='Entre cuentas propias' THEN 'internal_transfer' " +
     "WHEN c.category='Pagos y transferencias' AND c.subcategory='Pagos a terceros' THEN 'expense' " +
     "WHEN c.category='Pagos y transferencias' THEN 'review' " +
+    "WHEN c.category='Otros' THEN 'review' " +
     "WHEN c.category IS NOT NULL THEN 'expense' " +
     "WHEN "+debt+" THEN 'debt_payment' " +
     "WHEN "+own+" THEN 'internal_transfer' " +
