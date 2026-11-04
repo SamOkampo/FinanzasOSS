@@ -260,6 +260,69 @@ export const DASH_JS = `(() => {
       ? fmtDay.format(parseDay(top[0])) + " · " + asCOP(top[1]) : "Sin datos";
     $("all-movements").textContent = Number(totalMovements).toLocaleString("es-CO");
   }
+
+  function renderCategoryBreakdown(bounds){
+    const box=$("category-spend-list"),info=$("category-spend-status");
+    if(!box||!info)return;
+    box.replaceChildren();
+    const rows=(state.overview?.categoryDaily||[]).filter(row=>between(row.day,bounds));
+    const grouped=new Map();
+    let total=0;
+    for(const row of rows){
+      const minor=Number(row.minor);
+      if(!Number.isFinite(minor)||minor<0)continue;
+      total+=minor;
+      const category=typeof row.category==="string"&&row.category.trim()?
+        row.category:"Pendiente de clasificar";
+      const sub=typeof row.subcategory==="string"?row.subcategory:"";
+      const entry=grouped.get(category)||{minor:0,items:new Map()};
+      entry.minor+=minor;
+      if(category!=="Pendiente de clasificar"&&sub&&sub!=="Otros"){
+        entry.items.set(sub,(entry.items.get(sub)||0)+minor);
+      }
+      grouped.set(category,entry);
+    }
+    if(total===0){
+      info.textContent="Sin compras ni gastos registrados para este período.";
+      return;
+    }
+    const waiting=grouped.get("Pendiente de clasificar")?.minor||0;
+    info.textContent=waiting>0?
+      "Parte del consumo necesita descripción más precisa. No se inventan categorías.":
+      "Categorías identificadas del período seleccionado.";
+    [...grouped.entries()].sort((a,b)=>b[1].minor-a[1].minor).forEach(([category,item],i)=>{
+      const row=document.createElement("div");
+      row.className="category-spend-row";
+      row.style.setProperty("--stagger",String(Math.min(i,8)));
+      const head=document.createElement("div");
+      head.className="category-spend-head";
+      const label=document.createElement("strong");
+      label.textContent=category;
+      const value=document.createElement("span");
+      value.textContent=asCOP(item.minor);
+      head.append(label,value);
+      const track=document.createElement("div");
+      track.className="category-spend-track";
+      track.setAttribute("role","meter");
+      track.setAttribute("aria-label",category);
+      track.setAttribute("aria-valuemin","0");
+      track.setAttribute("aria-valuemax","100");
+      track.setAttribute("aria-valuenow",String(Math.round(100*item.minor/total)));
+      const bar=document.createElement("span");
+      bar.className="category-spend-fill";
+      bar.style.width=(100*item.minor/total).toFixed(2)+"%";
+      track.appendChild(bar);
+      const details=document.createElement("small");
+      details.className="category-spend-details";
+      if(category==="Pendiente de clasificar"){
+        details.textContent="Por precisar · confirma el concepto en Categorías";
+      }else{
+        details.textContent=[...item.items.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3)
+          .map(([sub,minor])=>sub+" · "+asCOP(minor)).join("  ·  ");
+      }
+      row.append(head,track,details);box.appendChild(row);
+    });
+  }
   function renderDashboard() {
     if (!state.overview) return;
     const today = bogotaToday();
@@ -271,6 +334,7 @@ export const DASH_JS = `(() => {
     renderKpis(selected, totals(active), totals(prior), totals(all));
     renderTrend(all, state.period, today);
     renderMethods(active);
+    renderCategoryBreakdown(selected);
     renderWeek(all, today);
     renderInsights(active, state.overview.movementCount);
   }
@@ -305,7 +369,21 @@ export const DASH_JS = `(() => {
         : x.kind === "transfer" ? "Transferencia propia · no es gasto"
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
       const desc = document.createElement("div");
-      desc.append(concept, kind);
+
+      const classification=document.createElement("div");
+      classification.className="history-classification";
+      const cat=document.createElement("span");
+      const confirmed=x.category_status==="confirmed";
+      const suggested=x.category_status==="suggested";
+      cat.className="history-category-chip"+(confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
+      const label=confirmed||suggested?x.category:"Pendiente de clasificar";
+      const subcategory=confirmed||suggested?x.subcategory:"Necesita tu confirmación";
+      cat.textContent=label;
+      const sub=document.createElement("small");
+      sub.className="history-subcategory";
+      sub.textContent=subcategory+(confirmed?" · Confirmada":suggested?" · Sugerida por IA":"");
+      classification.append(cat,sub);
+      desc.append(concept, kind, classification);
       const method = document.createElement("div");
       method.className = "history-method";
       const methodLabel = document.createElement("strong");
