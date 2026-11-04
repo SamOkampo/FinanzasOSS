@@ -35,3 +35,27 @@ export function classifyQuickEconomicMovement(m: QuickEconomicMovement): QuickEc
   }
   return "expense";
 }
+
+/**
+ * SQL counterpart for server-side dashboard/budget aggregation. The two
+ * account sources must provide owner_id and source; c is an owner-scoped
+ * manual category join. Keeping the CASE in one function avoids drift.
+ */
+export function quickEconomicGroupSql(): string {
+  const text = "lower(trim(coalesce(m.merchant,'')))";
+  return "CASE " +
+    "WHEN m.kind='transfer' THEN 'internal_transfer' " +
+    "WHEN m.kind='investment_transfer' THEN 'investment_flow' " +
+    "WHEN m.kind!='purchase' THEN 'other' " +
+    "WHEN c.category='Deudas y obligaciones' THEN 'debt_payment' " +
+    "WHEN c.category='Pagos y transferencias' AND c.subcategory='Transferencias' THEN 'internal_transfer' " +
+    "WHEN c.category IS NOT NULL AND c.category!='Pagos y transferencias' THEN 'expense' " +
+    "WHEN (" + text + " LIKE 'pago de pr_stamo%' OR " + text + " LIKE 'pago del pr_stamo%' " +
+    "OR " + text + " LIKE 'abono a pr_stamo%' OR " + text + " LIKE 'abono al pr_stamo%' " +
+    "OR " + text + " LIKE 'cuota de pr_stamo%' OR " + text + " LIKE 'pago de tarjeta de cr_dito%') " +
+    "THEN 'debt_payment' " +
+    "WHEN m.payment_method='bank_transfer' AND (" + text + " LIKE 'bre-b%' OR " +
+    text + " LIKE 'transferencia%' OR " + text + " LIKE 'envio de dinero%' OR " +
+    text + " LIKE 'paso plata%') THEN 'review' " +
+    "ELSE 'expense' END";
+}
