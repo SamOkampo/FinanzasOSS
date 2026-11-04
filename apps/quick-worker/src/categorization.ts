@@ -142,7 +142,7 @@ export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
     economicTypeSource:manual?"confirmado":automatic?x.auto_source:"reglas",
     amountCOP:(x.amount_minor/100).toFixed(2),category:cat,subcategory:sub,
     confidence:manual?"confirmada":automatic?(x.auto_confidence??0):suggestion.confidence,
-    manual:x.classification_source==="manual",automatic:automatic?x.auto_source:null,
+    manual:x.classification_source==="manual"&&!vague,automatic:automatic?x.auto_source:null,
     needsReview:vague || economicGroup==="review" || (manual?false:automatic?x.auto_needs_review===1:suggestion.confidence!=="alta"),
     question:economicGroup==="review"
       ? "¿Cuál fue la finalidad de este movimiento? Si es entre tus cuentas, selecciónalo expresamente; si pagaste una compra o una deuda, elige su categoría."
