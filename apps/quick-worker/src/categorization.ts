@@ -3,6 +3,7 @@
 // bank details, Access identity, transaction IDs, or full statements leave D1.
 import type {QuickD1,QuickWorkerEnv} from "./index.js";
 import { learnCategory } from "./category-automation.js";
+import { classifyQuickEconomicMovement } from "./economic-review.js";
 
 export class CategoryInputError extends Error {
  constructor(message:string,readonly status=422){super(message);}
@@ -17,6 +18,7 @@ export const TAXONOMY={
  "Educación":["Universidad","Libros y cursos","Otros"],
  "Compras":["Ropa","Tecnología","Hogar","Otros"],
  "Pagos y transferencias":["Pagos a terceros","Transferencias","Otros"],
+ "Deudas y obligaciones":["Abonos a préstamos","Tarjetas de crédito","Otros"],
  "Vivienda y servicios":["Arriendo","Servicios públicos","Internet y telefonía","Otros"],
  "Otros":["Por revisar","Otros"],
 } as const;
@@ -59,12 +61,17 @@ export function ruleCategory(merchant:string):{category:Category;subcategory:str
    return /spotify/.test(s)?{category:"Suscripciones",subcategory:"Música",confidence:"media"}:
      /netflix|youtube premium/.test(s)?{category:"Suscripciones",subcategory:"Streaming",confidence:"media"}:
      {category:"Suscripciones",subcategory:"IA y software",confidence:"media"};
- if(/vending|onces|mecato|snack|galleta|panaderia/.test(s))return {category:"Alimentación",subcategory:"Onces",confidence:"media"};
- if(/cafe|café|tinto|bebida|jugos|agua$/.test(s))return {category:"Alimentación",subcategory:"Café y bebidas",confidence:"baja"};
+ if(/^(pago de prestamo|abono (a|al) prestamo|cuota de prestamo)/.test(s))return {category:"Deudas y obligaciones",subcategory:"Abonos a préstamos",confidence:"alta"};
+ if(/^(pago (de |del )?tarjeta de credito)/.test(s))return {category:"Deudas y obligaciones",subcategory:"Tarjetas de crédito",confidence:"alta"};
+ if(/vending|onces|mecato|snack|galleta|panaderia|helado|chococono|chokis|empanada|tajaditas/.test(s))return {category:"Alimentación",subcategory:"Onces",confidence:"media"};
+ if(/cafe|café|tinto|bebida|jugos|agua$|espresso|expresso/.test(s))return {category:"Alimentación",subcategory:"Café y bebidas",confidence:"media"};
  if(/restaurante|almuerzo|comida|hamburgues|pizza|archie|trocipollo/.test(s))
    return {category:"Alimentación",subcategory:"Restaurantes",confidence:"media"};
  if(/didi food|rappi.*comida|domicilio/.test(s))
    return {category:"Alimentación",subcategory:"Domicilios",confidence:"media"};
+ if(/cine|cinema|pelicula/.test(s))return {category:"Ocio",subcategory:"Entretenimiento",confidence:"media"};
+ if(/plan movil|virgin mobile|plan celular/.test(s))return {category:"Vivienda y servicios",subcategory:"Internet y telefonía",confidence:"media"};
+ if(/transporte semana/.test(s))return {category:"Transporte",subcategory:"Transporte público",confidence:"media"};
  if(/recarga.*transporte|transmilenio|sitp|tullave|tu llave/.test(s))
    return {category:"Transporte",subcategory:"Recargas",confidence:"alta"};
  if(/uber|didi|taxi|parqueadero|pasaje/.test(s))
@@ -89,23 +96,39 @@ export async function ownerMovements(db:QuickD1,owner:string,limit=500):Promise<
 }
 export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
  const entries=await ownerMovements(db,owner,500);
- const total=new Map<string,number>(),items=entries.map(x=>{
+ const total=new Map<string,number>();
+ const economic=new Map<string,{minor:number;count:number}>();
+ const items=entries.map(x=>{
    const suggestion=ruleCategory(x.merchant||"");
    const manual=validCategory(x.category,x.subcategory);
    const automatic=validCategory(x.auto_category,x.auto_subcategory);
    const cat=manual?x.category:automatic?x.auto_category:suggestion.category;
    const sub=manual?x.subcategory:automatic?x.auto_subcategory:suggestion.subcategory;
-   if(x.kind==="purchase"&&x.currency==="COP")total.set(String(cat),(total.get(String(cat))||0)+x.amount_minor);
+   const economicGroup=classifyQuickEconomicMovement({
+     kind:x.kind,merchant:x.merchant,paymentMethod:x.payment_method,
+     manualCategory:manual?x.category:null,manualSubcategory:manual?x.subcategory:null,
+   });
+   if(x.currency==="COP"){
+     const previous=economic.get(economicGroup)??{minor:0,count:0};
+     economic.set(economicGroup,{minor:previous.minor+x.amount_minor,count:previous.count+1});
+     if(economicGroup==="expense")total.set(String(cat),(total.get(String(cat))||0)+x.amount_minor);
+   }
    return {id:x.id,source:x.source,day:isoDay(x.occurred_at),concept:x.merchant||"Sin concepto",
+    economicGroup,economicNeedsReview:economicGroup==="review",
     amountCOP:(x.amount_minor/100).toFixed(2),category:cat,subcategory:sub,
     confidence:manual?"confirmada":automatic?(x.auto_confidence??0):suggestion.confidence,
     manual:x.classification_source==="manual",automatic:automatic?x.auto_source:null,
-    needsReview:manual?false:automatic?x.auto_needs_review===1:suggestion.confidence!=="alta",
-    question:manual?null:automatic?x.auto_question:"¿Qué fue esta compra? Elige la categoría correcta."};
+    needsReview:economicGroup==="review" || (manual?false:automatic?x.auto_needs_review===1:suggestion.confidence!=="alta"),
+    question:economicGroup==="review"
+      ? "¿Fue un pago por una compra o una transferencia entre tus propias cuentas? Elige la categoría."
+      : manual?null:automatic?x.auto_question:"¿Qué fue este movimiento? Elige la categoría correcta."};
  });
  return reply({taxonomy:TAXONOMY,entries:items,summary:[...total].map(([category,minor])=>({
-   category,amountCOP:(minor/100).toFixed(2)})),limitedTo:500,
-   notice:"Las reglas son sugerencias: verifica los conceptos antes de aceptar."});
+   category,amountCOP:(minor/100).toFixed(2)})),
+   economicSummary:[...economic].map(([group,value])=>({
+     group,count:value.count,amountCOP:(value.minor/100).toFixed(2)
+   })),limitedTo:500,
+   notice:"El resumen por categorías cuenta solo consumos identificados. Deudas y transferencias dudosas van aparte y nunca se reclasifican en el ledger sin confirmación."});
 }
 export async function setCategory(db:QuickD1,owner:string,body:unknown):Promise<Response>{
  const x=origin(body,["source","id","category","subcategory","confirmed","rememberMerchant"]);
