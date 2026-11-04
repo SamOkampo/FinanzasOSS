@@ -3,6 +3,8 @@ import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
+import { MOBILE_INPUT_JS } from "./dashboard-mobile-input-js.js";
+import { BANK_BENEFITS_JS } from "./dashboard-bank-benefits-js.js";
 import { STUDIO_JS } from "./dashboard-studio-js.js";
 import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
@@ -16,8 +18,10 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
+import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
+import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
@@ -39,6 +43,8 @@ export interface QuickWorkerEnv {
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
   readonly ALLOW_PUSH_SEND?: string;
+  readonly ALLOW_CATEGORY_PUSH_SEND?: string;
+  readonly ALLOW_DAILY_REMINDERS?: string;
   readonly VAPID_PUBLIC_KEY?: string;
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
@@ -282,6 +288,34 @@ async function confirmEntry(db: QuickD1, owner: string, body: unknown, ignoreRep
   return respond({ entryId: prior.id, replayed: true });
 }
 
+async function categorizedResponse(
+ response:Response,db:QuickD1,owner:string,env:QuickWorkerEnv,
+ source:"manual"|"accountless" | null,
+):Promise<Response>{
+ if(response.status!==201)return response;
+ try{
+   const body=await response.clone().json() as {entryId?:string;inserted?:number;replayed?:boolean};
+   if(source && typeof body.entryId==="string"){
+     await runCategoryAutomation(db,owner,env,{source,id:body.entryId});
+     // The user sees a verified AI/rule classification immediately after
+     // saving, without a second client POST or speculative financial claims.
+     const all=await (await categoryReview(db,owner)).json() as
+       {entries?:Array<{id:string;source:string;category:string;subcategory:string;
+         economicGroup:string;needsReview:boolean;automatic:string|null}>};
+     const found=all.entries?.find(x=>x.id===body.entryId&&x.source===source);
+     if(found)return new Response(JSON.stringify({...body,
+       classification:{category:found.category,subcategory:found.subcategory,
+         economicGroup:found.economicGroup,needsReview:found.needsReview,
+         source:found.automatic || "reglas"}}),{
+       status:201,headers:response.headers
+     });
+   } else if(!source && typeof body.inserted==="number" && body.inserted>0){
+     await runCategoryAutomation(db,owner,env);
+   }
+ }catch{ /* Successful financial writes must never become retries if AI fails. */ }
+ return response;
+}
+
 export async function handleQuickRequest(
   request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
 ): Promise<Response> {
@@ -292,7 +326,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js",
+    "/dashboard-sw.js", "/studio.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -343,11 +377,14 @@ export async function handleQuickRequest(
     if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
+    if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
+    if (pathname === "/mobile-input.js") return respondAsset(MOBILE_INPUT_JS, "application/javascript");
     if (pathname === "/studio.js") return respondAsset(STUDIO_JS, "application/javascript");
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
+    if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
     if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
@@ -363,8 +400,10 @@ export async function handleQuickRequest(
       requireSameOrigin(request);
       const data = await parseJson(request, pathname.startsWith("/api/quick/import/")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
-      if (pathname === "/api/quick/entries") return await confirmEntry(env.DB, owner, data);
-      if (pathname === "/api/quick/studio/expense") return await browserExpense(env.DB, owner, data);
+      if (pathname === "/api/quick/entries") return await categorizedResponse(
+        await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
+      if (pathname === "/api/quick/studio/expense") return await categorizedResponse(
+        await browserExpense(env.DB, owner, data),env.DB,owner,env,"accountless");
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
@@ -372,9 +411,16 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
-      if (pathname === "/api/quick/import/commit") return await commitStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/import/commit") return await categorizedResponse(
+        await commitStatement(env.DB, owner, data),env.DB,owner,env,null);
       if (pathname === "/api/quick/categories/set") return await setCategory(env.DB, owner, data);
       if (pathname === "/api/quick/ai/suggest") return await qwenSuggestions(env.DB, owner, env, data);
+      if (pathname === "/api/quick/categories/automation/setting")
+        return await setCategoryAutomation(env.DB,owner,data);
+      if (pathname === "/api/quick/categories/automation/run")
+        return await runCategoryAutomation(env.DB,owner,env);
+      if (pathname === "/api/quick/categories/answer")
+        return await answerCategoryQuestion(env.DB,owner,env,data);
       if (pathname === "/api/quick/studio/reset/prepare" || pathname === "/api/quick/studio/reset/confirm") {
         // This feature must never run outside the explicitly configured private
         // staging Worker. A typed phrase and Access-authenticated owner required.
@@ -405,6 +451,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
       if (pathname === "/api/quick/categories") return await categoryReview(env.DB, owner);
+      if (pathname === "/api/quick/categories/automation/status")
+        return await categoryAutomationStatus(env.DB,owner);
       if (pathname === "/api/quick/export.xlsx") return await excelExport(env.DB, owner);
       if (pathname === "/api/quick/budgets") return await readBudgets(env.DB, owner);
       if (pathname === "/api/quick/studio/capabilities") return studioCapabilities();
@@ -432,6 +480,10 @@ export default {
   },
   async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
     if(controller.cron!=="30 1 * * *") return;
-    await sendDailyReminders(env,controller.scheduledTime);
+    try{await runScheduledCategoryBackfill(env);}
+    catch{ /* Existing financial reminders must still execute after any AI failure. */ }
+    // Daily expense reminders are separate from Qwen's opt-in category questions.
+    if(env.ALLOW_DAILY_REMINDERS==="true")
+      await sendDailyReminders(env,controller.scheduledTime);
   },
 };

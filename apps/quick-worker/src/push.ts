@@ -164,3 +164,30 @@ export async function sendOwnerTestPush(
    return reply({error:"Unable to contact push provider"},502);
  }
 }
+
+/** Deliver a privacy-preserving empty Push to at most five subscribed devices per owner. */
+export async function sendOwnerCategoryQuestion(
+ db:QuickD1,owner:string,env:QuickWorkerEnv,now=Date.now(),send:typeof fetch=fetch,
+):Promise<{accepted:number;configured:boolean}>{
+ if(!enabled(env)||env.ALLOW_CATEGORY_PUSH_SEND!=="true")return {accepted:0,configured:false};
+ const devices=await db.prepare(
+  "SELECT endpoint_hash,endpoint FROM quick_push_subscriptions WHERE owner_id=? ORDER BY created_at DESC LIMIT 5"
+ ).bind(owner).all<{endpoint_hash:string;endpoint:string}>();
+ let accepted=0;
+ for(const device of devices.results){
+   let endpoint:string;
+   try{endpoint=endpointOf(device.endpoint);}catch{continue;}
+   try{
+     const token=await jwt(env,new URL(endpoint).origin,now);
+     const response=await send(endpoint,{method:"POST",headers:{
+       Authorization:"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
+       TTL:"600",Urgency:"normal",
+     }});
+     if(response.status===404||response.status===410){
+       await db.prepare("DELETE FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=? RETURNING endpoint_hash")
+         .bind(owner,device.endpoint_hash).first();
+     }else if(response.ok)accepted++;
+   }catch{ /* No notification failure can affect financial data. */ }
+ }
+ return {accepted,configured:true};
+}

@@ -6,7 +6,8 @@ import {sendOwnerTestPush} from "../dist/apps/quick-worker/src/push.js";
 const sql=new DatabaseSync(":memory:");
 for(const migration of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortcut_expenses",
  "0004_staging_reset_challenges","0005_scoped_reset_confirmation","0006_push_subscriptions",
- "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test"]){
+ "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test",
+ "0010_categories_ai","0011_category_auto_questions"]){
  sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+migration+".sql",import.meta.url),"utf8"));
 }
 const db={prepare(query){
