@@ -5,6 +5,7 @@ import { quickEconomicGroupSql } from "./economic-review.js";
 // and never count transfers as purchases. Colombia is UTC-05 year-round.
 // Daily aggregates make period switching fast without exposing other users.
 type AggregateRow = { day: string; payment_method: string; amount_minor: number; quantity: number };
+type BankAggregateRow = { day: string; bank: string; amount_minor: number; quantity: number };
 type MovementRow = {
   id: string; account_id: string | null; amount_minor: number; currency: string;
   payment_method: string; kind: string; occurred_at: string;
@@ -35,7 +36,7 @@ function reply(data: unknown): Response {
 export async function dashboardOverview(db: QuickD1, owner: string): Promise<Response> {
   // Aggregate at DB level: the app never needs to download raw history to
   // calculate totals. All SQL branches constrain owner_id and purchases.
-  const [daily, counts] = await Promise.all([
+  const [daily, counts, byBank] = await Promise.all([
     db.prepare(
       "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
       "payment_method, SUM(amount_minor) AS amount_minor, COUNT(*) AS quantity " +
@@ -51,14 +52,25 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
       "COALESCE(SUM(CASE WHEN economic_group='debt_payment' AND currency='COP' THEN amount_minor ELSE 0 END),0) AS debt_minor " +
       "FROM (" + classifiedMovements + ")",
     ).bind(owner, owner).first<{ total: number; usd: number; non_expenses: number; review_minor: number; debt_minor: number }>(),
+    db.prepare(
+      "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
+      "COALESCE(NULLIF(TRIM(bank_label),''),'Sin banco indicado') AS bank," +
+      "SUM(amount_minor) AS amount_minor,COUNT(*) AS quantity " +
+      "FROM (" + classifiedMovements + ") " +
+      "WHERE currency='COP' AND economic_group='expense' " +
+      "GROUP BY day,bank ORDER BY day DESC LIMIT 40001",
+    ).bind(owner, owner).all<BankAggregateRow>(),
   ]);
-  const truncated = daily.results.length > 40000;
   return reply({
     timezone: "America/Bogota", currency: "COP", movementCount: counts?.total ?? 0,
     excludedUsd: counts?.usd ?? 0, transfersAndInvestments: counts?.non_expenses ?? 0,
     pendingTransferReviewMinor: String(counts?.review_minor ?? 0),
     debtPaymentsMinor: String(counts?.debt_minor ?? 0),
-    truncated, daily: daily.results.slice(0, 40000).map((r) => ({
+    truncated: daily.results.length > 40000 || byBank.results.length > 40000,
+    bankDaily: byBank.results.slice(0,40000).map(r => ({
+      day:r.day,bank:r.bank,minor:String(r.amount_minor),count:r.quantity,
+    })),
+    daily: daily.results.slice(0, 40000).map((r) => ({
       day: r.day, method: r.payment_method, minor: String(r.amount_minor), count: r.quantity,
     })),
   });

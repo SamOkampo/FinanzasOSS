@@ -3,6 +3,7 @@ import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
+import { BANK_BENEFITS_JS } from "./dashboard-bank-benefits-js.js";
 import { STUDIO_JS } from "./dashboard-studio-js.js";
 import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
@@ -324,7 +325,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/bank-benefits.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -375,6 +376,7 @@ export async function handleQuickRequest(
     if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
+    if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
     if (pathname === "/studio.js") return respondAsset(STUDIO_JS, "application/javascript");
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
