@@ -167,8 +167,8 @@ async function saveAccountlessExpense(
   // Old iPhone shortcuts remain valid. A new explicit choice lets the user
   // distinguish repayment of borrowed money from consumption without changing
   // the append-only SQLite table or inventing a lender.
-  const movementType = data.movementType === undefined ? "expense" : data.movementType;
-  if (movementType !== "expense" && movementType !== "debt_repayment") {
+  const movementType = data.movementType === undefined ? "auto" : data.movementType;
+  if (movementType !== "expense" && movementType !== "auto" && movementType !== "debt_repayment") {
     throw new ShortcutInputError("Unsupported movementType");
   }
   const rawConcept = requiredText(data.concept, 120, "Concept");

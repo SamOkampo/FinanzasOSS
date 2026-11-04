@@ -10,6 +10,8 @@ for(const n of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortc
 }
 // Dashboard economic summaries read per-user confirmations when present.
 sql.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
+// Optional AI classifications are joined read-only in expense reports.
+sql.exec("CREATE TABLE quick_auto_categories (owner_id TEXT, source TEXT, movement_id TEXT,category TEXT,subcategory TEXT,confidence REAL,needs_review INTEGER)");
 const db={prepare(q){let args=[];return {bind(...v){args=v;return this;},
  async first(){return sql.prepare(q).get(...args)??null;},
  async all(){return {results:sql.prepare(q).all(...args)};}}}};

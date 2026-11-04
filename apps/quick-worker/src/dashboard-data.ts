@@ -17,7 +17,8 @@ const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_
 const allMovementSql = accountBound + " UNION ALL " + accountFree;
 const classifiedMovements = "SELECT m.*," + quickEconomicGroupSql() + " AS economic_group FROM (" +
   allMovementSql + ") m LEFT JOIN quick_movement_categories c ON " +
-  "c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id";
+  "c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
+  "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id";
 
 function reply(data: unknown): Response {
   return new Response(JSON.stringify(data), {

@@ -50,6 +50,7 @@ export async function readBudgets(db:QuickD1,owner:string,now=Date.now()):Promis
       "UNION ALL SELECT owner_id,'accountless' AS source,id,amount_minor,occurred_at,kind,currency,payment_method,merchant "+
       "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL) m "+
       "LEFT JOIN quick_movement_categories c ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id "+
+      "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id "+
       "WHERE m.currency='COP') WHERE economic_group='expense' AND day<=?"
     ).bind(b.day,b.week,b.month,b.year,owner,owner,b.today).first<Totals>(),
   ]);
