@@ -49,7 +49,10 @@ const list=await (await dashboardMovements(fake,"profile-A",new URL("https://tes
 assert.equal(overview.movementCount,6);
 assert.equal(overview.debtPaymentsMinor,"3000000");
 assert.equal(overview.pendingTransferReviewMinor,"80000");
-const perCategory=Object.fromEntries(overview.categoryDaily.map(x=>[x.category,x.minor]));
+const perCategory={};
+for(const x of overview.categoryDaily){
+ perCategory[x.category]=String((Number(perCategory[x.category]||0))+Number(x.minor));
+}
 assert.equal(perCategory["Alimentación"],"300000");
 assert.equal(perCategory["Pendiente de clasificar"],"90000");
 assert.ok(!perCategory.Otros);
