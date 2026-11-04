@@ -71,7 +71,7 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
       "ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
       "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id " +
       "WHERE m.currency='COP' AND "+quickEconomicGroupSql()+"='expense' " +
-      "GROUP BY day,category,subcategory ORDER BY day DESC LIMIT 40001",
+      "GROUP BY 1,2,3 ORDER BY 1 DESC LIMIT 40001",
     ).bind(owner, owner).all<CategoryAggregateRow>(),
   ]);
   return reply({
