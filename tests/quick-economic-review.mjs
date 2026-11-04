@@ -11,6 +11,7 @@ assert.equal(kind("Pago de préstamo de una persona"),"debt_payment");
 assert.equal(kind("Bre-B · Nequi llave", "bank_transfer"),"review");
 assert.equal(kind("Transferencia a X","bank_transfer","Pagos y transferencias","Entre cuentas propias"),"internal_transfer");
 assert.equal(kind("Bre-B · comercio","bank_transfer","Alimentación","Onces"),"expense");
+assert.equal(kind("Transferencia a un tercero","bank_transfer","Pagos y transferencias","Transferencias"),"review");
 assert.equal(kind("Chokis","debit_card"),"expense");
 assert.equal(classifyQuickEconomicMovement({kind:"investment_transfer",merchant:"Comida",paymentMethod:"other"}),"investment_flow");
 assert.equal(ruleCategory("Expresso 1").subcategory,"Café y bebidas");
@@ -44,7 +45,7 @@ add("A","a7",80000,"bank_transfer","investment_transfer","Aporte Hapi");
 add("B","b1",900000,"debit_card","purchase","Gasto de otra persona");
 const manual=sql.prepare("INSERT INTO quick_movement_categories VALUES(?,?,?,?,?,?)");
 manual.run("A","accountless","a5","Alimentación","Onces","manual");
-manual.run("A","accountless","a6","Pagos y transferencias","Transferencias","manual");
+manual.run("A","accountless","a6","Pagos y transferencias","Entre cuentas propias","manual");
 const db={prepare(query){const statement=sql.prepare(query);let args=[];return {
  bind(...values){args=values;return this;},
  async all(){return {results:statement.all(...args)};},
