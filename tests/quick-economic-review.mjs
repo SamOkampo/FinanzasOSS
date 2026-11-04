@@ -9,7 +9,7 @@ const kind = (merchant, paymentMethod = "bank_transfer", category = null, subcat
   classifyQuickEconomicMovement({kind:"purchase",merchant,paymentMethod,manualCategory:category,manualSubcategory:subcategory});
 assert.equal(kind("Pago de préstamo de una persona"),"debt_payment");
 assert.equal(kind("Bre-B · Nequi llave", "bank_transfer"),"review");
-assert.equal(kind("Transferencia a X","bank_transfer","Pagos y transferencias","Transferencias"),"internal_transfer");
+assert.equal(kind("Transferencia a X","bank_transfer","Pagos y transferencias","Entre cuentas propias"),"internal_transfer");
 assert.equal(kind("Bre-B · comercio","bank_transfer","Alimentación","Onces"),"expense");
 assert.equal(kind("Chokis","debit_card"),"expense");
 assert.equal(classifyQuickEconomicMovement({kind:"investment_transfer",merchant:"Comida",paymentMethod:"other"}),"investment_flow");
