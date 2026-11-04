@@ -34,6 +34,7 @@ let calls=0,rawInput="";
 const env={DB:db,ALLOW_AI_SUGGESTIONS:"true",ALLOW_PUSH_SEND:"false",AI:{async run(model,input){
  calls++;rawInput=JSON.stringify(input);
  assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");
+ assert.ok(input.messages[0].content.includes("/no_think"),"Qwen must be instructed to return JSON without consuming tokens in reasoning");
  const request=JSON.parse(input.messages[1].content);
  const suggestions=request.movements.map(({index,concept})=>{
    if(concept.includes("devolví")||concept.includes("devolvi"))return {
