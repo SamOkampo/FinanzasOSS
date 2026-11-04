@@ -292,13 +292,25 @@ async function categorizedResponse(
 ):Promise<Response>{
  if(response.status!==201)return response;
  try{
-   const body=await response.clone().json() as {entryId?:string;inserted?:number};
+   const body=await response.clone().json() as {entryId?:string;inserted?:number;replayed?:boolean};
    if(source && typeof body.entryId==="string"){
      await runCategoryAutomation(db,owner,env,{source,id:body.entryId});
+     // The user sees a verified AI/rule classification immediately after
+     // saving, without a second client POST or speculative financial claims.
+     const all=await (await categoryReview(db,owner)).json() as
+       {entries?:Array<{id:string;source:string;category:string;subcategory:string;
+         economicGroup:string;needsReview:boolean;automatic:string|null}>};
+     const found=all.entries?.find(x=>x.id===body.entryId&&x.source===source);
+     if(found)return new Response(JSON.stringify({...body,
+       classification:{category:found.category,subcategory:found.subcategory,
+         economicGroup:found.economicGroup,needsReview:found.needsReview,
+         source:found.automatic || "reglas"}}),{
+       status:201,headers:response.headers
+     });
    } else if(!source && typeof body.inserted==="number" && body.inserted>0){
      await runCategoryAutomation(db,owner,env);
    }
- }catch{ /* A category outage must never invalidate a successfully committed financial movement. */ }
+ }catch{ /* Successful financial writes must never become retries if AI fails. */ }
  return response;
 }
 
