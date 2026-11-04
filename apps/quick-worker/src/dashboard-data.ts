@@ -6,10 +6,12 @@ import { quickEconomicGroupSql } from "./economic-review.js";
 // Daily aggregates make period switching fast without exposing other users.
 type AggregateRow = { day: string; payment_method: string; amount_minor: number; quantity: number };
 type BankAggregateRow = { day: string; bank: string; amount_minor: number; quantity: number };
+type CategoryAggregateRow = { day: string; category: string; subcategory: string; amount_minor: number; quantity: number };
 type MovementRow = {
   id: string; account_id: string | null; amount_minor: number; currency: string;
   payment_method: string; kind: string; occurred_at: string;
   merchant: string | null; bank_label: string | null; revision:number;
+  source?:string;category?:string;subcategory?:string;category_status?:string;
 };
 const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
   "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL";
@@ -36,7 +38,7 @@ function reply(data: unknown): Response {
 export async function dashboardOverview(db: QuickD1, owner: string): Promise<Response> {
   // Aggregate at DB level: the app never needs to download raw history to
   // calculate totals. All SQL branches constrain owner_id and purchases.
-  const [daily, counts, byBank] = await Promise.all([
+  const [daily, counts, byBank, byCategory] = await Promise.all([
     db.prepare(
       "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
       "payment_method, SUM(amount_minor) AS amount_minor, COUNT(*) AS quantity " +
@@ -60,13 +62,28 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
       "WHERE currency='COP' AND economic_group='expense' " +
       "GROUP BY day,bank ORDER BY day DESC LIMIT 40001",
     ).bind(owner, owner).all<BankAggregateRow>(),
+    db.prepare(
+      "SELECT substr(datetime(m.occurred_at,'-5 hours'),1,10) AS day," +
+      "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.category WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.category ELSE 'Pendiente de clasificar' END AS category," +
+      "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.subcategory WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.subcategory ELSE 'Pendiente de clasificar' END AS subcategory," +
+      "SUM(m.amount_minor) AS amount_minor,COUNT(*) AS quantity " +
+      "FROM ("+allMovementSql+") m LEFT JOIN quick_movement_categories c " +
+      "ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
+      "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id " +
+      "WHERE m.currency='COP' AND "+quickEconomicGroupSql()+"='expense' " +
+      "GROUP BY day,category,subcategory ORDER BY day DESC LIMIT 40001",
+    ).bind(owner, owner).all<CategoryAggregateRow>(),
   ]);
   return reply({
     timezone: "America/Bogota", currency: "COP", movementCount: counts?.total ?? 0,
     excludedUsd: counts?.usd ?? 0, transfersAndInvestments: counts?.non_expenses ?? 0,
     pendingTransferReviewMinor: String(counts?.review_minor ?? 0),
     debtPaymentsMinor: String(counts?.debt_minor ?? 0),
-    truncated: daily.results.length > 40000 || byBank.results.length > 40000,
+    truncated: daily.results.length > 40000 || byBank.results.length > 40000 || byCategory.results.length > 40000,
+    categoryDaily: byCategory.results.slice(0,40000).map(r=>({
+      day:r.day,category:r.category,subcategory:r.subcategory,
+      minor:String(r.amount_minor),count:r.quantity,
+    })),
     bankDaily: byBank.results.slice(0,40000).map(r => ({
       day:r.day,bank:r.bank,minor:String(r.amount_minor),count:r.quantity,
     })),
@@ -87,8 +104,17 @@ export async function dashboardMovements(db: QuickD1, owner: string, url: URL): 
   const page = Number(raw);
   const size = 40;
   const data = await db.prepare(
-    "SELECT id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision " +
-    "FROM (" + allMovementSql + ") ORDER BY occurred_at DESC,id DESC LIMIT ? OFFSET ?",
+    "SELECT m.id,m.account_id,m.amount_minor,m.currency,m.payment_method,m.kind," +
+    "m.occurred_at,m.merchant,m.bank_label,m.revision,m.source," +
+    "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.category WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.category ELSE 'Pendiente de clasificar' END AS category," +
+    "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.subcategory WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.subcategory ELSE 'Pendiente de clasificar' END AS subcategory," +
+    "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' THEN 'confirmed' " +
+    "WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' " +
+    "AND a.needs_review=0 AND a.confidence>=0.9 THEN 'suggested' ELSE 'review' END AS category_status " +
+    "FROM (" + allMovementSql + ") m " +
+    "LEFT JOIN quick_movement_categories c ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
+    "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id " +
+    "ORDER BY m.occurred_at DESC,m.id DESC LIMIT ? OFFSET ?",
   ).bind(owner, owner, size + 1, page * size).all<MovementRow>();
   return reply({
     page, hasMore: data.results.length > size, entries: data.results.slice(0, size).map((x) => ({
