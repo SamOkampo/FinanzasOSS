@@ -8,6 +8,8 @@ const sqlite=new DatabaseSync(":memory:");
 for(const name of ["0001_quick_d1","0003_accountless_shortcut_expenses","0007_spending_limits","0008_movement_edit_soft_delete"]){
  sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+name+".sql",import.meta.url),"utf8"));
 }
+// The budget query honors explicitly confirmed per-owner classifications.
+sqlite.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
 const db={prepare(query){let params=[];return {
   bind(...args){params=args;return this;},
   async first(){return sqlite.prepare(query).get(...params)??null;},
