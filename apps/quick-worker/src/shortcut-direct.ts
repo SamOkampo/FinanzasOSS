@@ -173,7 +173,7 @@ async function saveAccountlessExpense(
   }
   const rawConcept = requiredText(data.concept, 120, "Concept");
   const concept = movementType === "debt_repayment" &&
-    !/^pago de pr[eé]stamo(?:\\b|:)/i.test(rawConcept)
+    !/^pago de pr[eé]stamo(?:[ :]|$)/i.test(rawConcept)
     ? "Pago de préstamo: " + rawConcept : rawConcept;
   if (concept.length > 120) throw new ShortcutInputError("Concept is too long");
   if (typeof data.amount !== "string") throw new ShortcutInputError("Amount must be text");
