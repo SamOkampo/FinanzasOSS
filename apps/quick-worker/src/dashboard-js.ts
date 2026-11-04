@@ -383,6 +383,23 @@ export const DASH_JS = `(() => {
       sub.className="history-subcategory";
       sub.textContent=subcategory+(confirmed?" · Confirmada":suggested?" · Sugerida por IA":"");
       classification.append(cat,sub);
+      if(!confirmed&&!suggested){
+        const fix=document.createElement("button");
+        fix.type="button";fix.className="history-precise-button";
+        fix.textContent="Precisar";
+        fix.setAttribute("aria-label","Precisar la categoría de "+(x.merchant||"este movimiento"));
+        fix.addEventListener("click",()=>{
+          document.querySelector('[data-view="plan"]')?.click();
+          requestAnimationFrame(()=>{
+            const cards=[...document.querySelectorAll(".category-entry")];
+            const matching=cards.find(card=>card.dataset.movementId===x.id);
+            (matching||document.getElementById("categories-list"))?.scrollIntoView({
+              behavior:"smooth",block:"center"
+            });
+          });
+        });
+        classification.append(fix);
+      }
       desc.append(concept, kind, classification);
       const method = document.createElement("div");
       method.className = "history-method";
