@@ -29,6 +29,6 @@ assert.match(DASH_HTML,/Plata Pay/);
 assert.match(DASH_HTML,/benefit-cashback/);
 assert.match(DASH_HTML,/no se registran ingresos|No se registran ingresos/i);
 new Function(BANK_BENEFITS_JS);
-assert.match(BANK_BENEFITS_JS,/\^\(1\+r\/100\),d\/365/);
+assert.ok(BANK_BENEFITS_JS.includes("Math.pow(1+r/100,d/365)"));
 assert.ok(!/localStorage|indexedDB|sessionStorage/.test(BANK_BENEFITS_JS),"No persist input balances");
 console.log("Bank expenses: spend-only, isolation, safe estimate UI passed");
