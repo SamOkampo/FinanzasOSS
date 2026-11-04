@@ -20,7 +20,7 @@ export function classifyQuickEconomicMovement(m: QuickEconomicMovement): QuickEc
   if (m.kind === "investment_transfer") return "investment_flow";
   if (m.kind !== "purchase") return "other";
   if (m.manualCategory === "Deudas y obligaciones") return "debt_payment";
-  if (m.manualCategory === "Pagos y transferencias" && m.manualSubcategory === "Transferencias") {
+  if (m.manualCategory === "Pagos y transferencias" && m.manualSubcategory === "Entre cuentas propias") {
     return "internal_transfer";
   }
   // Explicit human categorization takes precedence over keyword guesses.
