@@ -48,7 +48,7 @@ export function quickEconomicGroupSql(): string {
     "WHEN m.kind='investment_transfer' THEN 'investment_flow' " +
     "WHEN m.kind!='purchase' THEN 'other' " +
     "WHEN c.category='Deudas y obligaciones' THEN 'debt_payment' " +
-    "WHEN c.category='Pagos y transferencias' AND c.subcategory='Transferencias' THEN 'internal_transfer' " +
+    "WHEN c.category='Pagos y transferencias' AND c.subcategory='Entre cuentas propias' THEN 'internal_transfer' " +
     "WHEN c.category IS NOT NULL AND c.category!='Pagos y transferencias' THEN 'expense' " +
     "WHEN (" + text + " LIKE 'pago de pr_stamo%' OR " + text + " LIKE 'pago del pr_stamo%' " +
     "OR " + text + " LIKE 'abono a pr_stamo%' OR " + text + " LIKE 'abono al pr_stamo%' " +
