@@ -19,6 +19,7 @@ export const TAXONOMY={
  "Compras":["Ropa","Tecnología","Hogar","Otros"],
  "Pagos y transferencias":["Pagos a terceros","Transferencias","Entre cuentas propias","Otros"],
  "Deudas y obligaciones":["Abonos a préstamos","Tarjetas de crédito","Otros"],
+ "Inversiones":["Aportes","Compras de activos","Otros"],
  "Vivienda y servicios":["Arriendo","Servicios públicos","Internet y telefonía","Otros"],
  "Otros":["Por revisar","Otros"],
 } as const;
@@ -61,8 +62,12 @@ export function ruleCategory(merchant:string):{category:Category;subcategory:str
    return /spotify/.test(s)?{category:"Suscripciones",subcategory:"Música",confidence:"media"}:
      /netflix|youtube premium/.test(s)?{category:"Suscripciones",subcategory:"Streaming",confidence:"media"}:
      {category:"Suscripciones",subcategory:"IA y software",confidence:"media"};
- if(/^(pago de prestamo|abono (a|al) prestamo|cuota de prestamo)/.test(s))return {category:"Deudas y obligaciones",subcategory:"Abonos a préstamos",confidence:"alta"};
+ if(/^(pago de prestamo|abono (a|al) prestamo|cuota de prestamo|pague (el |un )?prestamo|devolvi (el |un )?prestamo|le devolvi.*prestamo)/.test(s))return {category:"Deudas y obligaciones",subcategory:"Abonos a préstamos",confidence:"alta"};
  if(/^(pago (de |del )?tarjeta de credito)/.test(s))return {category:"Deudas y obligaciones",subcategory:"Tarjetas de crédito",confidence:"alta"};
+ if(/(?:entre mis cuentas|a mi otra cuenta|de mi cuenta a mi|a mi plata|de mi bancolombia a plata)/.test(s))
+   return {category:"Pagos y transferencias",subcategory:"Entre cuentas propias",confidence:"alta"};
+ if(/(?:aporte|inverti|inversion)\s+(?:en |a )?(?:hapi|bolsa|etf|acciones)/.test(s))
+   return {category:"Inversiones",subcategory:"Aportes",confidence:"media"};
  if(/vending|onces|mecato|snack|galleta|panaderia|helado|chococono|chokis|empanada|tajaditas/.test(s))return {category:"Alimentación",subcategory:"Onces",confidence:"media"};
  if(/cafe|café|tinto|bebida|jugos|agua$|espresso|expresso/.test(s))return {category:"Alimentación",subcategory:"Café y bebidas",confidence:"media"};
  if(/restaurante|almuerzo|comida|hamburgues|pizza|archie|trocipollo/.test(s))
@@ -107,6 +112,10 @@ export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
    const economicGroup=classifyQuickEconomicMovement({
      kind:x.kind,merchant:x.merchant,paymentMethod:x.payment_method,
      manualCategory:manual?x.category:null,manualSubcategory:manual?x.subcategory:null,
+     autoCategory:automatic?x.auto_category:null,
+     autoSubcategory:automatic?x.auto_subcategory:null,
+     autoConfidence:automatic?x.auto_confidence:null,
+     autoNeedsReview:automatic?x.auto_needs_review===1:null,
    });
    if(x.currency==="COP"){
      const previous=economic.get(economicGroup)??{minor:0,count:0};
@@ -115,12 +124,13 @@ export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
    }
    return {id:x.id,source:x.source,day:isoDay(x.occurred_at),concept:x.merchant||"Sin concepto",
     economicGroup,economicNeedsReview:economicGroup==="review",
+    economicTypeSource:manual?"confirmado":automatic?x.auto_source:"reglas",
     amountCOP:(x.amount_minor/100).toFixed(2),category:cat,subcategory:sub,
     confidence:manual?"confirmada":automatic?(x.auto_confidence??0):suggestion.confidence,
     manual:x.classification_source==="manual",automatic:automatic?x.auto_source:null,
     needsReview:economicGroup==="review" || (manual?false:automatic?x.auto_needs_review===1:suggestion.confidence!=="alta"),
     question:economicGroup==="review"
-      ? "¿Fue un pago por una compra o una transferencia entre tus propias cuentas? Elige la categoría."
+      ? "¿Cuál fue la finalidad de este movimiento? Si es entre tus cuentas, selecciónalo expresamente; si pagaste una compra o una deuda, elige su categoría."
       : manual?null:automatic?x.auto_question:"¿Qué fue este movimiento? Elige la categoría correcta."};
  });
  return reply({taxonomy:TAXONOMY,entries:items,summary:[...total].map(([category,minor])=>({
