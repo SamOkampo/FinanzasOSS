@@ -1,6 +1,7 @@
 // Owner-scoped expense budgets. Soft warnings only: never block or mutate purchases.
 // Colombia runs at UTC-05 all year. All limits are independent COP amounts.
 import type {QuickD1} from "./index.js";
+import { quickEconomicGroupSql } from "./economic-review.js";
 
 type Period="day"|"week"|"month"|"year";
 const PERIODS:Period[]=["day","week","month","year"];
@@ -31,8 +32,9 @@ function dates(ts:number){
 }
 export async function readBudgets(db:QuickD1,owner:string,now=Date.now()):Promise<Response>{
   const b=dates(now);
-  // Explicit owner clauses in both sources. Never count transfers, investments,
-  // non-purchases, or non-COP records. One SQL aggregation, no client history cache.
+  // Explicit owner clauses in both sources. Only consumer outflows count; debt
+  // payments and ambiguous bank transfers remain separate pending review.
+  // Do not mutate ledger kind or infer recipient relationships.
   const [stored,totals]=await Promise.all([
     db.prepare("SELECT period,limit_minor FROM quick_spending_limits WHERE owner_id=?")
       .bind(owner).all<Stored>(),
@@ -41,11 +43,15 @@ export async function readBudgets(db:QuickD1,owner:string,now=Date.now()):Promis
       "COALESCE(SUM(CASE WHEN day>=? THEN amount_minor ELSE 0 END),0) AS week_minor,"+
       "COALESCE(SUM(CASE WHEN day>=? THEN amount_minor ELSE 0 END),0) AS month_minor,"+
       "COALESCE(SUM(CASE WHEN day>=? THEN amount_minor ELSE 0 END),0) AS year_minor "+
-      "FROM (SELECT amount_minor,substr(datetime(occurred_at,'-5 hours'),1,10) AS day "+
-      "FROM quick_manual_entries WHERE owner_id=? AND kind='purchase' AND currency='COP' AND deleted_at IS NULL "+
-      "UNION ALL SELECT amount_minor,substr(datetime(occurred_at,'-5 hours'),1,10) AS day "+
-      "FROM quick_shortcut_expenses WHERE owner_id=? AND kind='purchase' AND currency='COP' AND deleted_at IS NULL) "+
-      "WHERE day<=?"
+      "FROM (SELECT m.amount_minor,substr(datetime(m.occurred_at,'-5 hours'),1,10) AS day,"+
+      quickEconomicGroupSql()+" AS economic_group FROM ("+
+      "SELECT owner_id,'manual' AS source,id,amount_minor,occurred_at,kind,currency,payment_method,merchant "+
+      "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL "+
+      "UNION ALL SELECT owner_id,'accountless' AS source,id,amount_minor,occurred_at,kind,currency,payment_method,merchant "+
+      "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL) m "+
+      "LEFT JOIN quick_movement_categories c ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id "+
+      "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id "+
+      "WHERE m.currency='COP') WHERE economic_group='expense' AND day<=?"
     ).bind(b.day,b.week,b.month,b.year,owner,owner,b.today).first<Totals>(),
   ]);
   const limits=new Map(stored.results.map(x=>[x.period,Number(x.limit_minor)]));

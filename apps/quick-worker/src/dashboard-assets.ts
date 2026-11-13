@@ -22,17 +22,17 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 self.addEventListener("push", (event) => {
   // Empty payload only. Do not reveal any amount, bank or account on locked screens.
   event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:"¿Registraste tus gastos de hoy?",
+    body:"¿Qué fue esta compra? Revisa tus categorías pendientes.",
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
-    tag:"finanzasoss-daily",
-    data:{url:"/dashboard#movement"},
+    tag:"finanzasoss-finance-review",
+    data:{url:"/dashboard#plan"},
   }));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const target=new URL("/dashboard#movement",self.location.origin).href;
+    const target=new URL("/dashboard#plan",self.location.origin).href;
     const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});
     for(const window of windows) {
       if(new URL(window.url).origin===self.location.origin){

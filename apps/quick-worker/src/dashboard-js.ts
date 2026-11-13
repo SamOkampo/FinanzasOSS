@@ -260,6 +260,69 @@ export const DASH_JS = `(() => {
       ? fmtDay.format(parseDay(top[0])) + " · " + asCOP(top[1]) : "Sin datos";
     $("all-movements").textContent = Number(totalMovements).toLocaleString("es-CO");
   }
+
+  function renderCategoryBreakdown(bounds){
+    const box=$("category-spend-list"),info=$("category-spend-status");
+    if(!box||!info)return;
+    box.replaceChildren();
+    const rows=(state.overview?.categoryDaily||[]).filter(row=>between(row.day,bounds));
+    const grouped=new Map();
+    let total=0;
+    for(const row of rows){
+      const minor=Number(row.minor);
+      if(!Number.isFinite(minor)||minor<0)continue;
+      total+=minor;
+      const category=typeof row.category==="string"&&row.category.trim()?
+        row.category:"Pendiente de clasificar";
+      const sub=typeof row.subcategory==="string"?row.subcategory:"";
+      const entry=grouped.get(category)||{minor:0,items:new Map()};
+      entry.minor+=minor;
+      if(category!=="Pendiente de clasificar"&&sub&&sub!=="Otros"){
+        entry.items.set(sub,(entry.items.get(sub)||0)+minor);
+      }
+      grouped.set(category,entry);
+    }
+    if(total===0){
+      info.textContent="Sin compras ni gastos registrados para este período.";
+      return;
+    }
+    const waiting=grouped.get("Pendiente de clasificar")?.minor||0;
+    info.textContent=waiting>0?
+      "Parte del consumo necesita descripción más precisa. No se inventan categorías.":
+      "Categorías identificadas del período seleccionado.";
+    [...grouped.entries()].sort((a,b)=>b[1].minor-a[1].minor).forEach(([category,item],i)=>{
+      const row=document.createElement("div");
+      row.className="category-spend-row";
+      row.style.setProperty("--stagger",String(Math.min(i,8)));
+      const head=document.createElement("div");
+      head.className="category-spend-head";
+      const label=document.createElement("strong");
+      label.textContent=category;
+      const value=document.createElement("span");
+      value.textContent=asCOP(item.minor);
+      head.append(label,value);
+      const track=document.createElement("div");
+      track.className="category-spend-track";
+      track.setAttribute("role","meter");
+      track.setAttribute("aria-label",category);
+      track.setAttribute("aria-valuemin","0");
+      track.setAttribute("aria-valuemax","100");
+      track.setAttribute("aria-valuenow",String(Math.round(100*item.minor/total)));
+      const bar=document.createElement("span");
+      bar.className="category-spend-fill";
+      bar.style.width=(100*item.minor/total).toFixed(2)+"%";
+      track.appendChild(bar);
+      const details=document.createElement("small");
+      details.className="category-spend-details";
+      if(category==="Pendiente de clasificar"){
+        details.textContent="Por precisar · confirma el concepto en Categorías";
+      }else{
+        details.textContent=[...item.items.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3)
+          .map(([sub,minor])=>sub+" · "+asCOP(minor)).join("  ·  ");
+      }
+      row.append(head,track,details);box.appendChild(row);
+    });
+  }
   function renderDashboard() {
     if (!state.overview) return;
     const today = bogotaToday();
@@ -271,6 +334,7 @@ export const DASH_JS = `(() => {
     renderKpis(selected, totals(active), totals(prior), totals(all));
     renderTrend(all, state.period, today);
     renderMethods(active);
+    renderCategoryBreakdown(selected);
     renderWeek(all, today);
     renderInsights(active, state.overview.movementCount);
   }
@@ -302,10 +366,45 @@ export const DASH_JS = `(() => {
       const kind = document.createElement("small");
       kind.className = "history-kind";
       kind.textContent = x.kind === "purchase" ? (x.account_id === null ? "Sin cuenta asociada" : "Gasto manual")
-        : x.kind === "transfer" ? "Transferencia propia · no es gasto"
+        : x.kind === "transfer" ? "Abono entre cuentas propias · no es gasto"
+        : x.kind === "received_transfer" ? "Abono recibido · origen por confirmar"
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
       const desc = document.createElement("div");
-      desc.append(concept, kind);
+
+      const classification=document.createElement("div");
+      classification.className="history-classification";
+      const cat=document.createElement("span");
+      const nonExpense=x.kind==="transfer"||x.kind==="received_transfer"||x.kind==="investment_transfer";
+      const confirmed=x.category_status==="confirmed";
+      const suggested=x.category_status==="suggested";
+      cat.className="history-category-chip"+(nonExpense||confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
+      const label=nonExpense?(x.kind==="received_transfer"?"Abono recibido":"Transferencia propia"):
+        confirmed||suggested?x.category:"Pendiente de clasificar";
+      const subcategory=nonExpense?"No se cuenta como gasto":
+        confirmed||suggested?x.subcategory:"Necesita tu confirmación";
+      cat.textContent=label;
+      const sub=document.createElement("small");
+      sub.className="history-subcategory";
+      sub.textContent=subcategory+(confirmed?" · Confirmada":suggested?" · Sugerida por IA":"");
+      classification.append(cat,sub);
+      if(!nonExpense&&!confirmed&&!suggested){
+        const fix=document.createElement("button");
+        fix.type="button";fix.className="history-precise-button";
+        fix.textContent="Precisar";
+        fix.setAttribute("aria-label","Precisar la categoría de "+(x.merchant||"este movimiento"));
+        fix.addEventListener("click",()=>{
+          document.querySelector('[data-view="plan"]')?.click();
+          requestAnimationFrame(()=>{
+            const cards=[...document.querySelectorAll(".category-entry")];
+            const matching=cards.find(card=>card.dataset.movementId===x.id);
+            (matching||document.getElementById("categories-list"))?.scrollIntoView({
+              behavior:"smooth",block:"center"
+            });
+          });
+        });
+        classification.append(fix);
+      }
+      desc.append(concept, kind, classification);
       const method = document.createElement("div");
       method.className = "history-method";
       const methodLabel = document.createElement("strong");
@@ -322,8 +421,8 @@ export const DASH_JS = `(() => {
         method.appendChild(bank);
       }
       const amount = document.createElement("strong");
-      amount.className = "history-amount";
-      amount.textContent = (x.kind === "purchase" ? "− " : "↔ ") +
+      amount.className = "history-amount"+(x.direction==="credit"?" is-credit":"");
+      amount.textContent = (x.direction === "credit" ? "+ " : x.kind === "purchase" ? "− " : "↔ ") +
         (x.currency === "COP" ? asCOP(x.amount_minor) :
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "USD" }).format(Number(x.amount_minor) / 100));
       const actions=document.createElement("div");
@@ -332,12 +431,16 @@ export const DASH_JS = `(() => {
       edit.type="button";edit.className="history-action-edit";
       edit.textContent="Editar";
       edit.setAttribute("aria-label","Editar "+(x.merchant||"movimiento"));
-      edit.disabled=x.kind!=="purchase"||x.currency!=="COP";
+      edit.disabled=x.kind!=="purchase"||x.currency!=="COP"||x.source==="statement_credit";
       if(edit.disabled)edit.title="Por seguridad, solo se editan gastos COP";
       const remove=document.createElement("button");
       remove.type="button";remove.className="history-action-remove";
       remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
       remove.setAttribute("title","Eliminar movimiento");
+      if(x.source==="statement_credit"){
+        remove.disabled=true;
+        remove.title="Abono importado: registro de conciliación protegido";
+      }
       const symbol=document.createElement("span");symbol.className="history-trash-icon";
       symbol.setAttribute("aria-hidden","true");remove.appendChild(symbol);
       edit.addEventListener("click",()=>document.dispatchEvent(new CustomEvent("finanzasoss:movement-action",

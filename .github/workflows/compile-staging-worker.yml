@@ -1,0 +1,45 @@
+name: Reviewable staging worker bundle
+
+on:
+  push:
+    branches: [feature/studio-on-device-ios-qa-20261028]
+    paths:
+      - 'apps/quick-worker/src/**'
+      - 'packages/**'
+      - 'apps/quick-worker/migrations/**'
+      - 'package.json'
+      - '.github/workflows/compile-staging-worker.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    if: github.repository == 'SamOkampo/FinanzasOSS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm install -g typescript@5.8.3
+      - run: npm run lint && npm run typecheck
+      - name: Compile standalone Cloudflare Worker (no deployment)
+        run: |
+          npx --yes esbuild@0.25.12 apps/quick-worker/src/index.ts --bundle --platform=browser --format=esm --target=es2022 --minify --outfile=apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          test -s apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+      - name: Publish source-tracked reviewed bundle to staging branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          if git diff --cached --quiet; then
+            echo "Reviewed bundle is already current"
+            exit 0
+          fi
+          git commit -m "chore(staging): refresh compiled worker for reviewed QA"
+          git push origin HEAD:refs/heads/feature/studio-on-device-ios-qa-20261028
+          echo "Source-tracked reviewed bundle refreshed"

@@ -1,3 +1,4 @@
+import { runCategoryAutomation } from "./category-automation.js";
 // Personal iPhone Shortcut endpoint. Deliberately disabled without explicit flags.
 // Requires Cloudflare Access Service Auth at the edge AND a separate, revocable device token.
 import type { QuickD1, QuickWorkerEnv, QuickWorkerContext } from "./index.js";
@@ -139,14 +140,21 @@ export async function shortcutExpense(
     "AND expires_at>? LIMIT 1",
   ).bind(await digestToken(token), new Date().toISOString()).first<{ owner_id: string }>();
   if (!row) return reply({ error: "Device authorization expired or revoked" }, 401);
-  const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel"]);
-  return saveAccountlessExpense(env.DB, row.owner_id, data);
+  const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
+  const response=await saveAccountlessExpense(env.DB, row.owner_id, data);
+  if(response.status===201){
+    try{
+      const created=await response.clone().json() as {entryId?:string};
+      if(created.entryId)await runCategoryAutomation(env.DB,row.owner_id,env,{source:"accountless",id:created.entryId});
+    }catch{ /* Never convert successful iPhone Shortcut expense into a retry. */ }
+  }
+  return response;
 }
 
 // The browser flow reuses the SAME append-only write routine as iOS Atajos.
 // Human Access authentication, feature flag and same-origin CSRF gate live in index.ts.
 export async function browserExpense(db: QuickD1, owner: string, body: unknown): Promise<Response> {
-  const data = strict(body, ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "confirmed"]);
+  const data = strict(body, ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType", "confirmed"]);
   if (data.confirmed !== true) throw new ShortcutInputError("Expense confirmation required");
   return saveAccountlessExpense(db, owner, data);
 }
@@ -156,7 +164,18 @@ async function saveAccountlessExpense(
 ): Promise<Response> {
   const key = requiredText(data.clientEntryId, 96, "clientEntryId");
   if (!ID_RE.test(key)) throw new ShortcutInputError("Invalid clientEntryId");
-  const concept = requiredText(data.concept, 120, "Concept");
+  // Old iPhone shortcuts remain valid. A new explicit choice lets the user
+  // distinguish repayment of borrowed money from consumption without changing
+  // the append-only SQLite table or inventing a lender.
+  const movementType = data.movementType === undefined ? "auto" : data.movementType;
+  if (movementType !== "expense" && movementType !== "auto" && movementType !== "debt_repayment") {
+    throw new ShortcutInputError("Unsupported movementType");
+  }
+  const rawConcept = requiredText(data.concept, 120, "Concept");
+  const concept = movementType === "debt_repayment" &&
+    !/^pago de pr[eé]stamo(?:[ :]|$)/i.test(rawConcept)
+    ? "Pago de préstamo: " + rawConcept : rawConcept;
+  if (concept.length > 120) throw new ShortcutInputError("Concept is too long");
   if (typeof data.amount !== "string") throw new ShortcutInputError("Amount must be text");
   const method = data.paymentMethod;
   if (typeof method !== "string" || !METHODS.has(method)) throw new ShortcutInputError("Invalid payment method");
