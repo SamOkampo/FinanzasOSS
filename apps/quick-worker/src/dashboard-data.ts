@@ -13,7 +13,7 @@ type MovementRow = {
   merchant: string | null; bank_label: string | null; revision:number;
   source?:string;direction?:"credit"|"debit";category?:string;subcategory?:string;category_status?:string;
 };
-const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,direction " +
+const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction " +
   "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL";
 const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction " +
   "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
