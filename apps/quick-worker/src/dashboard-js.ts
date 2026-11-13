@@ -374,7 +374,7 @@ export const DASH_JS = `(() => {
       const classification=document.createElement("div");
       classification.className="history-classification";
       const cat=document.createElement("span");
-      const nonExpense=x.kind!=="purchase";
+      const nonExpense=x.kind==="transfer"||x.kind==="received_transfer"||x.kind==="investment_transfer";
       const confirmed=x.category_status==="confirmed";
       const suggested=x.category_status==="suggested";
       cat.className="history-category-chip"+(nonExpense||confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
