@@ -9,7 +9,7 @@ import {readBudgets} from "../dist/apps/quick-worker/src/spending-limits.js";
 const sqlite=new DatabaseSync(":memory:");
 for(const file of ["0001_quick_d1","0003_accountless_shortcut_expenses",
   "0007_spending_limits","0008_movement_edit_soft_delete","0010_categories_ai",
-  "0011_category_auto_questions"]){
+  "0011_category_auto_questions","0012_statement_credits"]){
  sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+file+".sql",import.meta.url),"utf8"));
 }
 const db={prepare(query){let values=[];return {
