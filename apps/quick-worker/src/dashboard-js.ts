@@ -366,24 +366,28 @@ export const DASH_JS = `(() => {
       const kind = document.createElement("small");
       kind.className = "history-kind";
       kind.textContent = x.kind === "purchase" ? (x.account_id === null ? "Sin cuenta asociada" : "Gasto manual")
-        : x.kind === "transfer" ? "Transferencia propia · no es gasto"
+        : x.kind === "transfer" ? "Abono entre cuentas propias · no es gasto"
+        : x.kind === "received_transfer" ? "Abono recibido · origen por confirmar"
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
       const desc = document.createElement("div");
 
       const classification=document.createElement("div");
       classification.className="history-classification";
       const cat=document.createElement("span");
+      const nonExpense=x.kind==="transfer"||x.kind==="received_transfer"||x.kind==="investment_transfer";
       const confirmed=x.category_status==="confirmed";
       const suggested=x.category_status==="suggested";
-      cat.className="history-category-chip"+(confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
-      const label=confirmed||suggested?x.category:"Pendiente de clasificar";
-      const subcategory=confirmed||suggested?x.subcategory:"Necesita tu confirmación";
+      cat.className="history-category-chip"+(nonExpense||confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
+      const label=nonExpense?(x.kind==="received_transfer"?"Abono recibido":"Transferencia propia"):
+        confirmed||suggested?x.category:"Pendiente de clasificar";
+      const subcategory=nonExpense?"No se cuenta como gasto":
+        confirmed||suggested?x.subcategory:"Necesita tu confirmación";
       cat.textContent=label;
       const sub=document.createElement("small");
       sub.className="history-subcategory";
       sub.textContent=subcategory+(confirmed?" · Confirmada":suggested?" · Sugerida por IA":"");
       classification.append(cat,sub);
-      if(!confirmed&&!suggested){
+      if(!nonExpense&&!confirmed&&!suggested){
         const fix=document.createElement("button");
         fix.type="button";fix.className="history-precise-button";
         fix.textContent="Precisar";
@@ -417,8 +421,8 @@ export const DASH_JS = `(() => {
         method.appendChild(bank);
       }
       const amount = document.createElement("strong");
-      amount.className = "history-amount";
-      amount.textContent = (x.kind === "purchase" ? "− " : "↔ ") +
+      amount.className = "history-amount"+(x.direction==="credit"?" is-credit":"");
+      amount.textContent = (x.direction === "credit" ? "+ " : x.kind === "purchase" ? "− " : "↔ ") +
         (x.currency === "COP" ? asCOP(x.amount_minor) :
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "USD" }).format(Number(x.amount_minor) / 100));
       const actions=document.createElement("div");
@@ -427,12 +431,16 @@ export const DASH_JS = `(() => {
       edit.type="button";edit.className="history-action-edit";
       edit.textContent="Editar";
       edit.setAttribute("aria-label","Editar "+(x.merchant||"movimiento"));
-      edit.disabled=x.kind!=="purchase"||x.currency!=="COP";
+      edit.disabled=x.kind!=="purchase"||x.currency!=="COP"||x.source==="statement_credit";
       if(edit.disabled)edit.title="Por seguridad, solo se editan gastos COP";
       const remove=document.createElement("button");
       remove.type="button";remove.className="history-action-remove";
       remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
       remove.setAttribute("title","Eliminar movimiento");
+      if(x.source==="statement_credit"){
+        remove.disabled=true;
+        remove.title="Abono importado: registro de conciliación protegido";
+      }
       const symbol=document.createElement("span");symbol.className="history-trash-icon";
       symbol.setAttribute("aria-hidden","true");remove.appendChild(symbol);
       edit.addEventListener("click",()=>document.dispatchEvent(new CustomEvent("finanzasoss:movement-action",

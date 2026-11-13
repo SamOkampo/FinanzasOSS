@@ -9,6 +9,7 @@ CREATE TABLE quick_manual_entries(owner_id TEXT,id TEXT,account_id TEXT,amount_m
 CREATE TABLE quick_shortcut_expenses(owner_id TEXT,id TEXT,amount_minor INTEGER,currency TEXT,payment_method TEXT,kind TEXT,occurred_at TEXT,merchant TEXT,bank_label TEXT,revision INTEGER,deleted_at TEXT);
 CREATE TABLE quick_movement_categories(owner_id TEXT,source TEXT,movement_id TEXT,category TEXT,subcategory TEXT);
 CREATE TABLE quick_auto_categories(owner_id TEXT,source TEXT,movement_id TEXT,category TEXT,subcategory TEXT,confidence REAL,needs_review INTEGER);
+CREATE TABLE quick_statement_credits(owner_id TEXT,id TEXT,amount_minor INTEGER,currency TEXT,occurred_at TEXT,merchant TEXT,bank_label TEXT,kind TEXT);
 `);
 const add=db.prepare("INSERT INTO quick_shortcut_expenses (owner_id,id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision) VALUES (?,?,?,?,?,?,?,?,?,0)");
 add.run("A","1",200000,"COP","debit_card","purchase","2026-11-04T20:00:00Z","Chokis","Plata Pay");

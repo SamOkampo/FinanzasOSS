@@ -30,6 +30,7 @@ sql.exec(`
  CREATE TABLE quick_auto_categories (owner_id TEXT,source TEXT,movement_id TEXT,category TEXT,subcategory TEXT,
  confidence REAL,needs_review INTEGER,question TEXT,classification_source TEXT);
  CREATE TABLE quick_spending_limits (owner_id TEXT,period TEXT,limit_minor INTEGER);
+ CREATE TABLE quick_statement_credits(owner_id TEXT,id TEXT,amount_minor INTEGER,currency TEXT,occurred_at TEXT,merchant TEXT,bank_label TEXT,kind TEXT);
 `);
 const row = sql.prepare("INSERT INTO quick_shortcut_expenses(owner_id,id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision) VALUES(?,?,?,?,?,?,?,?,?,0)");
 function add(owner,id,pesos,method,kindValue,merchant) {
