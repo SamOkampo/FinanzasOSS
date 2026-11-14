@@ -76,7 +76,7 @@ assert.equal(entries.length,4);
 assert.equal(entries.filter(x=>x.economic_purpose==="income").length,3);
 assert.ok(entries.every(x=>x.direction==="credit"));
 assert.equal(entries.find(x=>x.source==="income"&&x.payment_method==="cash").bank_label,null);
-assert.equal(entries.find(x=>x.source==="statement_credit"&&x.kind==="received_transfer").subcategory,"Pago recibido");
+assert.equal(entries.find(x=>x.source==="statement_credit"&&x.kind==="income").subcategory,"Pago recibido");
 assert.ok(!JSON.stringify(entries).includes(B));
 assert.match(DASH_HTML,/id="income-dialog"/);
 assert.match(DASH_HTML,/id="add-income-top"/);
