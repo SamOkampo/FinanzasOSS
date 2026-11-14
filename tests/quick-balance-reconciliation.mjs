@@ -1,0 +1,95 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { handleQuickRequest } from "../dist/apps/quick-worker/src/index.js";
+import { BALANCES_JS } from "../dist/apps/quick-worker/src/dashboard-balances-js.js";
+import { DASH_HTML } from "../dist/apps/quick-worker/src/dashboard-html.js";
+
+const sql=new DatabaseSync(":memory:");
+for(const name of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortcut_expenses",
+ "0004_staging_reset_challenges","0005_scoped_reset_confirmation","0006_push_subscriptions",
+ "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test",
+ "0010_categories_ai","0011_category_auto_questions","0012_statement_credits",
+ "0013_income_capture","0014_verified_balance_snapshots"]) {
+ sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+name+".sql",import.meta.url),"utf8"));
+}
+const db={prepare(query){let args=[];return {bind(...v){args=v;return this;},
+ async first(){return sql.prepare(query).get(...args)??null;},
+ async all(){return {results:sql.prepare(query).all(...args)};}};}};
+const A="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",B="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const origin="https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
+const env={DB:db,ACCESS_AUD:"balance-test",ALLOW_WRITES:"true"};
+const principal=owner=>({access:{aud:"balance-test",async getIdentity(){return {user_uuid:owner};}}});
+async function call(path,method="GET",body=null,owner=A,customOrigin=origin){
+ const r=await handleQuickRequest(new Request(origin+path,{
+  method,headers:method==="POST"?{"Content-Type":"application/json",Origin:customOrigin}:undefined,
+  body:method==="POST"?JSON.stringify(body):undefined
+ }),env,principal(owner));
+ return {status:r.status,body:await r.json()};
+}
+const d=new Date(),earlier=new Date(d.getTime()-72*3600000).toISOString();
+const middle=new Date(d.getTime()-48*3600000).toISOString();
+const later=new Date(d.getTime()-24*3600000).toISOString();
+const first={bankLabel:"Plata Pay",accountType:"deposit",amount:"100000",asOf:earlier,
+ requestKey:"balance-snapshot-first-001",confirmed:true};
+const second={...first,amount:"110768",asOf:later,requestKey:"balance-snapshot-second-002"};
+assert.equal((await call("/api/quick/balances")).body.accounts.length,0,"Never infer bank account from transactions");
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,confirmed:false})).status,422);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,owner_id:B})).status,422);
+assert.equal((await call("/api/quick/balances/verify","POST",first,A,"https://example.invalid")).status,403);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,amount:"-500"})).status,422);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,amount:"5.500"})).status,422);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,asOf:new Date(Date.now()+24*3600000).toISOString()})).status,422);
+assert.equal((await call("/api/quick/balances/verify","POST",first)).status,201);
+assert.equal((await call("/api/quick/balances/verify","POST",first)).body.replayed,true);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,amount:"100001"})).status,409);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,bankLabel:"PLATA PAY",accountType:"credit",requestKey:"balance-different-kind-001"})).status,409);
+const p=(query,values)=>sql.prepare(query).run(...values);
+// Five entries in period: deposit credit 10168, own transfer credit 4000, expense 3400, bank mismatch expense, no-label expense.
+p("INSERT INTO quick_statement_credits(id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,economic_purpose) VALUES(?,?,?,?,?,?,?,?,?,?)",
+ ["aaaaaaaa-aaaa-4aaa-8aaa-111111111111",A,"statement-payment-10168",1016800,"COP",middle,"Pago recibido","Plata Pay","received_transfer","income"]);
+p("INSERT INTO quick_statement_credits(id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,economic_purpose) VALUES(?,?,?,?,?,?,?,?,?,?)",
+ ["aaaaaaaa-aaaa-4aaa-8aaa-222222222222",A,"own-account-transfer-4000",400000,"COP",middle,"Rentabilidad → Cuenta","Plata Pay","transfer","transfer"]);
+p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?)",
+ ["aaaaaaaa-aaaa-4aaa-8aaa-333333333333",A,"expense-plata-3400",340000,"COP","bank_transfer","purchase",middle,"Comida","Plata Pay"]);
+p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?)",
+ ["aaaaaaaa-aaaa-4aaa-8aaa-444444444444",A,"expense-nu-14340",1434000,"COP","credit_card","purchase",middle,"D1","Nu Bank"]);
+p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?)",
+ ["aaaaaaaa-aaaa-4aaa-8aaa-555555555555",B,"another-owner-plata-5000",500000,"COP","bank_transfer","purchase",middle,"Extraño","Plata Pay"]);
+const firstResult=(await call("/api/quick/balances")).body.accounts;
+assert.equal(firstResult.length,1);
+assert.equal(firstResult[0].latest.amountMinor,"10000000");
+assert.equal(firstResult[0].reconciliation,null,"One balance cannot prove reconciliation");
+assert.equal((await call("/api/quick/balances", "GET", null,B)).body.accounts.length,0,"Account is tenant private");
+assert.equal((await call("/api/quick/balances/verify","POST",second)).status,201);
+const matched=(await call("/api/quick/balances")).body.accounts[0];
+assert.equal(matched.reconciliation.incomingMinor,"1416800");
+assert.equal(matched.reconciliation.outgoingMinor,"340000");
+assert.equal(matched.reconciliation.expectedMinor,"11076800");
+assert.equal(matched.reconciliation.differenceMinor,"0");
+assert.equal(matched.reconciliation.status,"matches_recorded_movements");
+assert.equal(matched.reconciliation.incomingCount,2);
+assert.equal(matched.reconciliation.outgoingCount,1);
+const third={...second,amount:"110000",requestKey:"balance-snapshot-third-003",
+ asOf:new Date(d.getTime()-12*3600000).toISOString()};
+assert.equal((await call("/api/quick/balances/verify","POST",third)).status,201);
+const differing=(await call("/api/quick/balances")).body.accounts[0];
+assert.equal(differing.reconciliation.status,"difference_requires_review");
+assert.equal(differing.reconciliation.differenceMinor,"-76800");
+assert.equal(differing.reconciliation.outgoingCount,0);
+assert.equal(sql.prepare("SELECT count(*) n FROM quick_shortcut_expenses WHERE owner_id=?").get(A).n,2,"No movements edited");
+const credit={bankLabel:"Nu Bank",accountType:"credit",amount:"50000",
+ asOf:later,requestKey:"nu-debt-snapshot-001",confirmed:true};
+assert.equal((await call("/api/quick/balances/verify","POST",credit)).status,201);
+const nu=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Nu Bank");
+assert.equal(nu.type,"credit");
+assert.equal(nu.reconciliation,null,"Credit card debt must not be reconciled as a deposit");
+assert.equal(nu.latest.amountMinor,"5000000");
+assert.ok(!JSON.stringify((await call("/api/quick/balances", "GET", null,B)).body).includes("Nu Bank"));
+assert.match(DASH_HTML,/id="verify-balance-form"/);
+assert.match(DASH_HTML,/\/balances\.js/);
+assert.match(BALANCES_JS,/not.*connected|no se|No se/i);
+assert.ok(!BALANCES_JS.includes("localStorage")&&!BALANCES_JS.includes("sessionStorage"));
+new Function(BALANCES_JS);
+sql.close();
+console.log("Verified bank balances: owner isolation, snapshot idempotency, credit separation, matched and unmatched flows PASSED");
