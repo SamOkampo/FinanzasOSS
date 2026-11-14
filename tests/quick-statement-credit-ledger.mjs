@@ -9,7 +9,7 @@ for (const m of [
   "0001_quick_d1","0002_shortcut_devices","0003_accountless_shortcut_expenses",
   "0004_staging_reset_challenges","0005_scoped_reset_confirmation","0006_push_subscriptions",
   "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test",
-  "0010_categories_ai","0011_category_auto_questions","0012_statement_credits",
+  "0010_categories_ai","0011_category_auto_questions","0012_statement_credits","0013_income_capture",
 ]) sqlite.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+m+".sql",import.meta.url),"utf8"));
 
 const A="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
