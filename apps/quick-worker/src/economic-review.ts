@@ -95,7 +95,7 @@ export function quickEconomicGroupSql(): string {
   ].join(" OR ")+"))";
   const confident="(a.needs_review=0 AND a.confidence>=0.9)";
   return "CASE " +
-    "WHEN m.kind='income' OR (m.source='statement_credit' AND m.economic_purpose='income') THEN 'income' " +
+    "WHEN m.kind='income' THEN 'income' " +
     "WHEN m.kind='transfer' THEN 'internal_transfer' " +
     "WHEN m.kind='investment_transfer' THEN 'investment_flow' " +
     "WHEN m.kind!='purchase' THEN 'other' " +
