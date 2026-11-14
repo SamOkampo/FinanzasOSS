@@ -27,7 +27,7 @@ function payload(body:unknown):{bankLabel:string;accountType:string;requestKey:s
    /[\u0000-\u001f\u007f]/.test(o.bankLabel))throw new BalanceInputError("Especifica el banco o billetera.");
  if(typeof o.accountType!=="string"||!TYPES.has(o.accountType))throw new BalanceInputError("Tipo de cuenta inválido.");
  if(typeof o.requestKey!=="string"||!KEY.test(o.requestKey))throw new BalanceInputError("Identificador inválido.");
- if(typeof o.amount!=="string"||!^(?:0|[1-9][0-9]{0,9})$/.test(o.amount))throw new BalanceInputError("Saldo COP entero inválido.");
+ if(typeof o.amount!=="string"||!/^(?:0|[1-9][0-9]{0,9})$/.test(o.amount))throw new BalanceInputError("Saldo COP entero inválido.");
  const amountMinor=Number(o.amount)*100;
  if(!Number.isSafeInteger(amountMinor)||amountMinor>1000000000000)throw new BalanceInputError("Saldo fuera del límite permitido.");
  if(typeof o.asOf!=="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(o.asOf)||
