@@ -4,7 +4,7 @@
  * projections only: never mutate the immutable amount, direction or ledger kind.
  * Explicit human review always wins over AI.
  */
-export type QuickEconomicGroup = "expense" | "debt_payment" | "review" |
+export type QuickEconomicGroup = "income" | "expense" | "debt_payment" | "review" |
   "internal_transfer" | "investment_flow" | "other";
 export interface QuickEconomicMovement {
   kind: string;
@@ -33,6 +33,7 @@ function unclearTransfer(concept: string, method: string): boolean {
     /^(?:bre-b|transferencia(?:\s|$)|transferi|le transferi|envio (?:a|de) dinero|envie dinero|paso plata|le mande plata|le pague a\b)/.test(concept);
 }
 export function classifyQuickEconomicMovement(m: QuickEconomicMovement): QuickEconomicGroup {
+  if (m.kind === "income") return "income";
   if (m.kind === "transfer") return "internal_transfer";
   if (m.kind === "investment_transfer") return "investment_flow";
   if (m.kind !== "purchase") return "other";
@@ -94,6 +95,7 @@ export function quickEconomicGroupSql(): string {
   ].join(" OR ")+"))";
   const confident="(a.needs_review=0 AND a.confidence>=0.9)";
   return "CASE " +
+    "WHEN m.kind='income' OR (m.source='statement_credit' AND m.economic_purpose='income') THEN 'income' " +
     "WHEN m.kind='transfer' THEN 'internal_transfer' " +
     "WHEN m.kind='investment_transfer' THEN 'investment_flow' " +
     "WHEN m.kind!='purchase' THEN 'other' " +
