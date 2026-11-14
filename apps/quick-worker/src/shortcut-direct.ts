@@ -121,31 +121,40 @@ function replayOrConflict(
   return reply({ entryId: prior.id, replayed: true });
 }
 
-export async function shortcutExpense(
-  request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
-): Promise<Response> {
+export async function authenticatedShortcutOwner(
+  request:Request,env:QuickWorkerEnv,ctx:QuickWorkerContext,
+):Promise<string> {
   // A Cloudflare Access *Service Auth* policy must validate the separate
   // CF-Access-Client-Id/Secret headers. Never configure a Bypass policy here.
   if (!env.ACCESS_AUD || ctx.access?.aud !== env.ACCESS_AUD) {
-    return reply({ error: "Cloudflare Access required" }, 401);
+    throw new ShortcutInputError("Cloudflare Access required",401);
   }
   if (env.ALLOW_WRITES !== "true" || env.ALLOW_SHORTCUT_WRITES !== "true") {
-    return reply({ error: "Direct shortcuts disabled" }, 503);
+    throw new ShortcutInputError("Direct shortcuts disabled",503);
   }
   const auth = request.headers.get("Authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (!TOKEN_RE.test(token)) return reply({ error: "Device authorization required" }, 401);
+  if (!TOKEN_RE.test(token)) throw new ShortcutInputError("Device authorization required",401);
   const row = await env.DB.prepare(
     "SELECT owner_id FROM quick_shortcut_devices WHERE token_hash=? AND revoked_at IS NULL " +
     "AND expires_at>? LIMIT 1",
   ).bind(await digestToken(token), new Date().toISOString()).first<{ owner_id: string }>();
-  if (!row) return reply({ error: "Device authorization expired or revoked" }, 401);
+  if (!row) throw new ShortcutInputError("Device authorization expired or revoked",401);
+
+  return row.owner_id;
+}
+export async function parseShortcutJson(request:Request):Promise<unknown> { return json(request); }
+
+export async function shortcutExpense(
+  request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
+): Promise<Response> {
+  const owner = await authenticatedShortcutOwner(request,env,ctx);
   const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
-  const response=await saveAccountlessExpense(env.DB, row.owner_id, data);
+  const response=await saveAccountlessExpense(env.DB, owner, data);
   if(response.status===201){
     try{
       const created=await response.clone().json() as {entryId?:string};
-      if(created.entryId)await runCategoryAutomation(env.DB,row.owner_id,env,{source:"accountless",id:created.entryId});
+      if(created.entryId)await runCategoryAutomation(env.DB,owner,env,{source:"accountless",id:created.entryId});
     }catch{ /* Never convert successful iPhone Shortcut expense into a retry. */ }
   }
   return response;
