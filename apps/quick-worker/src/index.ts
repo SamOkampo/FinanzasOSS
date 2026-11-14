@@ -4,6 +4,8 @@ import { DASH_HTML } from "./dashboard-html.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
 import { INCOME_JS } from "./dashboard-income-js.js";
+import { BALANCES_JS } from "./dashboard-balances-js.js";
+import { saveVerifiedBalance, verifiedBalances, BalanceInputError } from "./bank-reconciliation.js";
 import { MOBILE_INPUT_JS } from "./dashboard-mobile-input-js.js";
 import { BANK_BENEFITS_JS } from "./dashboard-bank-benefits-js.js";
 import { STUDIO_JS } from "./dashboard-studio-js.js";
@@ -328,7 +330,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -387,6 +389,7 @@ export async function handleQuickRequest(
     if (pathname === "/mobile-input.js") return respondAsset(MOBILE_INPUT_JS, "application/javascript");
     if (pathname === "/studio.js") return respondAsset(STUDIO_JS, "application/javascript");
     if (pathname === "/income.js") return respondAsset(INCOME_JS, "application/javascript");
+    if (pathname === "/balances.js") return respondAsset(BALANCES_JS, "application/javascript");
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
@@ -412,6 +415,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/studio/expense") return await categorizedResponse(
         await browserExpense(env.DB, owner, data),env.DB,owner,env,"accountless");
       if (pathname === "/api/quick/studio/income") return await saveIncome(env.DB,owner,data,true);
+      if (pathname === "/api/quick/balances/verify") return await saveVerifiedBalance(env.DB,owner,data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
@@ -458,6 +462,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/balances") return await verifiedBalances(env.DB,owner);
       if (pathname === "/api/quick/categories") return await categoryReview(env.DB, owner);
       if (pathname === "/api/quick/categories/automation/status")
         return await categoryAutomationStatus(env.DB,owner);
@@ -472,7 +477,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
