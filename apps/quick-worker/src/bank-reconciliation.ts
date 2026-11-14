@@ -7,7 +7,7 @@ export class BalanceInputError extends Error {
 }
 type SqlAccount={id:string;owner_id:string;bank_label:string;account_type:string;currency:string};
 type SqlSnapshot={id:string;account_id:string;request_key:string;amount_minor:number;as_of:string;created_at:string};
-type Flow={in_minor:number|null;out_minor:number|null;in_count:number;out_count:number};
+type Flow={in_minor:number;out_minor:number;in_count:number;out_count:number};
 const KEY=/^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const TYPES=new Set(["deposit","cash","credit"]);
 function response(data:unknown,status=200):Response{
