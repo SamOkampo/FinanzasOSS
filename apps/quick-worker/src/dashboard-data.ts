@@ -11,17 +11,25 @@ type MovementRow = {
   id: string; account_id: string | null; amount_minor: number; currency: string;
   payment_method: string; kind: string; occurred_at: string;
   merchant: string | null; bank_label: string | null; revision:number;
-  source?:string;direction?:"credit"|"debit";category?:string;subcategory?:string;category_status?:string;
+  source?:string;direction?:"credit"|"debit";economic_purpose?:string|null;income_category?:string|null;
+  category?:string;subcategory?:string;category_status?:string;
 };
-const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction " +
+const accountBound = "SELECT owner_id,'manual' AS source,id,account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction,NULL AS economic_purpose,NULL AS income_category " +
   "FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL";
-const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction " +
+const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,revision,'debit' AS direction,NULL AS economic_purpose,NULL AS income_category " +
   "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 // Credits from bank/card statements are read-only, owner-bound and non-expense.
 const statementCredits = "SELECT owner_id,'statement_credit' AS source,id,NULL AS account_id," +
   "amount_minor,currency,'bank_transfer' AS payment_method,kind,occurred_at,merchant,bank_label," +
-  "0 AS revision,'credit' AS direction FROM quick_statement_credits WHERE owner_id=?";
-const allMovementSql = accountBound + " UNION ALL " + accountFree + " UNION ALL " + statementCredits;
+  "0 AS revision,'credit' AS direction,economic_purpose," +
+  "CASE WHEN economic_purpose='income' THEN 'payment' ELSE NULL END AS income_category " +
+  "FROM quick_statement_credits WHERE owner_id=?";
+const incomeEntries = "SELECT owner_id,'income' AS source,id,NULL AS account_id," +
+  "amount_minor,currency,payment_method,kind,occurred_at,concept AS merchant,bank_label," +
+  "0 AS revision,'credit' AS direction,'income' AS economic_purpose,income_category " +
+  "FROM quick_income_entries WHERE owner_id=?";
+const allMovementSql = accountBound + " UNION ALL " + accountFree + " UNION ALL " + statementCredits +
+  " UNION ALL " + incomeEntries;
 const classifiedMovements = "SELECT m.*," + quickEconomicGroupSql() + " AS economic_group FROM (" +
   allMovementSql + ") m LEFT JOIN quick_movement_categories c ON " +
   "c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
@@ -42,22 +50,25 @@ function reply(data: unknown): Response {
 export async function dashboardOverview(db: QuickD1, owner: string): Promise<Response> {
   // Aggregate at DB level: the app never needs to download raw history to
   // calculate totals. All SQL branches constrain owner_id and purchases.
-  const [daily, counts, byBank, byCategory] = await Promise.all([
+  const [daily, counts, byBank, byCategory, incomeDaily] = await Promise.all([
     db.prepare(
       "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
       "payment_method, SUM(amount_minor) AS amount_minor, COUNT(*) AS quantity " +
       "FROM (" + classifiedMovements + ") " +
       "WHERE currency='COP' AND economic_group='expense' " +
       "GROUP BY day,payment_method ORDER BY day DESC LIMIT 40001",
-    ).bind(owner, owner, owner).all<AggregateRow>(),
+    ).bind(owner, owner, owner, owner).all<AggregateRow>(),
     db.prepare(
       "SELECT COUNT(*) AS total," +
       "COALESCE(SUM(CASE WHEN currency='USD' THEN 1 ELSE 0 END),0) AS usd," +
-      "COALESCE(SUM(CASE WHEN economic_group!='expense' THEN 1 ELSE 0 END),0) AS non_expenses," +
+      "COALESCE(SUM(CASE WHEN economic_group NOT IN ('expense','income') THEN 1 ELSE 0 END),0) AS non_expenses," +
+      "COALESCE(SUM(CASE WHEN economic_group='income' THEN amount_minor ELSE 0 END),0) AS income_minor," +
+      "COALESCE(SUM(CASE WHEN economic_group='income' THEN 1 ELSE 0 END),0) AS income_count," +
       "COALESCE(SUM(CASE WHEN economic_group='review' AND currency='COP' THEN amount_minor ELSE 0 END),0) AS review_minor," +
       "COALESCE(SUM(CASE WHEN economic_group='debt_payment' AND currency='COP' THEN amount_minor ELSE 0 END),0) AS debt_minor " +
       "FROM (" + classifiedMovements + ")",
-    ).bind(owner, owner, owner).first<{ total: number; usd: number; non_expenses: number; review_minor: number; debt_minor: number }>(),
+    ).bind(owner, owner, owner, owner).first<{ total: number; usd: number; non_expenses: number; income_minor:number;
+      income_count:number; review_minor: number; debt_minor: number }>(),
     db.prepare(
       "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
       "COALESCE(NULLIF(TRIM(bank_label),''),'Sin banco indicado') AS bank," +
@@ -65,7 +76,7 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
       "FROM (" + classifiedMovements + ") " +
       "WHERE currency='COP' AND economic_group='expense' " +
       "GROUP BY day,bank ORDER BY day DESC LIMIT 40001",
-    ).bind(owner, owner, owner).all<BankAggregateRow>(),
+    ).bind(owner, owner, owner, owner).all<BankAggregateRow>(),
     db.prepare(
       "SELECT substr(datetime(m.occurred_at,'-5 hours'),1,10) AS day," +
       "CASE WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.category WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.category ELSE 'Pendiente de clasificar' END AS category," +
@@ -76,11 +87,22 @@ export async function dashboardOverview(db: QuickD1, owner: string): Promise<Res
       "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id " +
       "WHERE m.currency='COP' AND "+quickEconomicGroupSql()+"='expense' " +
       "GROUP BY 1,2,3 ORDER BY 1 DESC LIMIT 40001",
-    ).bind(owner, owner, owner).all<CategoryAggregateRow>(),
+    ).bind(owner, owner, owner, owner).all<CategoryAggregateRow>(),
+    db.prepare(
+      "SELECT substr(datetime(occurred_at,'-5 hours'),1,10) AS day," +
+      "payment_method,SUM(amount_minor) AS amount_minor,COUNT(*) AS quantity " +
+      "FROM (" + classifiedMovements + ") " +
+      "WHERE currency='COP' AND economic_group='income' " +
+      "GROUP BY day,payment_method ORDER BY day DESC LIMIT 40001"
+    ).bind(owner,owner,owner,owner).all<AggregateRow>(),
   ]);
   return reply({
     timezone: "America/Bogota", currency: "COP", movementCount: counts?.total ?? 0,
     excludedUsd: counts?.usd ?? 0, transfersAndInvestments: counts?.non_expenses ?? 0,
+    incomeMinor: String(counts?.income_minor ?? 0),
+    incomeCount: counts?.income_count ?? 0,
+    incomeDaily: incomeDaily.results.map(x=>({day:x.day,method:x.payment_method,
+      minor:String(x.amount_minor),count:x.quantity})),
     pendingTransferReviewMinor: String(counts?.review_minor ?? 0),
     debtPaymentsMinor: String(counts?.debt_minor ?? 0),
     truncated: daily.results.length > 40000 || byBank.results.length > 40000 || byCategory.results.length > 40000,
@@ -110,16 +132,17 @@ export async function dashboardMovements(db: QuickD1, owner: string, url: URL): 
   const data = await db.prepare(
     "SELECT m.id,m.account_id,m.amount_minor,m.currency,m.payment_method,m.kind," +
     "m.occurred_at,m.merchant,m.bank_label,m.revision,m.source,m.direction," +
-    "CASE WHEN m.source='statement_credit' AND m.kind='transfer' THEN 'Pagos y transferencias' WHEN m.source='statement_credit' AND m.kind='received_transfer' THEN 'Abono recibido' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.category WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.category ELSE 'Pendiente de clasificar' END AS category," +
-    "CASE WHEN m.source='statement_credit' AND m.kind='transfer' THEN 'Entre cuentas propias' WHEN m.source='statement_credit' AND m.kind='received_transfer' THEN 'Origen por confirmar' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.subcategory WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.subcategory ELSE 'Pendiente de clasificar' END AS subcategory," +
-    "CASE WHEN m.source='statement_credit' THEN 'nonexpense' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' THEN 'confirmed' " +
+    "m.economic_purpose,m.income_category," +
+    "CASE WHEN m.economic_purpose='income' THEN 'Ingresos' WHEN m.source='statement_credit' AND m.kind='transfer' THEN 'Pagos y transferencias' WHEN m.source='statement_credit' AND m.kind='received_transfer' THEN 'Abono recibido' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.category WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.category ELSE 'Pendiente de clasificar' END AS category," +
+    "CASE WHEN m.economic_purpose='income' THEN CASE m.income_category WHEN 'salary' THEN 'Salario' WHEN 'sales' THEN 'Ventas' WHEN 'commission' THEN 'Comisiones' WHEN 'interest' THEN 'Intereses' WHEN 'refund' THEN 'Devoluciones' WHEN 'payment' THEN 'Pago recibido' ELSE 'Otros ingresos' END WHEN m.source='statement_credit' AND m.kind='transfer' THEN 'Entre cuentas propias' WHEN m.source='statement_credit' AND m.kind='received_transfer' THEN 'Origen por confirmar' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' AND c.category!='Por confirmar' THEN c.subcategory WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' AND a.category!='Por confirmar' AND a.needs_review=0 AND a.confidence>=0.90 THEN a.subcategory ELSE 'Pendiente de clasificar' END AS subcategory," +
+    "CASE WHEN m.economic_purpose='income' THEN 'income' WHEN m.source='statement_credit' THEN 'nonexpense' WHEN c.category IS NOT NULL AND c.category!='Otros' AND c.subcategory!='Otros' THEN 'confirmed' " +
     "WHEN a.category IS NOT NULL AND a.category!='Otros' AND a.subcategory!='Otros' " +
     "AND a.needs_review=0 AND a.confidence>=0.9 THEN 'suggested' ELSE 'review' END AS category_status " +
     "FROM (" + allMovementSql + ") m " +
     "LEFT JOIN quick_movement_categories c ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id " +
     "LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id " +
     "ORDER BY m.occurred_at DESC,m.id DESC LIMIT ? OFFSET ?",
-  ).bind(owner, owner, owner, size + 1, page * size).all<MovementRow>();
+  ).bind(owner, owner, owner, owner, size + 1, page * size).all<MovementRow>();
   return reply({
     page, hasMore: data.results.length > size, entries: data.results.slice(0, size).map((x) => ({
       ...x, amount_minor: String(x.amount_minor),
