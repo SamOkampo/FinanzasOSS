@@ -12,6 +12,8 @@ for(const name of ["0001_quick_d1","0003_accountless_shortcut_expenses","0007_sp
 sqlite.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
 // Optional AI classifications are joined read-only in expense reports.
 sqlite.exec("CREATE TABLE quick_auto_categories (owner_id TEXT, source TEXT, movement_id TEXT,category TEXT,subcategory TEXT,confidence REAL,needs_review INTEGER)");
+sqlite.exec("CREATE TABLE quick_statement_credits(owner_id TEXT,id TEXT,amount_minor INTEGER,currency TEXT,occurred_at TEXT,merchant TEXT,bank_label TEXT,kind TEXT,economic_purpose TEXT)");
+sqlite.exec("CREATE TABLE quick_income_entries(owner_id TEXT,id TEXT,amount_minor INTEGER,currency TEXT,payment_method TEXT,kind TEXT,occurred_at TEXT,concept TEXT,bank_label TEXT,income_category TEXT)");
 const db={prepare(query){let params=[];return {
   bind(...args){params=args;return this;},
   async first(){return sqlite.prepare(query).get(...params)??null;},

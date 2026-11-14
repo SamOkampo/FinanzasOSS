@@ -3,6 +3,7 @@ import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
+import { INCOME_JS } from "./dashboard-income-js.js";
 import { MOBILE_INPUT_JS } from "./dashboard-mobile-input-js.js";
 import { BANK_BENEFITS_JS } from "./dashboard-bank-benefits-js.js";
 import { STUDIO_JS } from "./dashboard-studio-js.js";
@@ -22,7 +23,8 @@ import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation,
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
-import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError } from "./shortcut-direct.js";
+import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError, authenticatedShortcutOwner, parseShortcutJson } from "./shortcut-direct.js";
+import { saveIncome } from "./income-capture.js";
 
 // Narrow structural definitions avoid requiring a Cloudflare SDK in Finance Core.
 type SqlValue = string | number | null;
@@ -326,15 +328,19 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
   }
   // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
-  if (pathname === "/api/quick/shortcut/expense" && request.method === "POST") {
-    try { return await shortcutExpense(request, env, ctx); }
-    catch (error) { return shortcutFailure(error); }
+  if ((pathname === "/api/quick/shortcut/expense" || pathname === "/api/quick/shortcut/income") &&
+      request.method === "POST") {
+    try {
+      if(pathname === "/api/quick/shortcut/expense")return await shortcutExpense(request, env, ctx);
+      const owner=await authenticatedShortcutOwner(request,env,ctx);
+      return await saveIncome(env.DB,owner,await parseShortcutJson(request),false);
+    } catch (error) { return shortcutFailure(error); }
   }
   const owner = await principal(ctx, env);
   if (!owner) {
@@ -380,6 +386,7 @@ export async function handleQuickRequest(
     if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
     if (pathname === "/mobile-input.js") return respondAsset(MOBILE_INPUT_JS, "application/javascript");
     if (pathname === "/studio.js") return respondAsset(STUDIO_JS, "application/javascript");
+    if (pathname === "/income.js") return respondAsset(INCOME_JS, "application/javascript");
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
@@ -404,6 +411,7 @@ export async function handleQuickRequest(
         await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
       if (pathname === "/api/quick/studio/expense") return await categorizedResponse(
         await browserExpense(env.DB, owner, data),env.DB,owner,env,"accountless");
+      if (pathname === "/api/quick/studio/income") return await saveIncome(env.DB,owner,data,true);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);

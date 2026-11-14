@@ -365,7 +365,8 @@ export const DASH_JS = `(() => {
       concept.textContent = textOrUnknown(x.merchant, x.kind === "purchase" ? "Gasto sin concepto" : "Movimiento");
       const kind = document.createElement("small");
       kind.className = "history-kind";
-      kind.textContent = x.kind === "purchase" ? (x.account_id === null ? "Sin cuenta asociada" : "Gasto manual")
+      kind.textContent = x.economic_purpose==="income" ? "Ingreso confirmado · dinero recibido"
+        : x.kind === "purchase" ? (x.account_id === null ? "Sin cuenta asociada" : "Gasto manual")
         : x.kind === "transfer" ? "Abono entre cuentas propias · no es gasto"
         : x.kind === "received_transfer" ? "Abono recibido · origen por confirmar"
         : x.kind === "investment_transfer" ? "Aporte a inversión · no es gasto" : "Movimiento";
@@ -374,13 +375,14 @@ export const DASH_JS = `(() => {
       const classification=document.createElement("div");
       classification.className="history-classification";
       const cat=document.createElement("span");
-      const nonExpense=x.kind==="transfer"||x.kind==="received_transfer"||x.kind==="investment_transfer";
+      const isIncome=x.economic_purpose==="income" || x.kind==="income";
+      const nonExpense=x.kind==="transfer"||x.kind==="received_transfer"||x.kind==="investment_transfer"||isIncome;
       const confirmed=x.category_status==="confirmed";
       const suggested=x.category_status==="suggested";
       cat.className="history-category-chip"+(nonExpense||confirmed?" is-confirmed":suggested?" is-suggested":" is-review");
-      const label=nonExpense?(x.kind==="received_transfer"?"Abono recibido":"Transferencia propia"):
+      const label=nonExpense?(isIncome?"Ingresos":x.kind==="received_transfer"?"Abono recibido":"Transferencia propia"):
         confirmed||suggested?x.category:"Pendiente de clasificar";
-      const subcategory=nonExpense?"No se cuenta como gasto":
+      const subcategory=isIncome?(x.subcategory||"Pago recibido"):nonExpense?"No se cuenta como gasto":
         confirmed||suggested?x.subcategory:"Necesita tu confirmación";
       cat.textContent=label;
       const sub=document.createElement("small");
@@ -437,9 +439,9 @@ export const DASH_JS = `(() => {
       remove.type="button";remove.className="history-action-remove";
       remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
       remove.setAttribute("title","Eliminar movimiento");
-      if(x.source==="statement_credit"){
+      if(x.source==="statement_credit" || x.source==="income"){
         remove.disabled=true;
-        remove.title="Abono importado: registro de conciliación protegido";
+        remove.title="Ingreso o abono protegido: la edición de gastos no aplica";
       }
       const symbol=document.createElement("span");symbol.className="history-trash-icon";
       symbol.setAttribute("aria-hidden","true");remove.appendChild(symbol);

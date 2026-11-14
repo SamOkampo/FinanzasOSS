@@ -9,6 +9,7 @@ for(const n of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortc
  sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+n+".sql",import.meta.url),"utf8"));
 }
 sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/0012_statement_credits.sql", import.meta.url),"utf8"));
+sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/0013_income_capture.sql", import.meta.url),"utf8"));
 // Dashboard economic summaries read per-user confirmations when present.
 sql.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
 // Optional AI classifications are joined read-only in expense reports.
