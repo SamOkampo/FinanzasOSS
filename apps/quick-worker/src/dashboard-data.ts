@@ -20,7 +20,9 @@ const accountFree = "SELECT owner_id,'accountless' AS source,id,NULL AS account_
   "FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
 // Credits from bank/card statements are read-only, owner-bound and non-expense.
 const statementCredits = "SELECT owner_id,'statement_credit' AS source,id,NULL AS account_id," +
-  "amount_minor,currency,'bank_transfer' AS payment_method,kind,occurred_at,merchant,bank_label," +
+  "amount_minor,currency,'bank_transfer' AS payment_method," +
+  "CASE WHEN economic_purpose='income' THEN 'income' ELSE kind END AS kind," +
+  "occurred_at,merchant,bank_label," +
   "0 AS revision,'credit' AS direction,economic_purpose," +
   "CASE WHEN economic_purpose='income' THEN 'payment' ELSE NULL END AS income_category " +
   "FROM quick_statement_credits WHERE owner_id=?";
