@@ -14,10 +14,11 @@ const env={ACCESS_AUD:"vision-test",ALLOW_STATEMENT_VISION:"true",ALLOW_WRITES:"
     calls++;
     assert.equal(model,"@cf/qwen/qwen3.8-27b");
     assert.match(input.messages[1].content[1].image_url.url,/^data:image\/jpeg;base64,/);
-    return {response:JSON.stringify({rows:[
+    return {choices:[{message:{content:JSON.stringify({rows:[
       {date:"2026-10-02",description:"Compra ficticia",amount:"1.234,56",currency:"COP",direction:"debit"},
       {date:"2026-02-31",description:"Fila ilegible",amount:"aproximado",currency:"XYZ",direction:"income"},
-    ],partial:false})};
+      {date:"2026-10-03",description:"Cargo en dólares",amount:"14.00",currency:"USD",direction:"debit"},
+    ],partial:false})}}]};
   }},
 };
 const context={access:{aud:env.ACCESS_AUD,async getIdentity(){return {user_uuid:user};}}};
@@ -41,12 +42,16 @@ const response=await post();
 assert.equal(response.status,200);
 assert.equal(response.headers.get("Cache-Control"),"no-store, private");
 assert.deepEqual(await response.json(),{page:1,rows:[
-  {date:"2026-10-02",description:"Compra ficticia",amount:"1.234,56",currency:"COP",direction:"debit"},
-  {date:null,description:"Fila ilegible",amount:null,currency:null,direction:null},
-],partial:false});
+  {date:"2026-10-02",description:"Compra ficticia",amount:"1.234,56",currency:"COP",direction:"debit",amountCOP:"1234.56"},
+  {date:null,description:"Fila ilegible",amount:null,currency:null,direction:null,amountCOP:null},
+  {date:"2026-10-03",description:"Cargo en dólares",amount:"14.00",currency:"USD",direction:"debit",amountCOP:null},
+],partial:true});
 assert.equal(calls,1);
 hits=5;
 assert.equal((await post()).status,429);
 assert.equal(calls,1);
 assert.equal(parseStatementVision({response:"Salida incompleta"}),null);
+assert.equal(parseStatementVision({response:{rows:[{
+  date:"2026-10-02",description:"Compra",amount:"1.2.34",currency:"COP",direction:"debit",
+}],partial:false}}).partial,true);
 console.log("Qwen vision: owner and consent gates, page payload, quota and uncertain fields PASSED");

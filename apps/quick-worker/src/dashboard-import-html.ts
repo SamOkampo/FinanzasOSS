@@ -48,20 +48,42 @@ export const IMPORTS_HTML = `
       <details id="ai-document-vision-options" class="import-disclosure import-secondary" data-vision-available="false" hidden>
         <summary>Leer páginas con Qwen</summary>
         <div class="import-secondary-body">
-          <p>Úsalo para escaneos o cuando falten movimientos. Qwen recibe una imagen de cada página procesada, con los datos visibles del extracto. Se leen hasta 5 páginas por vez y cada página cuenta como un análisis.</p>
+          <p>Úsalo para escaneos o cuando falten movimientos. Qwen recibe una imagen de cada página seleccionada con los datos visibles del extracto. El límite es de 5 análisis de Qwen por día y perfil, compartidos con el análisis de documentos.</p>
           <label class="ai-document-consent" for="ai-document-vision-consent">
             <input id="ai-document-vision-consent" type="checkbox">
             <span>Autorizo el envío de las imágenes a Cloudflare para leerlas con Qwen.</span>
           </label>
-          <label for="ai-document-vision-first">Empezar en la página
-            <input id="ai-document-vision-first" type="number" min="1" max="20" value="1" inputmode="numeric">
-          </label>
+          <div class="import-options">
+            <label for="ai-document-vision-first">Empezar en la página
+              <input id="ai-document-vision-first" type="number" min="1" max="20" value="1" inputmode="numeric" required>
+            </label>
+            <label for="ai-document-vision-count">Páginas a leer
+              <input id="ai-document-vision-count" type="number" min="1" max="5" value="1" inputmode="numeric" required>
+            </label>
+          </div>
           <button id="ai-document-vision-start" type="button" class="solid-button" disabled>Leer con Qwen</button>
           <p id="ai-document-vision-status" class="import-file-status" role="status" aria-live="polite"></p>
           <section id="ai-document-vision-results" aria-labelledby="ai-document-vision-title" hidden>
             <h3 id="ai-document-vision-title">Movimientos propuestos por Qwen</h3>
             <p id="ai-document-vision-issues" class="import-file-status"></p>
             <div id="ai-document-vision-groups"></div>
+            <div class="import-options">
+              <label for="ai-document-vision-bank">Banco del extracto
+                <input id="ai-document-vision-bank" type="text" maxlength="80" autocomplete="off" placeholder="Ej. Davivienda">
+              </label>
+              <label for="ai-document-vision-method">Medio de pago
+                <select id="ai-document-vision-method">
+                  <option value="bank_transfer">Cuenta bancaria</option>
+                  <option value="debit_card">Tarjeta débito vinculada</option>
+                </select>
+              </label>
+              <label for="ai-document-vision-scope">Páginas para conciliar
+                <select id="ai-document-vision-scope"></select>
+              </label>
+            </div>
+            <p>Coteja las filas con el PDF. Puedes conciliar extractos de cuentas bancarias en COP, hasta 50 movimientos a la vez.</p>
+            <button id="ai-document-vision-reconcile" type="button" class="solid-button" disabled>Conciliar movimientos en COP</button>
+            <p id="ai-document-vision-reconcile-status" class="import-file-status" role="status" aria-live="polite"></p>
           </section>
         </div>
       </details>

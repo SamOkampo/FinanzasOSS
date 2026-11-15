@@ -33,15 +33,34 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   const visionOptions=byId("ai-document-vision-options"),visionStart=byId("ai-document-vision-start"),
     visionConsent=byId("ai-document-vision-consent"),visionStatus=byId("ai-document-vision-status"),
     visionFirst=byId("ai-document-vision-first"),visionResults=byId("ai-document-vision-results"),
-    visionIssues=byId("ai-document-vision-issues"),visionGroups=byId("ai-document-vision-groups");
-  if(!visionOptions||!visionStart||!visionConsent||!visionStatus||!visionFirst||!visionResults||!visionIssues||!visionGroups)return;
-  const visionAvailable=visionOptions?.dataset.visionAvailable==="true";
-  let visionFile=null,visionTask=null;
+    visionIssues=byId("ai-document-vision-issues"),visionGroups=byId("ai-document-vision-groups"),
+    visionCount=byId("ai-document-vision-count"),visionBank=byId("ai-document-vision-bank"),
+    visionMethod=byId("ai-document-vision-method"),visionScope=byId("ai-document-vision-scope"),
+    visionReview=byId("ai-document-vision-reconcile"),visionReviewStatus=byId("ai-document-vision-reconcile-status");
+  if(!visionOptions||!visionStart||!visionConsent||!visionStatus||!visionFirst||!visionResults||!visionIssues||
+    !visionGroups||!visionCount||!visionBank||!visionMethod||!visionScope||!visionReview||!visionReviewStatus)return;
+  const visionAvailable=visionOptions.dataset.visionAvailable==="true";
+  let visionFile=null,visionTask=null,visionReviewTask=null,visionReviewActive=false;
   const visionPages=new Map();
   function updateVision(){
     visionOptions.hidden=!visionAvailable||!visionFile;
     visionStart.disabled=visionOptions.hidden||!visionConsent.checked||Boolean(visionTask);
     visionFirst.disabled=Boolean(visionTask);
+    visionCount.disabled=Boolean(visionTask);
+    visionReview.disabled=Boolean(visionTask||visionReviewTask)||!visionScope.value||!visionBank.value.trim();
+  }
+  function resetVisionReview(){
+    visionReviewTask?.abort();
+    visionReviewTask=null;
+    if(visionReviewActive){
+      document.dispatchEvent(new Event("finanzasoss:v41-invalidated"));
+      results.hidden=true;
+      recon.hidden=true;
+      reconRows.replaceChildren();
+      visionReviewActive=false;
+    }
+    announce(visionReviewStatus,"");
+    updateVision();
   }
   function resetVision(){
     visionTask?.abort();
@@ -50,11 +69,13 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     visionConsent.checked=false;
     visionOptions.open=false;
     visionFirst.value="1";
+    visionCount.value="1";
     visionPages.clear();
     visionGroups.replaceChildren();
+    visionScope.replaceChildren();
     visionResults.hidden=true;
     announce(visionStatus,"");
-    updateVision();
+    resetVisionReview();
   }
   const maxBytes=4000000;
   const analysisAvailable=controls.dataset.analysisAvailable==="true";
@@ -99,7 +120,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         item.append(elt("strong","",row.description||"Descripción por verificar"));
         const direction=row.direction==="credit"?"Abono":row.direction==="debit"?"Cargo":"Tipo por revisar";
         item.append(elt("span","",(row.date?row.date.split("-").reverse().join("/"):"Fecha por verificar")+" · "+
-          direction+" · "+(row.amount||"Importe por verificar")+" · Pág. "+row.page));
+          direction+" · "+(row.amount?[row.amount,row.currency].filter(Boolean).join(" "):"Importe por verificar")+" · Pág. "+row.page));
         list.append(item);
       }
       group.append(list);
@@ -111,14 +132,30 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     announce(status,section===localResults?count+" movimientos leídos"+period+"."+note+issues:issues.trim(),Boolean(note||issues));
     section.hidden=false;
   }
+  function updateVisionScope(groups){
+    const prior=visionScope.value;
+    visionScope.replaceChildren();
+    const option=(value,label)=>{
+      const item=elt("option","",label);
+      item.value=value;
+      visionScope.append(item);
+    };
+    const total=groups.reduce((sum,group)=>sum+group.rows.length,0);
+    if(total>0&&total<=50)option("all","Todas las páginas leídas ("+total+" filas)");
+    for(const group of groups){
+      for(let start=0;start<group.rows.length;start+=50){
+        const end=Math.min(start+50,group.rows.length);
+        option(group.page+":"+start,"Página "+group.page+(group.rows.length>50?" · filas "+(start+1)+" a "+end:""));
+      }
+    }
+    if([...visionScope.options].some(item=>item.value===prior))visionScope.value=prior;
+  }
   async function runVision(){
     if(visionTask||!visionFile||!visionConsent.checked)return;
-    if(!visionFirst.reportValidity())return;
+    if(!visionFirst.reportValidity()||!visionCount.reportValidity())return;
     const first=visionFirst.valueAsNumber;
-    if(!Number.isInteger(first)||first<1||first>20){
-      announce(visionStatus,"Elige una página entre 1 y 20.",true);
-      return;
-    }
+    const pages=visionCount.valueAsNumber;
+    resetVisionReview();
     const fileToRender=visionFile;
     const task=new AbortController();
     visionTask=task;
@@ -127,9 +164,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     const groups=[];
     let loading=null,failed=0,incomplete=0,total=0,last=0;
     try{
-      const engine=await import("/statement-pdf-renderer.mjs?v=41.7");
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.8");
       if(task.signal.aborted)return;
-      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.7";
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.8";
       const bytes=new Uint8Array(await fileToRender.arrayBuffer());
       if(task.signal.aborted)return;
       loading=engine.getDocument({data:bytes,
@@ -143,7 +180,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         announce(visionStatus,"El PDF tiene "+total+" páginas. Elige una página que exista.",true);
         return;
       }
-      last=Math.min(total,first+4,20);
+      last=Math.min(total,first+pages-1,20);
       for(let page=first;page<=last;page++){
         if(task.signal.aborted)return;
         announce(visionStatus,"Leyendo página "+page+" de "+total+"…");
@@ -178,10 +215,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
           failed++;
           continue;
         }
+        if(result.page!==page||!Array.isArray(result.rows)){failed++;continue;}
         if(result.partial)incomplete++;
-        const rows=result.rows.map(row=>({...row,page:result.page,
-          amount:row.amount?[row.amount,row.currency].filter(Boolean).join(" "):null}));
-        groups.push({page,title:"Página "+page,rows});
+        groups.push({page,title:"Página "+page,rows:result.rows.map(row=>({...row,page}))});
       }
       const count=groups.reduce((sum,group)=>sum+group.rows.length,0);
       const pending=last-first+1-groups.length;
@@ -201,11 +237,13 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         visionTask=null;
         for(const group of groups)visionPages.set(group.page,group);
         const accumulated=[...visionPages.values()].sort((a,b)=>a.page-b.page);
+        updateVisionScope(accumulated);
         visionGroups.replaceChildren();
         visionResults.hidden=!accumulated.some(group=>group.rows.length);
         if(!visionResults.hidden){
           showLocalPreview({groups:accumulated,
-            issues:accumulated.flatMap(group=>group.rows).filter(row=>!row.date||!row.description||!row.amount||!row.direction).length},
+            issues:accumulated.flatMap(group=>group.rows).filter(row=>!row.date||!row.description||
+              !row.amount||!row.direction||!row.currency||(row.currency==="COP"&&!row.amountCOP)).length},
             visionGroups,visionIssues,visionResults);
         }
         updateVision();
@@ -220,14 +258,16 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       announce(visionStatus,"");
       visionPages.clear();
       visionGroups.replaceChildren();
+      visionScope.replaceChildren();
       visionResults.hidden=true;
+      resetVisionReview();
     }
     updateVision();
   });
   function reset(){
+    resetVisionReview();
     document.dispatchEvent(new Event("finanzasoss:v41-invalidated"));
     results.hidden=true;tables.replaceChildren();summary.textContent="";
-    localResults.hidden=true;localGroups.replaceChildren();
     recon.hidden=true;reconRows.replaceChildren();reconSummary.textContent="";
     analysisTask?.abort();
     analysisTask=null;
@@ -247,6 +287,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     openPassword.disabled=true;
     readyFile=null;
     resetVision();
+    localResults.hidden=true;
+    localGroups.replaceChildren();
     reset();
     announce(fileStatus,pass?"Desbloqueando PDF…":"Comprobando el PDF…");
     const done=(result)=>{
@@ -273,6 +315,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
           if(result.statement)showLocalPreview(result.statement);
           if(result.issue==="no_text")announce(feedback,visionAvailable?
             "Este PDF parece un escaneo. Abre «Leer páginas con Qwen».":"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
+          if(visionAvailable&&visionFile&&(result.issue==="no_text"||result.statement?.issues||result.statement?.totalsDiffer))
+            visionOptions.open=true;
           if(result.issue==="page_limit")announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
           return;
         }
@@ -297,18 +341,20 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.7");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.8");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
       worker.onerror=()=>done({status:"unreadable"});
-      worker.postMessage({file:item,password:pass});
+      worker.postMessage({file:item,password:pass,enableVision:visionAvailable});
     }catch{done({status:"unreadable"});}
   }
   file.addEventListener("change",()=>{
     selection++;
     stopPdfTask();
     resetVision();
+    localResults.hidden=true;
+    localGroups.replaceChildren();
     readyFile=null;
     consent.checked=false;
     password.value="";
@@ -343,6 +389,84 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   }
   bank.addEventListener("input",updateAccount);
   method.addEventListener("change",updateAccount);
+  function showReconciliation(preview,input,source){
+    recon.hidden=false;
+    reconRows.replaceChildren();
+    const count=preview.counts||{};
+    reconSummary.textContent=(preview.count||0)+" movimientos examinados · "+
+      (count.possibleMatch||0)+" coincidencias posibles · "+
+      (count.needsPurpose||0)+" abonos por aclarar · "+
+      (count.possibleTransfer||0)+" posibles transferencias · "+
+      (count.needsCorrection||0)+" filas con datos inválidos. "+
+      "Origen: "+source+". Nada guardado.";
+    for(const row of (preview.rows||[])){
+      const item=elt("article","ai-document-table");
+      item.append(elt("strong","",(row.index+1)+". "+(statuses[row.status]||"Revisión")));
+      item.append(elt("p","",String(row.date||"Fecha inválida")+" · "+
+        String(row.description||"Concepto no identificado")+" · "+
+        (row.amountCOP?row.amountCOP+" COP":"Importe por revisar")+" · "+
+        (row.direction==="credit"?"Abono":row.direction==="debit"?"Cargo":"Sentido por revisar")));
+      if(row.existing?.length){
+        item.append(elt("p","budget-note","Posible coincidencia: "+
+          row.existing.map(x=>x.description+" ("+x.source+")").join(", ")));
+      }
+      if(row.repeatOfIndex!==null&&row.repeatOfIndex!==undefined)
+        item.append(elt("p","budget-note","Similar a la fila "+(row.repeatOfIndex+1)+
+          "; podría ser otra compra legítima."));
+      if(row.issues?.length)
+        item.append(elt("p","budget-note","Revisar: "+row.issues.join(" · ")));
+      reconRows.append(item);
+    }
+    if(input&&preview.rows?.some(row=>row.status!=="needs_correction"))
+      document.dispatchEvent(new CustomEvent("finanzasoss:v41-preview",{
+        detail:{input,result:preview,origin:"document"}}));
+    results.hidden=false;
+    results.scrollIntoView?.({behavior:"smooth",block:"nearest"});
+  }
+  for(const [element,event] of [[visionBank,"input"],[visionMethod,"change"],[visionScope,"change"]])
+    element.addEventListener(event,resetVisionReview);
+  visionReview.addEventListener("click",async()=>{
+    if(visionReview.disabled)return;
+    const source=visionScope.selectedOptions[0].textContent;
+    const scope=visionScope.value;
+    const [page,start]=scope.split(":").map(Number);
+    const selected=scope==="all"?
+      [...visionPages.values()].sort((a,b)=>a.page-b.page).flatMap(group=>group.rows):
+      visionPages.get(page)?.rows.slice(start,start+50);
+    if(!selected?.length)return;
+    reset();
+    const tableHelp=tables.closest("details");
+    if(tableHelp)tableHelp.hidden=true;
+    const task=new AbortController();
+    visionReviewTask=task;
+    updateVision();
+    const input={
+      rows:selected.map(row=>({
+        Fecha:row.date||"",Concepto:row.description||"",
+        Importe:row.amountCOP||"",Tipo:row.direction||"",Moneda:row.currency||"INVALIDA",
+      })),
+      mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo",currency:"Moneda"},
+      bankLabel:visionBank.value.trim(),paymentMethod:visionMethod.value,
+    };
+    announce(visionReviewStatus,"Comparando con los movimientos registrados…");
+    try{
+      const response=await fetch("/api/quick/v41/reconcile/preview",{
+        method:"POST",credentials:"same-origin",cache:"no-store",signal:task.signal,
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(input),
+      });
+      const preview=await response.json().catch(()=>({}));
+      if(task.signal.aborted)return;
+      if(!response.ok||!Array.isArray(preview.rows))
+        throw Error(preview.error||"No se pudo preparar la conciliación.");
+      visionReviewActive=true;
+      showReconciliation(preview,input,"lectura visual · "+source);
+      announce(visionReviewStatus,"Conciliación lista. Revisa los movimientos antes de confirmar.");
+    }catch(error){
+      if(!task.signal.aborted)announce(visionReviewStatus,error.message||"No se pudo preparar la conciliación.",true);
+    }finally{
+      if(visionReviewTask===task){visionReviewTask=null;updateVision();}
+    }
+  });
   button.addEventListener("click",async()=>{
     if(!analysisAvailable||analysisTask||!consent.checked||!readyFile)return;
     const item=readyFile;
@@ -406,36 +530,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       if(!match?.available){
         reconSummary.textContent=payload.tables.length?(match?.reason||"Completa el banco para conciliar."):"";
       }else{
-        const preview=match.preview||{};
-        const count=preview.counts||{};
-        reconSummary.textContent=(preview.count||0)+" movimientos examinados · "+
-          (count.possibleMatch||0)+" coincidencias posibles · "+
-          (count.needsPurpose||0)+" abonos por aclarar · "+
-          (count.possibleTransfer||0)+" posibles transferencias · "+
-          (count.needsCorrection||0)+" filas con datos inválidos. "+
-          "Origen: tabla "+(match.tableIndex+1)+". Nada guardado.";
-        for(const row of (preview.rows||[])){
-          const item=elt("article","ai-document-table");
-          item.append(elt("strong","",(row.index+1)+". "+(statuses[row.status]||"Revisión")));
-          item.append(elt("p","",String(row.date||"Fecha inválida")+" · "+
-            String(row.description||"Concepto no identificado")+" · "+
-            String(row.amountCOP||"Importe inválido")+" COP · "+
-            (row.direction==="credit"?"Abono":row.direction==="debit"?"Cargo":"Sentido por revisar")));
-          if(row.existing?.length){
-            item.append(elt("p","budget-note","Posible coincidencia: "+
-              row.existing.map(x=>x.description+" ("+x.source+")").join(", ")));
-          }
-          if(row.repeatOfIndex!==null&&row.repeatOfIndex!==undefined)
-            item.append(elt("p","budget-note","Similar a la fila "+(row.repeatOfIndex+1)+
-              "; podría ser otra compra legítima."));
-          if(row.issues?.length)
-            item.append(elt("p","budget-note","Revisar: "+row.issues.join(" · ")));
-          reconRows.append(item);
-        }
+        showReconciliation(match.preview||{},match.prepared,"tabla "+(match.tableIndex+1));
       }
-      if(match?.available&&match.prepared&&match.preview)
-        document.dispatchEvent(new CustomEvent("finanzasoss:v41-preview",{
-          detail:{input:match.prepared,result:match.preview,origin:"document"}}));
       results.hidden=false;
       announce(feedback,match?.available&&match.preview?.count?
         "Vista previa lista. Revisa los movimientos antes de guardar.":

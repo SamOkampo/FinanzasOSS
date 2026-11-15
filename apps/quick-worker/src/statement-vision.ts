@@ -1,5 +1,6 @@
 import type {QuickD1,QuickWorkerEnv} from "./index.js";
 import {QWEN_MODEL,QWEN_OPTIONS,qwenJson} from "./ai-model.js";
+import {normalizeCOP} from "./statement-document-bridge-v41.js";
 
 export const STATEMENT_VISION_PATH="/api/quick/v41/ai/document/vision";
 const MAX_JPEG_BYTES=1_500_000;
@@ -35,7 +36,9 @@ export function parseStatementVision(value:unknown){
     const currency=["COP","USD","EUR","USDC"].includes(row.currency)?row.currency as string:null;
     const direction=row.direction==="debit"||row.direction==="credit"?row.direction as "debit"|"credit":null;
     if(!date&&!description&&!amount){partial=true;return [];}
-    return [{date,description:description||null,amount,currency,direction}];
+    const amountCOP=currency==="COP"&&amount?normalizeCOP(amount):null;
+    if(!date||!description||!amount||!currency||!direction||(currency==="COP"&&!amountCOP))partial=true;
+    return [{date,description:description||null,amount,currency,direction,amountCOP}];
   });
   return {rows,partial};
 }

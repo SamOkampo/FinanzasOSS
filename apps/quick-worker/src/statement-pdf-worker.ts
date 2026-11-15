@@ -63,8 +63,8 @@ export async function openStatementPdf(file: File, password: string, wasmUrl: st
 }
 
 if (typeof self !== "undefined") {
-  self.onmessage = async (event: MessageEvent<{ file: File; password: string }>) => {
-    const { file, password } = event.data;
+  self.onmessage = async (event: MessageEvent<{ file: File; password: string; enableVision?: boolean }>) => {
+    const { file, password, enableVision } = event.data;
     const result = await openStatementPdf(file, password, "/statement-pdf-engine.wasm");
     const bytes = result.status==="unlocked" ? result.bytes :
       result.status==="plain" ? new Uint8Array(await file.arrayBuffer()) : null;
@@ -72,7 +72,8 @@ if (typeof self !== "undefined") {
     if(bytes){
       try { layout = await readStatementPdf(bytes); } catch { /* Use the existing inspection flow. */ }
     }
-    if(layout.preview&&!layout.preview.issues&&!layout.preview.totalsDiffer){
+    if(layout.preview&&!layout.preview.issues&&!layout.preview.totalsDiffer&&
+      !(enableVision&&result.status==="unlocked")){
       self.postMessage({status:result.status,statement:layout.preview});
     }else{
       self.postMessage({...result,statement:layout.preview,issue:layout.issue},
