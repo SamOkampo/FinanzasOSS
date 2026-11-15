@@ -470,7 +470,7 @@ export async function handleQuickRequest(
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
     if (pathname === "/dashboard-sw.js") {
-      const script=env.ALLOW_V41_ASSISTANT==="true"?DASH_SW.replace('/dashboard#plan','/dashboard#qwen'):DASH_SW;
+      const script=env.ALLOW_V41_ASSISTANT==="true"?DASH_SW.replace('/dashboard#plan','/dashboard#qwen-pending'):DASH_SW;
       return respondAsset(script,"application/javascript");
     }
     // An iOS home-screen icon requires PNG, not only a manifest SVG.

@@ -118,7 +118,7 @@ assert.equal(sql.prepare("SELECT last_day FROM quick_agent_notice_settings WHERE
 const session={access:{aud:env.ACCESS_AUD,async getIdentity(){return {user_uuid:A};}}};
 const serviceWorker=new Request("https://qa.example/dashboard-sw.js");
 const script=await (await handleQuickRequest(serviceWorker,env,session)).text();
-assert.match(script,/data:\{url:"\/dashboard#qwen"\}/);
+assert.match(script,/data:\{url:"\/dashboard#qwen-pending"\}/);
 const fallback=await (await handleQuickRequest(serviceWorker,{...env,ALLOW_V41_ASSISTANT:"false"},session)).text();
 assert.match(fallback,/data:\{url:"\/dashboard#plan"\}/);
 

@@ -2,35 +2,63 @@ export const ASSISTANT_HTML = `
 <button id="assistant-open" data-assistant-enabled="false" hidden type="button" class="solid-button assistant-launch" aria-haspopup="dialog">Qwen</button>
 <dialog id="assistant-dialog" class="assistant-dialog" aria-labelledby="assistant-title">
   <div class="assistant-heading">
-    <h2 id="assistant-title">Asistente Qwen</h2>
-    <form method="dialog"><button class="soft-button" aria-label="Cerrar asistente">Cerrar</button></form>
+    <div class="assistant-identity">
+      <span class="assistant-avatar" aria-hidden="true">Q</span>
+      <div><h2 id="assistant-title">Qwen</h2><p>Asistente de FinanzasOSS</p></div>
+    </div>
+    <form method="dialog"><button autofocus class="assistant-close" aria-label="Cerrar asistente">×</button></form>
   </div>
-  <details id="assistant-chat" data-assistant-chat="false" hidden>
-    <summary>Consultas y gráficos</summary>
-    <div class="assistant-fields">
-      <label>Historial de conversaciones <select id="assistant-chat-history"></select></label>
+  <nav class="assistant-nav" aria-label="Secciones de Qwen">
+    <button type="button" data-assistant-view="chat" aria-controls="assistant-chat" aria-pressed="false" hidden>Chat</button>
+    <button type="button" data-assistant-view="pending" aria-controls="assistant-pending" aria-pressed="false">Pendientes<span id="assistant-count" hidden></span></button>
+    <button type="button" data-assistant-view="settings" aria-controls="assistant-settings" aria-pressed="false">Ajustes</button>
+  </nav>
+  <section id="assistant-chat" class="assistant-chat" data-assistant-chat="false" aria-label="Chat con Qwen" hidden>
+    <div class="assistant-chat-tools">
+      <button type="button" class="assistant-text-button" id="assistant-chat-threads" aria-expanded="false" aria-controls="assistant-chat-library">Historial</button>
+      <button type="button" class="assistant-text-button" id="assistant-chat-new">+ Nuevo chat</button>
+    </div>
+    <div id="assistant-chat-library" class="assistant-chat-library assistant-fields" hidden>
+      <label>Conversaciones guardadas <select id="assistant-chat-history"><option value="">Elige una conversación</option></select></label>
       <div class="assistant-chat-actions">
-        <button type="button" class="soft-button" id="assistant-chat-new">Nueva conversación</button>
         <button type="button" class="soft-button" id="assistant-chat-delete" hidden>Borrar conversación</button>
       </div>
-      <p id="assistant-chat-status" role="status" aria-live="polite"></p>
-      <div id="assistant-chat-turns" class="assistant-fields"></div>
-      <form id="assistant-chat-form" class="assistant-fields" autocomplete="off">
-        <label>Pregunta sobre tus registros <input id="assistant-chat-question" maxlength="200" required placeholder="Ej.: ¿En qué gasté este mes?"></label>
-        <p class="budget-note">Las preguntas y respuestas quedan en tu historial privado.</p>
-        <div class="assistant-chat-actions">
-          <button type="button" class="soft-button" data-question="¿Cuánto gasté por categoría este mes?">Gastos del mes</button>
-          <button type="button" class="soft-button" data-question="¿Cuáles son mis aportes pendientes en Hapi?">Aportes Hapi</button>
-          <button type="button" class="soft-button" data-question="¿Cómo va mi portafolio en Hapi?">Portafolio Hapi</button>
-        </div>
-        <label class="ai-document-consent" id="assistant-chat-ai-label" hidden><input id="assistant-chat-ai" type="checkbox">
-          <span>Autorizo enviarle a Qwen el texto para interpretar la pregunta.</span>
-        </label>
-        <button type="submit" class="solid-button">Consultar</button>
-      </form>
     </div>
-  </details>
-  <p id="assistant-status" role="status" aria-live="polite"></p>
+    <div id="assistant-chat-scroll" class="assistant-chat-scroll" tabindex="0" aria-label="Mensajes de la conversación">
+      <div id="assistant-chat-welcome" class="assistant-chat-welcome">
+        <div class="assistant-bubble assistant-bubble-qwen"><span class="assistant-speaker">Qwen</span>
+          <p>Hola, soy Qwen. ¿Qué quieres revisar hoy?</p>
+        </div>
+        <div class="assistant-chat-actions" aria-label="Preguntas sugeridas">
+          <button type="button" class="assistant-chip" data-question="¿Cuánto gasté por categoría este mes?">Gastos del mes</button>
+          <button type="button" class="assistant-chip" data-question="¿Cuáles son mis aportes pendientes en Hapi?">Aportes Hapi</button>
+          <button type="button" class="assistant-chip" data-question="¿Cómo va mi portafolio en Hapi?">Portafolio Hapi</button>
+        </div>
+      </div>
+      <div id="assistant-chat-turns" role="log" aria-label="Conversación" aria-relevant="additions text"></div>
+      <div id="assistant-chat-pending" class="assistant-bubble assistant-bubble-qwen assistant-typing" hidden aria-hidden="true"><i></i><i></i><i></i></div>
+    </div>
+    <form id="assistant-chat-form" class="assistant-compose" autocomplete="off">
+      <p id="assistant-chat-status" role="status" aria-live="polite"></p>
+      <div class="assistant-compose-row">
+        <label class="sr-only" for="assistant-chat-question">Escribe tu mensaje</label>
+        <input id="assistant-chat-question" maxlength="200" required placeholder="Escribe tu mensaje…" autocomplete="off" enterkeyhint="send">
+        <button type="submit" class="solid-button">Enviar</button>
+      </div>
+      <details id="assistant-chat-ai-label" class="assistant-chat-options" hidden>
+        <summary>Interpretar con IA</summary>
+        <label class="ai-document-consent"><input id="assistant-chat-ai" type="checkbox">
+          <span>Autorizo enviar a Qwen el texto de este mensaje si hay que interpretarlo.</span>
+        </label>
+      </details>
+    </form>
+  </section>
+  <div id="assistant-pending" class="assistant-side" hidden>
+    <p id="assistant-status" role="status" aria-live="polite"></p>
+    <section id="assistant-alerts" class="assistant-fields" aria-label="Alertas financieras"></section>
+    <div id="assistant-items"></div>
+  </div>
+  <div id="assistant-settings" class="assistant-side" hidden>
   <details id="assistant-notice-rules">
     <summary>Avisos y horario</summary>
     <form id="assistant-notice-form" class="assistant-fields" hidden>
@@ -60,7 +88,6 @@ export const ASSISTANT_HTML = `
     <div class="assistant-fields" id="assistant-merchants-list"></div>
     <button type="button" class="soft-button" id="assistant-merchants-more" hidden>Ver más comercios</button>
   </details>
-  <section id="assistant-alerts" class="assistant-fields" aria-label="Alertas financieras"></section>
   <details id="assistant-credit">
     <summary>Vencimientos de tarjetas</summary>
     <p id="assistant-credit-empty" hidden>Primero registra la tarjeta en Saldos.</p>
@@ -71,9 +98,11 @@ export const ASSISTANT_HTML = `
     </form>
     <div id="assistant-credit-list" class="assistant-fields"></div>
   </details>
-  <div id="assistant-items"></div>
+  <p id="assistant-settings-status" role="status"></p>
+  </div>
   <section id="assistant-movement" hidden>
     <button id="assistant-back" type="button" class="soft-button">Volver a pendientes</button>
+    <p id="assistant-movement-status" role="status"></p>
     <h3 id="assistant-concept"></h3>
     <p id="assistant-question"></p>
     <form id="assistant-answer-form" class="assistant-fields" autocomplete="off">
@@ -100,23 +129,73 @@ export const ASSISTANT_HTML = `
 export const ASSISTANT_CSS = `
 .assistant-chat-actions{display:flex;flex-wrap:wrap;gap:8px}
 .assistant-chat-turn{padding:12px;border:1px solid var(--rule);border-radius:12px;overflow-wrap:anywhere}
-.assistant-chat-chart{margin:12px 0}
+.assistant-chat-chart{margin:12px 0;min-width:0}
+.assistant-chat-chart figcaption{font-weight:700}
 .assistant-chat-chart p{margin:6px 0}
 .assistant-chat-chart meter{width:100%;height:12px;display:block}
-
+.assistant-dialog[open]{display:flex;flex-direction:column;position:fixed;inset:auto 20px 22px auto;margin:0;
+  width:min(420px,calc(100% - 40px));height:min(660px,calc(100dvh - 44px));max-width:none;max-height:none;
+  padding:0;border:1px solid var(--rule);border-radius:22px;overflow:hidden;
+  background:var(--surface);color:var(--ink);box-shadow:0 20px 68px rgba(0,0,0,.22)}
 .assistant-launch{position:fixed;z-index:7;right:20px;bottom:22px;min-height:44px}
-.assistant-dialog{width:min(94%,510px);max-height:85vh;max-height:85dvh;border:1px solid var(--rule);border-radius:18px;
-  background:var(--surface);color:var(--ink);padding:20px;overflow:auto}
-.assistant-dialog::backdrop{background:rgba(10,26,25,.58)}
-.assistant-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.assistant-heading h2{margin:0}
+.assistant-dialog::backdrop{background:rgba(10,26,25,.42)}
+.assistant-heading{flex:none;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 14px;background:#172e2c;color:#f7faf6}
+.assistant-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.assistant-heading h2{margin:0;font-size:18px;line-height:1.15}
+.assistant-heading p{margin:3px 0 0;color:#d3e2d8;font-size:12px}
+.assistant-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:14px;
+  background:#dcecd9;color:#172e2c;font-size:19px;font-weight:800}
+.assistant-close{min-width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:inherit;font-size:26px;line-height:1}
+.assistant-close:hover{background:#ffffff19}
+.assistant-nav{flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;border-bottom:1px solid var(--rule)}
+.assistant-nav button,.assistant-text-button,.assistant-chip{border:1px solid transparent;background:transparent;color:var(--ink);border-radius:10px;min-height:40px;padding:0 10px}
+.assistant-nav button{font-weight:700;white-space:nowrap;min-height:44px}
+.assistant-nav button[aria-pressed=true]{background:var(--paper);border-color:var(--rule)}
+.assistant-nav span{margin-left:5px;font-size:11px;padding:2px 5px;border-radius:9px;background:var(--forest);color:#fff}
+.assistant-chat{min-width:0;flex:1;min-height:0;display:flex;flex-direction:column}
+.assistant-chat-tools{flex:none;display:flex;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--rule)}
+.assistant-text-button{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.assistant-chat-library{flex:none;max-height:35%;overflow:auto;padding:0 14px}
+.assistant-chat-scroll,.assistant-side,#assistant-movement{min-height:0;min-width:0;flex:1;overflow:auto;overscroll-behavior:contain;padding:14px}
+.assistant-bubble{width:fit-content;max-width:94%;min-width:0;padding:10px 13px;margin:0 0 10px;
+  border-radius:15px;overflow-wrap:anywhere}
+.assistant-bubble p{margin:5px 0}
+.assistant-bubble-qwen{border:1px solid var(--rule);background:var(--paper);border-bottom-left-radius:4px}
+.assistant-bubble-user{margin-left:auto;background:#244541;color:#fff;border-bottom-right-radius:4px}
+.assistant-speaker{font-size:11px;font-weight:800;letter-spacing:.025em}
+.assistant-chat-welcome .assistant-chip{min-height:36px;border-color:var(--rule);border-radius:24px;font-size:12px;font-weight:700}
+.assistant-chip:hover,.assistant-text-button:hover{background:var(--paper)}
+.assistant-bubble a{max-width:100%;white-space:normal;text-align:left}
+.assistant-compose{flex:none;padding:8px 12px 10px;border-top:1px solid var(--rule)}
+.assistant-compose-row{display:flex;gap:8px;align-items:center}
+.assistant-compose input:not([type=checkbox]){width:100%;min-width:0;min-height:44px;padding:0 12px;
+  border:1px solid var(--rule);border-radius:13px;background:var(--paper);color:var(--ink);font-size:16px}
+.assistant-compose button{min-height:44px;white-space:nowrap}
+.assistant-compose p{font-size:12px;margin:0 0 5px;overflow-wrap:anywhere}
+.assistant-compose p:empty,.assistant-side p:empty,#assistant-movement-status:empty{display:none}
+.assistant-chat-options{margin-top:7px;font-size:12px}
+.assistant-chat-options summary,.assistant-side summary{cursor:pointer;padding:6px 0}
+.assistant-side details{border-bottom:1px solid var(--rule);padding:5px 0}
+.assistant-side summary{min-height:44px;padding-top:11px;font-weight:700}
+.assistant-typing{display:flex;gap:5px;margin-top:3px;padding:13px}
+.assistant-typing i{height:6px;width:6px;border-radius:50%;background:currentColor}
+.assistant-typing i:nth-child(2){opacity:.65}.assistant-typing i:nth-child(3){opacity:.35}
 .assistant-fields,#assistant-items{display:grid;gap:10px;margin:13px 0}
 .assistant-fields label:not(.ai-document-consent){display:grid;gap:6px}
 .assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-placeholder[hidden],#portfolio-no-data[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
 #hapi-position-fields fieldset{min-width:0;display:grid;gap:10px;border:1px solid var(--rule);border-radius:12px}
 .assistant-fields input:not([type=checkbox]),.assistant-fields select{font-size:16px;width:100%;min-height:42px}
-@media(max-width:800px){.assistant-launch{bottom:calc(74px + env(safe-area-inset-bottom));right:12px}
-.assistant-dialog{margin:auto auto max(10px,env(safe-area-inset-bottom));max-height:85dvh}}
+@media(max-width:800px){
+  .assistant-launch{bottom:calc(74px + env(safe-area-inset-bottom));right:12px}
+  .assistant-dialog[open]{inset:auto 8px max(8px,env(safe-area-inset-bottom)) 8px;width:calc(100% - 16px);
+    height:min(660px,calc(100dvh - max(8px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom))))}
+  .fos-keyboard-visible .assistant-dialog[open]{top:calc(var(--fos-visible-top,0px) + 4px);bottom:auto;
+    height:calc(var(--fos-visible-height,100dvh) - 8px);animation:none}
+  .fos-keyboard-visible .assistant-chat-tools{display:none}
+  .fos-keyboard-visible .assistant-heading{padding-block:4px}
+  .fos-keyboard-visible .assistant-chat-scroll{padding-block:8px}
+}
 `;
 
 export const ASSISTANT_JS = String.raw`
@@ -127,6 +206,11 @@ export const ASSISTANT_JS = String.raw`
   const launcher=byId("open");
   if(!dialog||launcher.dataset.assistantEnabled!=="true")return;
   launcher.hidden=false;
+  const chatSection=byId("chat"),pendingView=byId("pending"),settingsView=byId("settings");
+  const chatEnabled=chatSection.dataset.assistantChat==="true",nav=[...dialog.querySelectorAll("[data-assistant-view]")];
+  const startingView=chatEnabled?"chat":"pending";
+  let view=startingView;
+  nav[0].hidden=!chatEnabled;
   const category=byId("category"),subcategory=byId("subcategory"),answer=byId("answer");
   const ai=byId("ai"),notices=byId("notices"),remember=byId("remember"),save=byId("save");
   const noticeForm=byId("notice-form"),noticeStatus=byId("notice-status"),quiet=byId("quiet");
@@ -137,7 +221,19 @@ export const ASSISTANT_JS = String.raw`
   quiet.addEventListener("change",()=>{byId("quiet-hours").hidden=!quiet.checked;});
   let current=null,draft=null,taxonomy={},busy=false;
   const base="/api/quick/v41/agent/";
-  function message(value){status.textContent=value;}
+  function message(value){
+    const output=!panel.hidden?byId("movement-status"):view==="settings"?byId("settings-status"):status;
+    output.textContent=value;
+  }
+  function showView(next){
+    view=next;
+    chatSection.hidden=next!=="chat";
+    pendingView.hidden=next!=="pending";
+    settingsView.hidden=next!=="settings";
+    panel.hidden=true;
+    if(next==="chat")byId("chat-scroll").scrollTop=byId("chat-scroll").scrollHeight;
+    for(const button of nav)button.setAttribute("aria-pressed",String(button.dataset.assistantView===next));
+  }
   function el(tag,text,className){
     const node=document.createElement(tag);
     if(text)node.textContent=text;
@@ -167,9 +263,7 @@ export const ASSISTANT_JS = String.raw`
   function openMovement(item){
     if(busy)return;
     current=item;
-    list.hidden=true;
-    byId("alerts").hidden=true;
-    byId("credit").hidden=true;
+    pendingView.hidden=true;
     panel.hidden=false;
     answer.value="";
     ai.checked=false;
@@ -305,12 +399,10 @@ export const ASSISTANT_JS = String.raw`
   async function inbox(){
     current=null;
     panel.hidden=true;
-    list.hidden=false;
-    byId("alerts").hidden=false;
-    byId("credit").hidden=false;
+    pendingView.hidden=view!=="pending";
     list.replaceChildren();
     noticeForm.hidden=true;
-    message("Cargando pendientes…");
+    status.textContent="Cargando pendientes…";
     try{
       const data=await request("inbox");
       taxonomy=data.taxonomy;
@@ -329,19 +421,30 @@ export const ASSISTANT_JS = String.raw`
         list.append(button);
       }
       const count=data.items.length+data.alerts.length;
-      launcher.textContent=count?"Qwen · "+count:"Qwen";
-      message(count?count+" pendientes para revisar.":"No tienes pendientes para revisar.");
+      const badge=byId("count");
+      badge.textContent=String(count);
+      badge.hidden=!count;
+      launcher.setAttribute("aria-label",count?"Qwen, "+count+" pendientes":"Abrir chat de Qwen");
+      status.textContent=count?count+" pendientes para revisar.":"No tienes pendientes para revisar.";
     }catch(error){message(error.message);}
   }
   function setupChat(section){
     const history=byId("chat-history"),turns=byId("chat-turns"),output=byId("chat-status");
     const input=byId("chat-question"),form=byId("chat-form"),remove=byId("chat-delete"),fresh=byId("chat-new");
     const send=form.querySelector("[type=submit]"),consent=byId("chat-ai");
-    let id="",loaded=false,working=false,retry=null;
+    const scroll=byId("chat-scroll"),pending=byId("chat-pending"),welcome=byId("chat-welcome");
+    const threads=byId("chat-threads"),library=byId("chat-library"),consentPanel=byId("chat-ai-label");
+    let id="",working=false,retry=null,saved=false;
     const format=(amount,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(amount)/100);
-    function render(turn){
-      const card=el("article","","assistant-chat-turn"),answer=turn.answer;
-      card.append(el("strong",turn.question),el("p",answer.text));
+    function bottom(){scroll.scrollTop=scroll.scrollHeight;}
+    function bubble(who,message){
+      const card=el("div","","assistant-bubble assistant-bubble-"+(who==="Qwen"?"qwen":"user"));
+      card.append(el("span",who,"assistant-speaker"),el("p",message));
+      return card;
+    }
+    function render(turn,includeQuestion=true){
+      const answer=turn.answer,card=bubble("Qwen",answer.text);
+      if(includeQuestion)turns.append(bubble("Tú",turn.question));
       if(answer.totalMinor!==undefined&&answer.currency)card.append(el("strong",format(answer.totalMinor,answer.currency)));
       if(answer.points?.length&&answer.currency){
         const figure=el("figure","","assistant-chat-chart");
@@ -362,39 +465,47 @@ export const ASSISTANT_JS = String.raw`
       }
       turns.append(card);
     }
+    function closeHistory(){
+      library.hidden=true;
+      threads.setAttribute("aria-expanded","false");
+    }
     function freshThread(){
-      id=crypto.randomUUID();retry=null;turns.replaceChildren();history.value="";
+      id="";retry=null;saved=false;turns.replaceChildren();history.value="";welcome.hidden=false;
       remove.hidden=true;input.value="";consent.checked=false;output.textContent="";
+      consentPanel.open=false;closeHistory();scroll.scrollTop=0;
     }
     async function loadHistory(){
       const data=await request("chat");
-      history.replaceChildren(new Option("Nueva conversación",""),...data.items.map(item=>new Option(item.title,item.id)));
+      history.replaceChildren(new Option(data.items.length?"Elige una conversación":"Aún no hay conversaciones",""),
+        ...data.items.map(item=>new Option(item.title,item.id)));
       history.value=data.items.some(item=>item.id===id)?id:"";
-      remove.hidden=!history.value;
-      loaded=true;
+      remove.hidden=!saved;
     }
     function setBusy(value){
-      working=value;history.disabled=value;send.disabled=value;remove.disabled=value;fresh.disabled=value;
-      input.readOnly=value;
+      working=value;history.disabled=value;send.disabled=value;remove.disabled=value;fresh.disabled=value;threads.disabled=value;
     }
-    section.addEventListener("toggle",async()=>{
-      if(!section.open||loaded||working)return;
+    window.visualViewport?.addEventListener("resize",()=>{if(document.activeElement===input)requestAnimationFrame(bottom);});
+    threads.addEventListener("click",async()=>{
+      if(!library.hidden){closeHistory();return;}
+      library.hidden=false;threads.setAttribute("aria-expanded","true");
       setBusy(true);
-      try{freshThread();await loadHistory();}
+      try{output.textContent="Cargando historial…";await loadHistory();output.textContent="";}
       catch(error){output.textContent=error.message;}
       finally{setBusy(false);}
     });
-    fresh.addEventListener("click",()=>{if(!working){freshThread();input.focus();}});
+    fresh.addEventListener("click",()=>{if(!working){freshThread();input.focus({preventScroll:true});}});
     for(const button of section.querySelectorAll("[data-question]"))
-      button.addEventListener("click",()=>{if(!working){input.value=button.dataset.question;input.focus();}});
+      button.addEventListener("click",()=>{if(!working){input.value=button.dataset.question;input.focus({preventScroll:true});}});
     history.addEventListener("change",async()=>{
       if(working)return;
       if(!history.value){freshThread();return;}
       setBusy(true);output.textContent="Cargando conversación…";
       try{
         const data=await request("chat?id="+encodeURIComponent(history.value));
-        id=data.thread.id;retry=null;input.value="";consent.checked=false;turns.replaceChildren();
-        data.turns.forEach(render);remove.hidden=false;output.textContent="";
+        id=data.thread.id;retry=null;saved=true;input.value="";consent.checked=false;consentPanel.open=false;turns.replaceChildren();
+        for(const turn of data.turns)render(turn);
+        welcome.hidden=Boolean(data.turns.length);remove.hidden=false;output.textContent="";
+        closeHistory();threads.focus({preventScroll:true});bottom();
       }catch(error){output.textContent=error.message;history.value=id; }
       finally{setBusy(false);}
     });
@@ -404,32 +515,43 @@ export const ASSISTANT_JS = String.raw`
       if(working||!question)return;
       if(!id)id=crypto.randomUUID();
       if(!retry||retry.question!==question)retry={id,question,turnId:crypto.randomUUID()};
-      setBusy(true);output.textContent="Consultando tus registros…";
+      const optimistic=bubble("Tú",question),allowAI=consent.checked;
+      input.value="";consent.checked=false;consentPanel.open=false;
+      welcome.hidden=true;turns.append(optimistic);pending.hidden=false;
+      setBusy(true);output.textContent="Qwen está consultando tus registros…";bottom();
       try{
-        const data=await request("chat",{...retry,allowAI:consent.checked});
-        render(data.turn);retry=null;input.value="";consent.checked=false;
-        remove.hidden=false;output.textContent="";
-        try{await loadHistory();}catch{loaded=false;output.textContent="Consulta guardada. Vuelve a abrir el asistente para actualizar el historial.";}
-      }catch(error){output.textContent=error.message;}
-      finally{setBusy(false);}
+        const data=await request("chat",{...retry,allowAI});
+        render(data.turn,false);retry=null;saved=true;remove.hidden=false;output.textContent="";
+      }catch(error){
+        optimistic.remove();welcome.hidden=Boolean(turns.children.length);
+        if(!input.value)input.value=question;
+        output.textContent=error.message;
+      }
+      finally{pending.hidden=true;setBusy(false);bottom();}
     });
     remove.addEventListener("click",async()=>{
       if(working||!id||!window.confirm("¿Borrar esta conversación?"))return;
       setBusy(true);
-      try{await request("chat/delete",{id,confirmed:true});freshThread();await loadHistory();output.textContent="Conversación borrada.";}
+      try{await request("chat/delete",{id,confirmed:true});freshThread();output.textContent="Conversación borrada.";}
       catch(error){output.textContent=error.message;}
       finally{setBusy(false);}
     });
-    section.hidden=false;
   }
-  const chatSection=byId("chat");
-  if(chatSection?.dataset.assistantChat==="true")setupChat(chatSection);
-  function open(){if(!dialog.open){dialog.showModal();inbox();}}
-  launcher.addEventListener("click",open);
-  if(location.hash==="#qwen")open();
-  window.addEventListener("hashchange",()=>{if(location.hash==="#qwen")open();});
+  if(chatEnabled)setupChat(chatSection);
+  for(const button of nav)button.addEventListener("click",()=>{if(!busy)showView(button.dataset.assistantView);});
+  function open(next){
+    if(dialog.open){if(!busy)showView(next);return;}
+    showView(next);dialog.showModal();inbox();
+  }
+  launcher.addEventListener("click",()=>open(startingView));
+  if(location.hash==="#qwen")open(startingView);
+  if(location.hash==="#qwen-pending")open("pending");
+  window.addEventListener("hashchange",()=>{
+    if(location.hash==="#qwen")open(startingView);
+    if(location.hash==="#qwen-pending")open("pending");
+  });
   dialog.addEventListener("close",()=>{
-    if(location.hash==="#qwen")history.replaceState(null,"",location.pathname+location.search+"#plan");
+    if(location.hash==="#qwen"||location.hash==="#qwen-pending")history.replaceState(null,"",location.pathname+location.search+"#plan");
   });
   byId("back").addEventListener("click",()=>{if(!busy)inbox();});
   byId("credit-form").addEventListener("submit",async event=>{
