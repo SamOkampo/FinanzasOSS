@@ -3,6 +3,7 @@
 // financial movement, balance or category is written by this endpoint.
 import type {QuickD1,QuickWorkerEnv} from "./index.js";
 import {QWEN_MODEL,QWEN_OPTIONS,qwenJson} from "./ai-model.js";
+import {reconciliationFromDocument} from "./statement-document-bridge-v41.js";
 
 export class DocumentInspectionError extends Error {
   constructor(message:string,readonly status=422){super(message);}
@@ -136,7 +137,7 @@ export async function inspectFinancialDocument(
    throw new DocumentInspectionError("Envía un archivo mediante formulario multipart.");
  let form:FormData;
  try{form=await request.formData();}catch{throw new DocumentInspectionError("Formulario de documento inválido.");}
- if([...form.keys()].some(k=>!["file","consent"].includes(k)))
+ if([...form.keys()].some(k=>!["file","consent","bankLabel","paymentMethod"].includes(k)))
    throw new DocumentInspectionError("No se admiten otros campos.");
  if(form.get("consent")!=="true")throw new DocumentInspectionError("Autoriza expresamente analizar el archivo con Qwen.",403);
  const file=form.get("file");
@@ -174,11 +175,23 @@ export async function inspectFinancialDocument(
  const parsed=qwenJson(modelResult,12000);
  if(!parsed)return reply({error:"Qwen devolvió una estructura incompleta. No se importó nada."},502);
  const inference=validateDocumentInference(parsed,scan.tables);
+ const bankLabel=form.get("bankLabel");
+ const paymentMethod=form.get("paymentMethod");
+ if(bankLabel!==null&&typeof bankLabel!=="string"||paymentMethod!==null&&typeof paymentMethod!=="string")
+   throw new DocumentInspectionError("Datos bancarios del formulario inválidos.");
+ // Qwen selects a table and column names only. The original converted rows
+ // are parsed by deterministic validators inside the existing reconciliation.
+ // No financial writes, even when the model is mistaken.
+ const reconciliation=await reconciliationFromDocument(db,owner,result.data,
+   inference.documentType,scan.tables,inference.tables,{
+     bankLabel:typeof bankLabel==="string"?bankLabel:"",
+     paymentMethod:typeof paymentMethod==="string"?paymentMethod:"",
+   });
  return reply({version:"v41.2-document-inspection",fileType:extension,
   model:QWEN_MODEL,documentType:inference.documentType,explanation:inference.explanation,
   sections:scan.sectionHints,tables:scan.tables.map(t=>({...t,
     analysis:inference.tables.find(x=>x.index===t.index)||null})),
-  textWasExtracted:true,conversionFormat:result.format||"markdown",stored:false,
+  textWasExtracted:true,conversionFormat:result.format||"markdown",reconciliation,stored:false,
   financialRecordsModified:false,requiresManualReview:true,canCommit:false,
-  note:"Qwen propone ubicaciones de tablas y columnas; nunca modifica ni importa movimientos. Los datos de ejemplo se minimizan antes de consultarlo."});
+  note:"Qwen propone tablas y columnas; sus filas se validan y concilian sin importar movimientos. Solo se envían metadatos minimizados a Qwen."});
 }
