@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS quick_statement_review_decisions (
  owner_id TEXT NOT NULL,
  row_key TEXT NOT NULL,
  row_hash TEXT NOT NULL,
+ review_digest TEXT NOT NULL CHECK(length(review_digest)=64),
  bank_label TEXT NOT NULL,
  payment_method TEXT NOT NULL CHECK(payment_method IN ('bank_transfer','debit_card','credit_card')),
  direction TEXT NOT NULL CHECK(direction IN ('credit','debit')),
