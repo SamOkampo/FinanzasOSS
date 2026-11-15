@@ -229,7 +229,9 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
     if(needsReview)pending++;
     await db.prepare(
       "INSERT INTO quick_auto_categories(owner_id,source,movement_id,category,subcategory,confidence,needs_review,question,classification_source,updated_at) " +
-      "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,source,movement_id) DO UPDATE SET " +
+      "SELECT ?,?,?,?,?,?,?,?,?,? WHERE ?<>'learned' OR EXISTS("+
+      "SELECT 1 FROM quick_category_preferences WHERE owner_id=? AND merchant_key=? AND category=? AND subcategory=?) "+
+      "ON CONFLICT(owner_id,source,movement_id) DO UPDATE SET " +
       "category=excluded.category,subcategory=excluded.subcategory,confidence=excluded.confidence," +
       "needs_review=excluded.needs_review,question=excluded.question," +
       "classification_source=excluded.classification_source,updated_at=excluded.updated_at " +
@@ -238,9 +240,10 @@ export async function runCategoryAutomation(db:QuickD1,owner:string,env:QuickWor
       "AND c.source=excluded.source AND c.movement_id=excluded.movement_id) RETURNING movement_id",
     ).bind(owner,item.movement.source,item.movement.id,item.decision.category,item.decision.subcategory,
       item.decision.confidence,needsReview?1:0,item.decision.question,item.origin,
-      new Date().toISOString()).first();
+      new Date().toISOString(),item.origin,owner,merchantKey(item.movement.merchant),
+      item.decision.category,item.decision.subcategory).first();
   }
-  if(pending && allowAI) {
+  if(pending && allowAI && env.ALLOW_V41_ASSISTANT!=="true") {
     // Only notify an opted-in Push subscriber; cap to one notification per owner/hour.
     const now=new Date().toISOString(),hour=now.slice(0,13);
     const claimed=await db.prepare(

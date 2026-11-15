@@ -31,14 +31,34 @@ export const ASSISTANT_HTML = `
     </div>
   </details>
   <p id="assistant-status" role="status" aria-live="polite"></p>
-  <label class="ai-document-consent">
-    <input id="assistant-notices" type="checkbox" disabled>
-    <span>Avisarme de pendientes financieros</span>
-  </label>
-  <p class="budget-note" id="assistant-notice-hint"></p>
   <details id="assistant-notice-rules">
-    <summary>Tipos de aviso</summary>
-    <div class="assistant-fields" id="assistant-rule-list"></div>
+    <summary>Avisos y horario</summary>
+    <form id="assistant-notice-form" class="assistant-fields" hidden>
+      <label class="ai-document-consent">
+        <input id="assistant-notices" type="checkbox">
+        <span>Avisarme de pendientes financieros</span>
+      </label>
+      <p class="budget-note" id="assistant-notice-hint"></p>
+      <label>Hora del resumen (Bogotá) <select id="assistant-digest-hour"></select></label>
+      <label class="ai-document-consent">
+        <input id="assistant-quiet" type="checkbox"><span>Silenciar avisos de Qwen durante un horario</span>
+      </label>
+      <div class="assistant-fields" id="assistant-quiet-hours" hidden>
+        <label>Silencio desde <select id="assistant-quiet-start"></select></label>
+        <label>Silencio hasta <select id="assistant-quiet-end"></select></label>
+        <p class="budget-note">Si el resumen cae en ese horario, saldrá al terminar el silencio.</p>
+      </div>
+      <div class="assistant-fields" id="assistant-rule-list" role="group" aria-label="Tipos de aviso"></div>
+      <button type="submit" class="solid-button">Guardar avisos</button>
+      <p id="assistant-notice-status" role="status"></p>
+    </form>
+  </details>
+  <details id="assistant-merchants">
+    <summary>Comercios recordados</summary>
+    <p class="budget-note">Estas reglas se aplican a compras futuras. Puedes quitarlas y conservar las categorías guardadas.</p>
+    <p id="assistant-merchants-status" role="status"></p>
+    <div class="assistant-fields" id="assistant-merchants-list"></div>
+    <button type="button" class="soft-button" id="assistant-merchants-more" hidden>Ver más comercios</button>
   </details>
   <section id="assistant-alerts" class="assistant-fields" aria-label="Alertas financieras"></section>
   <details id="assistant-credit">
@@ -109,6 +129,12 @@ export const ASSISTANT_JS = String.raw`
   launcher.hidden=false;
   const category=byId("category"),subcategory=byId("subcategory"),answer=byId("answer");
   const ai=byId("ai"),notices=byId("notices"),remember=byId("remember"),save=byId("save");
+  const noticeForm=byId("notice-form"),noticeStatus=byId("notice-status"),quiet=byId("quiet");
+  const digestHour=byId("digest-hour"),quietStart=byId("quiet-start"),quietEnd=byId("quiet-end");
+  for(const select of [digestHour,quietStart,quietEnd]){
+    for(let hour=0;hour<24;hour++)select.add(new Option(String(hour).padStart(2,"0")+":00",hour));
+  }
+  quiet.addEventListener("change",()=>{byId("quiet-hours").hidden=!quiet.checked;});
   let current=null,draft=null,taxonomy={},busy=false;
   const base="/api/quick/v41/agent/";
   function message(value){status.textContent=value;}
@@ -203,22 +229,79 @@ export const ASSISTANT_JS = String.raw`
       list.append(row);
     }
   }
-  function renderRules(data){
+  function renderNotices(data){
+    notices.checked=data.notifications;
+    digestHour.value=data.noticeHours.digestHour;
+    quiet.checked=data.noticeHours.quietStart!==null;
+    quietStart.value=data.noticeHours.quietStart??22;
+    quietEnd.value=data.noticeHours.quietEnd??7;
+    byId("quiet-hours").hidden=!quiet.checked;
+    byId("notice-hint").textContent=data.pushConfigured?
+      (data.notifications?"Entrega prevista a las "+data.noticeSchedule+" (Bogotá). ":
+        "Los avisos están desactivados. ")+"Activa las notificaciones en el dispositivo para recibirlos.":
+      "Los avisos de este entorno todavía no están habilitados.";
     const list=byId("rule-list");
     list.replaceChildren();
     for(const [key,name] of Object.entries(data.ruleLabels)){
       const label=el("label","","ai-document-consent"),input=el("input");
-      input.type="checkbox";input.checked=data.rules[key];
-      input.addEventListener("change",async()=>{
-        input.disabled=true;
-        try{await request("preferences",{enabled:notices.checked,confirmed:true,rules:{[key]:input.checked}});}
-        catch(error){input.checked=!input.checked;message(error.message);}
-        finally{input.disabled=false;}
-      });
+      input.type="checkbox";input.name=key;input.checked=data.rules[key];
       label.append(input,el("span",name));
       list.append(label);
     }
+    noticeForm.hidden=false;
   }
+  noticeForm.addEventListener("submit",async event=>{
+    event.preventDefault();
+    const button=noticeForm.querySelector("button");
+    const start=quiet.checked?Number(quietStart.value):null,end=quiet.checked?Number(quietEnd.value):null;
+    if(start!==null&&start===end){noticeStatus.textContent="Elige dos horas distintas para el silencio.";return;}
+    const rules=Object.fromEntries([...byId("rule-list").querySelectorAll("input")].map(input=>[input.name,input.checked]));
+    button.disabled=true;
+    try{
+      await request("preferences",{enabled:notices.checked,confirmed:true,rules,
+        hours:{digestHour:Number(digestHour.value),quietStart:start,quietEnd:end}});
+      await inbox();
+      noticeStatus.textContent="Avisos guardados.";
+    }catch(error){noticeStatus.textContent=error.message;}
+    finally{button.disabled=false;}
+  });
+  const merchantSection=byId("merchants"),merchantList=byId("merchants-list"),merchantStatus=byId("merchants-status");
+  const moreMerchants=byId("merchants-more");
+  let merchantCursor=null,loadingMerchants=false;
+  async function loadMerchants(reset){
+    if(loadingMerchants)return;
+    loadingMerchants=true;
+    moreMerchants.disabled=true;
+    merchantStatus.textContent="Cargando comercios…";
+    try{
+      const path=!reset&&merchantCursor?"merchants?"+new URLSearchParams({after:merchantCursor}):"merchants";
+      const data=await request(path);
+      if(reset)merchantList.replaceChildren();
+      for(const item of data.items){
+        const row=el("article","","assistant-chat-turn");
+        const button=el("button","Olvidar comercio","soft-button");
+        button.type="button";
+        button.setAttribute("aria-label","Olvidar "+item.merchant);
+        button.addEventListener("click",async()=>{
+          if(!window.confirm("¿Quitar la regla de "+item.merchant+" para futuras compras?"))return;
+          button.disabled=true;
+          try{await request("merchants/forget",{merchant:item.merchant,updatedAt:item.updatedAt,confirmed:true});}
+          catch(error){merchantStatus.textContent=error.message;button.disabled=false;return;}
+          row.remove();
+          if(!merchantList.children.length&&merchantCursor)await loadMerchants(false);
+          merchantStatus.textContent="Regla quitada para futuras compras.";
+        });
+        row.append(el("strong",item.merchant),el("p",item.category+" · "+item.subcategory),button);
+        merchantList.append(row);
+      }
+      merchantCursor=data.next;
+      moreMerchants.hidden=!merchantCursor;
+      merchantStatus.textContent=merchantList.children.length?"":"Todavía no hay comercios recordados.";
+    }catch(error){merchantStatus.textContent=error.message;}
+    finally{loadingMerchants=false;moreMerchants.disabled=false;}
+  }
+  merchantSection.addEventListener("toggle",()=>{if(merchantSection.open)loadMerchants(true);});
+  moreMerchants.addEventListener("click",()=>loadMerchants(false));
   async function inbox(){
     current=null;
     panel.hidden=true;
@@ -226,21 +309,17 @@ export const ASSISTANT_JS = String.raw`
     byId("alerts").hidden=false;
     byId("credit").hidden=false;
     list.replaceChildren();
-    notices.disabled=true;
+    noticeForm.hidden=true;
     message("Cargando pendientes…");
     try{
       const data=await request("inbox");
       taxonomy=data.taxonomy;
-      notices.checked=data.notifications;
       renderAlerts(data.alerts);
       renderCredit(data.credit);
-      renderRules(data);
+      renderNotices(data);
+      if(merchantSection.open)loadMerchants(true);
       ai.closest("label").hidden=!data.aiAvailable;
       byId("chat-ai-label").hidden=!data.aiAvailable;
-      byId("notice-hint").textContent=data.pushConfigured?
-        "Revisamos tus pendientes a las "+data.noticeSchedule+" (Bogotá). Los avisos llegan a dispositivos con notificaciones activas.":
-        "Los avisos de este entorno todavía no están habilitados.";
-      notices.disabled=false;
       for(const item of data.items){
         const button=document.createElement("button");
         button.className="soft-button";
@@ -400,12 +479,5 @@ export const ASSISTANT_JS = String.raw`
       message(result.learningBlocked?"Categoría guardada. Este descriptor requiere revisión individual.":"Categoría guardada.");
     }catch(error){message(error.message);}
     finally{busy=false;save.disabled=false;}
-  });
-  notices.addEventListener("change",async()=>{
-    const enabled=notices.checked;
-    notices.disabled=true;
-    try{await request("preferences",{enabled,confirmed:true});}
-    catch(error){notices.checked=!enabled;message(error.message);}
-    finally{notices.disabled=false;}
   });
 })();`;

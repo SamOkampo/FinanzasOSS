@@ -3,12 +3,16 @@ import { PRECISE_TAXONOMY, CategoryInputError } from "./categorization.js";
 import { QWEN_MODEL, QWEN_OPTIONS, qwenJson } from "./ai-model.js";
 import { merchantKey, protectCategoryText } from "./category-automation.js";
 import { categoryPushConfigured, sendOwnerCategoryQuestion } from "./push.js";
-import { ALERT_RULES, creditSchedule, defaultAlertRules, markAlertsNotified, openOperationalAlerts, readAlertRules,
+import { ALERT_RULES, creditSchedule, defaultAlertRules, localDay, markAlertsNotified, openOperationalAlerts, readAlertRules,
   reconciliationNotificationRules, saveCreditDue, snoozeOperationalAlert } from "./assistant-alerts.js";
 
 // Cron Trigger times are UTC. Bogotá is UTC−05:00 year-round.
 export const ASSISTANT_DAILY_CRON = "0 1 * * *";
-const ASSISTANT_LOCAL_TIME = "20:00";
+export const ASSISTANT_HOURLY_CRON = "0 * * * *";
+const defaultNoticeHour = 20;
+const bogotaHour = new Intl.DateTimeFormat("en-GB",{timeZone:"America/Bogota",hour:"2-digit",hourCycle:"h23"});
+const hourLabel = (hour:number) => String(hour).padStart(2,"0")+":00";
+type NoticeHours = {digest_hour:number;quiet_start:number|null;quiet_end:number|null;delivery_hour:number};
 
 type Source = "manual" | "accountless";
 type Purchase = {source:Source; id:string; merchant:string|null; kind:string; version:string;
@@ -20,9 +24,6 @@ const reply = (body:unknown, status=200) => new Response(JSON.stringify(body), {
   "X-Content-Type-Options":"nosniff","Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'",
   "Referrer-Policy":"no-referrer",
 }});
-const dayInBogota = (time=Date.now()) => new Intl.DateTimeFormat("en-CA", {
-  timeZone:"America/Bogota",year:"numeric",month:"2-digit",day:"2-digit",
-}).format(new Date(time));
 const tableFor = (source:Source) => source==="manual"?"quick_manual_entries":"quick_shortcut_expenses";
 const validCategory = (category:unknown):category is string =>
   typeof category==="string" && Object.hasOwn(PRECISE_TAXONOMY,category);
@@ -61,10 +62,15 @@ function readDraft(db:QuickD1,owner:string,source:Source,id:string) {
   return db.prepare("SELECT category,subcategory,token,status,movement_version,learning FROM quick_agent_category_drafts "+
     "WHERE owner_id=? AND source=? AND movement_id=?").bind(owner,source,id).first<Draft>();
 }
+async function readNoticeHours(db:QuickD1,owner:string) {
+  return db.prepare("SELECT digest_hour,quiet_start,quiet_end,delivery_hour FROM quick_agent_notice_hours WHERE owner_id=?")
+    .bind(owner).first<NoticeHours>();
+}
 export async function assistantInbox(db:QuickD1,owner:string,env:QuickWorkerEnv):Promise<Response> {
-  const [rows,pref,rules,credit]=await Promise.all([
+  const [rows,pref,hours,rules,credit]=await Promise.all([
     queue(db,owner),
     db.prepare("SELECT enabled FROM quick_agent_notice_settings WHERE owner_id=?").bind(owner).first<{enabled:number}>(),
+    readNoticeHours(db,owner),
     readAlertRules(db,owner),
     creditSchedule(db,owner),
   ]);
@@ -89,7 +95,9 @@ export async function assistantInbox(db:QuickD1,owner:string,env:QuickWorkerEnv)
     taxonomy:PRECISE_TAXONOMY, notifications:pref?.enabled===1,
     alerts, rules, ruleLabels:Object.fromEntries(Object.entries(ALERT_RULES).filter(([rule])=>enabledRules[rule as keyof typeof enabledRules])), credit,
     pushConfigured:categoryPushConfigured(env),
-    noticeSchedule:ASSISTANT_LOCAL_TIME,
+    noticeSchedule:hourLabel(hours?.delivery_hour??defaultNoticeHour),
+    noticeHours:{digestHour:hours?.digest_hour??defaultNoticeHour,quietStart:hours?.quiet_start??null,
+      quietEnd:hours?.quiet_end??null},
     aiAvailable:env.ALLOW_V41_ASSISTANT_AI==="true"&&Boolean(env.AI),
   });
 }
@@ -111,7 +119,7 @@ export async function answerAssistant(db:QuickD1,owner:string,env:QuickWorkerEnv
         return reply({error:"Puedes elegir la categoría manualmente o autorizar a Qwen."},422);
       const quota=await db.prepare("INSERT INTO quick_agent_chat_quotas(owner_id,day,hits) VALUES(?,?,1) "+
         "ON CONFLICT(owner_id,day) DO UPDATE SET hits=hits+1 WHERE hits<5 RETURNING hits")
-        .bind(owner,dayInBogota()).first<{hits:number}>();
+        .bind(owner,localDay(Date.now())).first<{hits:number}>();
       if(!quota)return reply({error:"Agotaste las 5 aclaraciones con Qwen de hoy. Puedes elegir la categoría manualmente."},429);
       try {
         const result=await env.AI.run(QWEN_MODEL,{messages:[
@@ -182,19 +190,46 @@ export async function confirmAssistant(db:QuickD1,owner:string,raw:unknown):Prom
     learningBlocked:verified.learning==="blocked",replayed:results[1]?.meta?.changes===0});
 }
 export async function setAssistantNotices(db:QuickD1,owner:string,raw:unknown):Promise<Response> {
-  const data=bodyOf(raw,["enabled","confirmed","rules"]);
+  const data=bodyOf(raw,["enabled","confirmed","rules","hours"]);
   if(typeof data.enabled!=="boolean"||data.confirmed!==true)return reply({error:"Confirma la preferencia de avisos."},422);
   const preferences=data.rules===undefined?{}:bodyOf(data.rules,Object.keys(ALERT_RULES));
   if(Object.values(preferences).some(value=>typeof value!=="boolean"))return reply({error:"Selecciona tipos de aviso válidos."},422);
+  const hours=data.hours===undefined?null:bodyOf(data.hours,["digestHour","quietStart","quietEnd"]);
+  const isHour=(value:unknown):value is number=>typeof value==="number"&&Number.isInteger(value)&&value>=0&&value<=23;
+  if(hours&&(!isHour(hours.digestHour)||!((hours.quietStart===null&&hours.quietEnd===null)||
+    (isHour(hours.quietStart)&&isHour(hours.quietEnd)&&hours.quietStart!==hours.quietEnd))))
+    return reply({error:"Elige una hora de resumen y, si activas el silencio, dos horas distintas."},422);
   const notice=db.prepare("INSERT INTO quick_agent_notice_settings(owner_id,enabled) VALUES(?,?) "+
     "ON CONFLICT(owner_id) DO UPDATE SET enabled=excluded.enabled").bind(owner,data.enabled?1:0);
   const edits=Object.entries(preferences).map(([rule,enabled])=>
     db.prepare("INSERT INTO "+(reconciliationNotificationRules.has(rule)?"quick_agent_review_notification_rules":"quick_agent_alert_rules")+
       "(owner_id,rule,enabled) VALUES(?,?,?) "+
       "ON CONFLICT(owner_id,rule) DO UPDATE SET enabled=excluded.enabled").bind(owner,rule,enabled?1:0));
+  if(hours)edits.push(db.prepare("INSERT INTO quick_agent_notice_hours(owner_id,digest_hour,quiet_start,quiet_end) VALUES(?,?,?,?) "+
+    "ON CONFLICT(owner_id) DO UPDATE SET digest_hour=excluded.digest_hour,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end")
+    .bind(owner,hours.digestHour as number,hours.quietStart as number|null,hours.quietEnd as number|null));
   if(!db.batch)return reply({error:"Preferencias temporalmente no disponibles."},503);
   await db.batch([notice,...edits]);
   return reply({enabled:data.enabled});
+}
+export async function listRememberedMerchants(db:QuickD1,owner:string,after:string|null):Promise<Response>{
+  if(after!==null&&merchantKey(after)!==after)return reply({error:"Página de comercios inválida."},422);
+  const {results}=await db.prepare("SELECT merchant_key AS merchant,category,subcategory,updated_at AS updatedAt "+
+    "FROM quick_category_preferences WHERE owner_id=? AND merchant_key>? ORDER BY merchant_key LIMIT 26")
+    .bind(owner,after??"").all<{merchant:string;category:string;subcategory:string;updatedAt:string}>();
+  const items=results.slice(0,25);
+  return reply({items,next:results.length>25?items.at(-1)?.merchant:null});
+}
+export async function forgetRememberedMerchant(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
+  const data=bodyOf(raw,["merchant","updatedAt","confirmed"]);
+  if(data.confirmed!==true||typeof data.merchant!=="string"||merchantKey(data.merchant)!==data.merchant||
+    typeof data.updatedAt!=="string"||data.updatedAt.length>40)
+    return reply({error:"Confirma el comercio que quieres olvidar."},422);
+  const removed=await db.prepare("DELETE FROM quick_category_preferences WHERE owner_id=? AND merchant_key=? AND updated_at=? "+
+    "RETURNING merchant_key").bind(owner,data.merchant,data.updatedAt).first();
+  if(!removed&&await db.prepare("SELECT merchant_key FROM quick_category_preferences WHERE owner_id=? AND merchant_key=?")
+    .bind(owner,data.merchant).first())return reply({error:"La regla cambió. Vuelve a cargar los comercios."},409);
+  return reply({removed:Boolean(removed)});
 }
 export async function assistantSnooze(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
   const data=bodyOf(raw,["key"]);
@@ -215,10 +250,13 @@ export async function assistantCreditDue(db:QuickD1,owner:string,raw:unknown):Pr
 }
 export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sendOwnerCategoryQuestion):Promise<void> {
   if(!categoryPushConfigured(env))return;
-  const ownerRows=await env.DB.prepare("SELECT owner_id,last_fingerprint FROM quick_agent_notice_settings s WHERE enabled=1 "+
+  const day=localDay(now),hour=Number(bogotaHour.format(new Date(now)));
+  const ownerRows=await env.DB.prepare("SELECT s.owner_id,s.last_fingerprint FROM quick_agent_notice_settings s "+
+    "LEFT JOIN quick_agent_notice_hours h ON h.owner_id=s.owner_id "+
+    "WHERE s.enabled=1 AND COALESCE(h.delivery_hour,?)=? AND COALESCE(s.last_day,'')<? "+
     "AND EXISTS(SELECT 1 FROM quick_push_subscriptions p WHERE p.owner_id=s.owner_id) "+
-    "ORDER BY COALESCE(last_day,''),owner_id LIMIT 10").all<{owner_id:string;last_fingerprint:string|null}>();
-  const day=dayInBogota(now);
+    "ORDER BY COALESCE(s.last_day,''),s.owner_id LIMIT 10").bind(defaultNoticeHour,hour,day)
+    .all<{owner_id:string;last_fingerprint:string|null}>();
   for(const {owner_id:owner,last_fingerprint:previous} of ownerRows.results){
     const rules=await readAlertRules(env.DB,owner);
     if(env.ALLOW_V41_REVIEW_DRAFTS!=="true"){rules.possible_duplicate=false;rules.import_unreviewed=false;}
@@ -229,8 +267,9 @@ export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sen
     const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(signature));
     const fingerprint=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");
     const claimed=await env.DB.prepare("UPDATE quick_agent_notice_settings SET last_day=? "+
-      "WHERE owner_id=? AND enabled=1 AND COALESCE(last_day,'')<>? RETURNING owner_id")
-      .bind(day,owner,day).first();
+      "WHERE owner_id=? AND enabled=1 AND COALESCE(last_day,'')<? AND "+
+      "COALESCE((SELECT delivery_hour FROM quick_agent_notice_hours WHERE owner_id=?),?)=? RETURNING owner_id")
+      .bind(day,owner,day,owner,defaultNoticeHour,hour).first();
     if(!claimed||(!alerts.length&&previous===fingerprint))continue;
     if((alerts.length||(items.length&&previous!==fingerprint))&&!(await send(env.DB,owner,env,now)).accepted)continue;
     await markAlertsNotified(env.DB,owner,alerts,new Date(now).toISOString());

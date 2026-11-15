@@ -35,8 +35,8 @@ import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
 import { askAssistant, deleteAssistantConversation, listAssistantConversations } from "./assistant-conversations.js";
-import { ASSISTANT_DAILY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
-  confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
+import { ASSISTANT_DAILY_CRON, ASSISTANT_HOURLY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
+  confirmAssistant, forgetRememberedMerchant, listRememberedMerchants, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
 import { hapiActivityCommit, hapiActivityPreview, linkHapiActivityDeposit, listHapiActivity } from "./hapi-activity.js";
 import { HAPI_JS } from "./dashboard-hapi.js";
@@ -506,6 +506,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/merchants/forget") return await forgetRememberedMerchant(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/snooze") return await assistantSnooze(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/credit-due") return await assistantCreditDue(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
@@ -568,6 +569,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/agent/chat")
         return await listAssistantConversations(env.DB,owner,new URL(request.url).searchParams.get("id"));
       if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);
+      if (pathname === "/api/quick/v41/agent/merchants")
+        return await listRememberedMerchants(env.DB,owner,new URL(request.url).searchParams.get("after"));
       if (pathname === "/api/quick/v41/hapi/deposits") return await listHapiDeposits(env.DB,owner);
       if (pathname === "/api/quick/v41/hapi/activity") return await listHapiActivity(env.DB,owner);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await listHapiPortfolio(env.DB,owner);
@@ -621,7 +624,7 @@ export default {
     return handleQuickRequest(request, env, ctx);
   },
   async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
-    if(controller.cron===ASSISTANT_DAILY_CRON){
+    if(controller.cron===ASSISTANT_HOURLY_CRON||controller.cron===ASSISTANT_DAILY_CRON){
       if(env.ALLOW_V41_ASSISTANT==="true")await sendAssistantDigest(env,controller.scheduledTime);
       return;
     }
