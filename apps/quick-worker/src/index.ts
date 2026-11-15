@@ -407,7 +407,8 @@ export async function handleQuickRequest(
   }
   try {
     if (request.method === "POST") {
-      if (env.ALLOW_WRITES !== "true") return respond({ error: "Staging writes disabled" }, 503);
+      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview")
+        return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
       const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname==="/api/quick/v41/reconcile/preview")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
