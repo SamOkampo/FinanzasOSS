@@ -6,6 +6,7 @@ export type DaviviendaRow = {
   direction: "debit" | "credit";
   document: string;
   description: string;
+  page: number;
 };
 export type DaviviendaStatement = {
   period: string;
@@ -22,10 +23,15 @@ const MOVEMENT = /^(\d{2})\s+(\d{2})\s+\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\
 
 const toCents = (amount: string) => Number(amount.replace(".",""));
 
-export async function readDaviviendaPdf(bytes: Uint8Array): Promise<DaviviendaStatement|null> {
-  const pdf = await PDF.load(bytes, {lenient: false});
-  if(pdf.isEncrypted || pdf.getPageCount()>20)return null;
-  const pages = pdf.getPages().map(page=>page.extractText().lines.map(line=>{
+type PageText = ReturnType<ReturnType<PDF["getPages"]>[number]["extractText"]>;
+
+export async function readDaviviendaPdf(bytes: Uint8Array, extracted?:PageText[]): Promise<DaviviendaStatement|null> {
+  if(!extracted){
+    const pdf = await PDF.load(bytes, {lenient: false});
+    if(pdf.isEncrypted || pdf.getPageCount()>20)return null;
+    extracted=pdf.getPages().map(page=>page.extractText());
+  }
+  const pages = extracted.map(page=>page.lines.map(line=>{
     const spans = line.spans;
     return {
       spans,
@@ -45,7 +51,7 @@ export async function readDaviviendaPdf(bytes: Uint8Array): Promise<DaviviendaSt
   const period = report[2]+"-"+String(month).padStart(2,"0");
   const statement: DaviviendaStatement = {period,savings:[],pocket:[],issues:0,savingsTotals:"unavailable"};
   let section: "savings" | "pocket" = "savings";
-  for(const page of pages){
+  for(const [pageIndex,page] of pages.entries()){
     let insideTable = false;
     for(const line of page){
       if(/^EXTRACTO BOLSILLO\b/i.test(line.text)){
@@ -63,7 +69,7 @@ export async function readDaviviendaPdf(bytes: Uint8Array): Promise<DaviviendaSt
         continue;
       }
       statement[section].push({date,amount:match[3]!.replace(/,/g,""),
-        direction:match[4]==="+"?"credit":"debit",document:match[5]!,description:match[6]!});
+        direction:match[4]==="+"?"credit":"debit",document:match[5]!,description:match[6]!,page:pageIndex+1});
     }
   }
   const firstSpans = pages[0]?.flatMap(line=>line.spans)||[];

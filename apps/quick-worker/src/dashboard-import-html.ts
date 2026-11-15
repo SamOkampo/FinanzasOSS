@@ -23,7 +23,7 @@ export const IMPORTS_HTML = `
       </form>
       <p id="ai-document-file-status" class="import-file-status" role="status" aria-live="polite"></p>
       <section id="ai-document-local-results" class="ai-document-results" aria-labelledby="ai-document-local-title" hidden>
-        <h3 id="ai-document-local-title">Movimientos de Davivienda</h3>
+        <h3 id="ai-document-local-title">Movimientos del extracto</h3>
         <p id="ai-document-local-status" class="import-file-status" role="status" aria-live="polite"></p>
         <div id="ai-document-local-groups"></div>
       </section>
@@ -61,7 +61,7 @@ export const IMPORTS_HTML = `
       </section>
       <details class="import-disclosure import-help">
         <summary>Cómo funciona y privacidad</summary>
-        <p>La clave se usa en tu dispositivo. Los extractos Davivienda compatibles se leen ahí mismo. Para otros formatos, puedes autorizar a Cloudflare a leer el archivo desbloqueado y a Qwen a analizar su estructura.</p>
+        <p>La clave se usa en tu dispositivo. Los PDF compatibles se leen ahí mismo. Para otros formatos, puedes autorizar a Cloudflare a leer el archivo desbloqueado y a Qwen a analizar su estructura.</p>
         <p>Revisa las sugerencias antes de guardar. FinanzasOSS compara extractos bancarios en COP con tus movimientos registrados cuando indicas el banco.</p>
       </details>
     </section>

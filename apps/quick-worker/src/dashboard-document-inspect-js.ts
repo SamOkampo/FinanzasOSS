@@ -15,10 +15,10 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   const pick=byId("ai-document-pick"),filename=byId("ai-document-filename"),
     openPassword=byId("ai-document-password-open"),controls=byId("ai-document-analysis-controls"),
     localResults=byId("ai-document-local-results"),localStatus=byId("ai-document-local-status"),
-    localGroups=byId("ai-document-local-groups");
+    localGroups=byId("ai-document-local-groups"),localTitle=byId("ai-document-local-title");
   if(!file||!consent||!button||!feedback||!results||!summary||!tables||!bank||!method||
     !recon||!reconSummary||!reconRows||!passwordForm||!password||!fileStatus||!unlockButton||
-    !pick||!filename||!openPassword||!controls||!localResults||!localStatus||!localGroups)return;
+    !pick||!filename||!openPassword||!controls||!localResults||!localStatus||!localGroups||!localTitle)return;
   const labels={bank_statement:"Extracto bancario",card_statement:"Extracto de tarjeta de crédito",
     investment_statement:"Estado de inversiones",non_financial:"No parece un documento financiero",
     unknown:"Documento no identificado"};
@@ -58,29 +58,31 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if(txt!==undefined)el.textContent=txt;
     return el;
   };
-  function showDaviviendaPreview(statement){
-    const money=new Intl.NumberFormat("es-CO",{minimumFractionDigits:2,maximumFractionDigits:2});
-    for(const [title,rows] of [["Cuenta de ahorros",statement.savings],["Bolsillo",statement.pocket]]){
+  function showLocalPreview(statement){
+    localTitle.textContent=statement.title;
+    let count=0;
+    for(const {title,rows} of statement.groups){
       if(!rows.length)continue;
+      count+=rows.length;
       const group=elt("details","import-disclosure import-local-group");
       group.append(elt("summary","",title+" · "+rows.length));
+      group.open=statement.groups.length===1&&rows.length<=12;
       const list=elt("ul","import-local-rows");
       for(const row of rows){
         const item=elt("li");
         item.append(elt("strong","",row.description));
+        const direction=row.direction==="credit"?"Abono":row.direction==="debit"?"Cargo":"Tipo por revisar";
         item.append(elt("span","",row.date.split("-").reverse().join("/")+" · "+
-          (row.direction==="credit"?"Abono":"Cargo")+" · $"+money.format(Number(row.amount))));
+          direction+" · "+row.amount+" · Pág. "+row.page));
         list.append(item);
       }
       group.append(list);
       localGroups.append(group);
     }
-    const count=statement.savings.length+statement.pocket.length;
-    const note=statement.savingsTotals==="mismatch"?
-      " El total de los movimientos de ahorros difiere del resumen del banco. Revisa ambos en el PDF.":
-      "";
+    const period=statement.period?" · "+statement.period:"";
+    const note=statement.totalsDiffer?" Los totales leídos difieren del resumen del banco.":"";
     const issues=statement.issues?" Hay "+statement.issues+" fila(s) que requieren revisión en el PDF.":"";
-    announce(localStatus,count+" movimientos leídos · "+statement.period+"."+note+issues,Boolean(note||issues));
+    announce(localStatus,count+" movimientos leídos"+period+"."+note+issues,Boolean(note||issues));
     localResults.hidden=false;
   }
   function reset(){
@@ -126,7 +128,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
             next.focus({preventScroll:true});
           }
           reset();
-          if(result.statement)showDaviviendaPreview(result.statement);
+          if(result.statement)showLocalPreview(result.statement);
+          if(result.issue==="no_text")announce(feedback,"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
+          if(result.issue==="page_limit")announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
           return;
         }
         case "password_required":
@@ -150,7 +154,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.5");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.6");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
@@ -222,8 +226,12 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       const tableHelp=tables.closest("details");
       if(tableHelp){tableHelp.hidden=!payload.tables.length;tableHelp.open=false;}
       tables.replaceChildren();
+      if(!payload.tables.length){
+        announce(feedback,"No se encontraron filas de movimientos. Si el banco ofrece el extracto en Excel o CSV, prueba con ese archivo.",true);
+        return;
+      }
       summary.textContent=(labels[payload.documentType]||labels.unknown)+
-        " · "+payload.tables.length+" tabla(s) detectada(s). "+payload.explanation;
+        " · "+payload.tables.length+" tabla(s) detectada(s).";
       for(const table of payload.tables){
         const analysis=table.analysis||{},section=elt("article","ai-document-table");
         const head=elt("div","ai-document-table-head");
@@ -287,8 +295,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       results.hidden=false;
       announce(feedback,match?.available&&match.preview?.count?
         "Vista previa lista. Revisa los movimientos antes de guardar.":
-        payload.tables.length?"El análisis no preparó movimientos para revisar.":
-        "El lector recibió texto, pero no pudo reconstruir las tablas de movimientos.",!match?.available);
+        "El análisis no preparó movimientos para revisar.",!match?.available);
       results.scrollIntoView?.({behavior:"smooth",block:"nearest"});
     }catch(e){
       if(!task.signal.aborted)announce(feedback,e instanceof Error?e.message:"No se pudo revisar el documento.",true);
