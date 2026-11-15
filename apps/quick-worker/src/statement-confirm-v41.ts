@@ -90,7 +90,8 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
  const previewResponse=await previewReconciliationV41(db,owner,input);
  if(!previewResponse.ok)throw new ReviewConfirmationError("Extracto inválido",422);
  const preview=await previewResponse.json() as Preview;
- if(preview.reviewDigest!==d.expectedDigest)
+ if(preview.reviewDigest!==d.expectedDigest ||
+    preview.reviewDigest!==await reviewDigestV41(preview.bankLabel,d.paymentMethod as string,preview.rows))
   throw new ReviewConfirmationError("La conciliación cambió. Vuelve a revisarla antes de confirmar",409);
  const rawRows=d.rows as Record<string,string>[];
  const mapping=d.mapping as {externalId?:string};
@@ -184,8 +185,8 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
     }else{
      // Classify as an unclassified bank credit. Never call it salary/income by default.
      stmts.push(db.prepare("INSERT INTO quick_statement_credits("+
-      "id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,direction,created_at) "+
-      "SELECT ?,?,?,?,'COP',?,?,?,'received_transfer','credit',? WHERE EXISTS("+condition+") "+
+      "id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,direction,economic_purpose,created_at) "+
+      "SELECT ?,?,?,?,'COP',?,?,?,'received_transfer','credit','pending',? WHERE EXISTS("+condition+") "+
       "ON CONFLICT(owner_id,client_entry_id) DO NOTHING")
       .bind(entryId,owner,clientId,amount,date,row.description,preview.bankLabel,now,
        owner,rowKey,rowHash,entryId));
