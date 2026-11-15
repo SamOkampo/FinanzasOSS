@@ -10,7 +10,8 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .import-file-picker > span{min-width:0;max-width:100%;overflow-wrap:anywhere;font-size:.86rem;color:var(--ink-2)}
 .import-hub :is(.import-file-status:empty,[hidden]){display:none}
 .import-hub .import-file-status[data-error]{color:var(--ink);border-inline-start:3px solid var(--copper);padding-inline-start:10px}
-.import-password-open,.import-history-link{justify-self:start}
+.import-hub :is(.import-password-open,.import-history-link){justify-self:start;color:var(--ink);background:var(--surface);border-color:var(--rule)}
+.import-hub :is(.import-password-open,.import-history-link):hover{background:var(--paper)}
 .import-hub .import-password-form{display:grid;gap:10px;padding:12px;border:1px solid var(--copper);border-radius:12px;background:var(--paper)}
 .import-hub .import-password-form[hidden]{display:none}
 .import-password-form label{display:grid;gap:6px}
