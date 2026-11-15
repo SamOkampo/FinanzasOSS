@@ -1800,6 +1800,142 @@ dialog[open]{touch-action:pan-y}
 .verify-balance-form .expense-amount input{flex:1}
 .verify-balance-form .save-button{max-width:500px}
 @media(max-width:600px){.verified-balances{padding:16px}.balance-summary{display:grid}.balance-account-head{align-items:flex-start}}
+
+/* v39 - Verified balances: readable in both the existing editorial light and night themes.
+   Previous --panel / --line variables were undefined; a light fallback on a dark
+   page made headings and form text nearly invisible on iOS. */
+.verified-balances{
+  --balance-bg:var(--surface);
+  --balance-text:var(--ink);
+  --balance-secondary:var(--ink-muted);
+  --balance-border:var(--rule);
+  background:var(--balance-bg);
+  color:var(--balance-text);
+  border:1px solid var(--balance-border);
+  box-shadow:0 12px 34px rgba(0,0,0,.055);
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.verified-balances :is(h2,h3,label,.balance-summary-item strong,.balance-account-value strong){
+  color:var(--balance-text);
+}
+.verified-balances .panel-heading h2{
+  color:var(--balance-text);
+  font-size:clamp(24px,5.5vw,34px);
+  line-height:1.12;
+  letter-spacing:-.025em;
+}
+.verified-balances .panel-heading h2 em{
+  color:var(--copper);
+}
+.verified-balances :is(.panel-heading p,.balance-help,.balance-empty,.balance-account-value small){
+  color:var(--balance-secondary);
+  opacity:1;
+  font-size:clamp(13px,3.5vw,15px);
+  line-height:1.6;
+}
+.verified-balances .panel-heading{
+  margin:0 0 18px;
+  padding-bottom:18px;
+  border-bottom:1px solid var(--balance-border);
+}
+.verified-balances .panel-heading p{max-width:58ch}
+.verified-balances .micro-label{
+  color:var(--copper);
+  font-size:10px;
+  letter-spacing:.12em;
+}
+.verified-balances .balance-summary-item,
+.verified-balances .balance-account{
+  background:var(--paper);
+  border-color:var(--balance-border);
+}
+.verified-balances .balance-summary-item span{color:var(--balance-secondary);font-size:13px}
+.verified-balances .balance-summary-item strong{font-variant-numeric:tabular-nums}
+.verified-balances .balance-account-head .state-pill{
+  background:var(--surface);
+  color:var(--ink-2);
+  border:1px solid var(--rule);
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.verified-balances .balance-matches{color:var(--success)}
+.verified-balances .balance-difference{color:var(--copper)}
+.verify-balance-form{
+  border-top-color:var(--balance-border);
+  gap:12px;
+  padding-top:22px;
+}
+.verify-balance-form h3{
+  color:var(--balance-text);
+  font-size:clamp(19px,4.9vw,24px);
+  line-height:1.25;
+  margin:0 0 4px;
+}
+.verify-balance-form label{
+  color:var(--balance-text);
+  font-size:13px;
+  font-weight:750;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.verify-balance-form :is(input,select){
+  background:var(--paper);
+  color:var(--ink);
+  border:1px solid var(--rule);
+  border-radius:11px;
+  min-height:50px;
+  font-size:16px;
+  padding:12px 15px;
+  opacity:1;
+  appearance:auto;
+}
+.verify-balance-form input::placeholder{color:var(--ink-muted);opacity:1}
+.verify-balance-form :is(input,select):focus-visible{
+  outline:2px solid var(--copper);
+  outline-offset:2px;
+  border-color:var(--copper);
+}
+.verify-balance-form .expense-amount{
+  background:transparent;
+  color:var(--balance-text);
+  border:0;
+  padding:0;
+  margin:0;
+}
+.verify-balance-form .expense-amount>span{
+  color:var(--balance-text);
+  font-weight:750;
+  font-size:20px;
+  min-width:14px;
+}
+.verify-balance-form .expense-amount input{flex:1 1 0;min-width:0}
+.verify-balance-form .save-button{
+  background:var(--forest-2);
+  color:#fffefa;
+  border-radius:11px;
+  min-height:52px;
+  font-size:15px;
+  font-weight:750;
+  width:100%;
+  margin-top:6px;
+}
+.verify-balance-form .save-button:focus-visible{outline:2px solid var(--copper)}
+.verify-balance-form :is(.expense-review,.expense-feedback){
+  color:var(--balance-text);
+  white-space:pre-line;
+  font-size:13px;
+  line-height:1.6;
+}
+.verify-balance-form .expense-feedback.fail{color:var(--copper)}
+@media(max-width:600px){
+  .verified-balances{padding:20px 17px;margin:18px 0 32px;border-radius:17px}
+  .verified-balances .panel-heading{margin-bottom:14px}
+  .verified-balances .balance-summary{gap:10px}
+  .verified-balances .balance-summary-item,.verified-balances .balance-account{padding:14px}
+  .verified-balances .balance-account-head h3{font-size:16px}
+  .verify-balance-form{padding-bottom:max(18px,env(safe-area-inset-bottom))}
+}
 `;var Fe=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
