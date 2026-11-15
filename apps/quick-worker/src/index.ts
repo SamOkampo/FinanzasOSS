@@ -21,6 +21,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
+import { inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
@@ -54,7 +55,12 @@ export interface QuickWorkerEnv {
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
-  readonly AI?: {run(model:string,input:{messages:{role:string;content:string}[];max_tokens:number;temperature:number;stream:boolean}):Promise<unknown>};
+  readonly AI?: {
+    run(model:string,input:{messages:{role:string;content:string}[];
+      max_tokens?:number;max_completion_tokens?:number;
+      reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean}):Promise<unknown>;
+    toMarkdown?(document:{name:string;blob:Blob}):Promise<unknown>;
+  };
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -407,9 +413,12 @@ export async function handleQuickRequest(
   }
   try {
     if (request.method === "POST") {
-      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview")
+      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
+          pathname !== "/api/quick/v41/ai/document/inspect")
         return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
+      if(pathname==="/api/quick/v41/ai/document/inspect")
+        return await inspectFinancialDocument(request,env.DB,owner,env);
       const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname==="/api/quick/v41/reconcile/preview")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
@@ -480,7 +489,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof DocumentInspectionError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
