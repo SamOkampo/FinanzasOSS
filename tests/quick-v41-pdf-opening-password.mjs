@@ -27,7 +27,15 @@ assert.deepEqual(Buffer.from(await wasmResponse.arrayBuffer()),readFileSync(wasm
 const password = " prueba QA 41 ";
 const fixture = (kind) => readFileSync(new URL("./fixtures/v41-fictitious-" + kind + ".pdf",import.meta.url));
 const file = (bytes) => new File([bytes],"extracto-ficticio.pdf",{type:"application/pdf"});
-const open = (bytes,password="") => openStatementPdf(file(bytes),password,wasm);
+async function open(bytes, candidate = "") {
+  const exitCode = process.exitCode;
+  try {
+    return await openStatementPdf(file(bytes),candidate,wasm);
+  } finally {
+    // Emscripten propagates QPDF's inspection status to Node's exit code.
+    process.exitCode = exitCode;
+  }
+}
 const plain = fixture("plain");
 assert.deepEqual(await open(plain),{status:"plain"});
 assert.deepEqual(await open("No es PDF"),{status:"unreadable"});
@@ -38,7 +46,7 @@ const protectedBytes = fixture("encrypted");
 const protectedFile = file(protectedBytes);
 assert.deepEqual(await open(protectedBytes),{status:"password_required"});
 assert.deepEqual(await open(protectedBytes,password.trim()),{status:"incorrect_password"});
-const unlocked = await openStatementPdf(protectedFile,password,wasm);
+const unlocked = await open(protectedBytes,password);
 assert.equal(unlocked.status,"unlocked");
 assert.deepEqual(await open(unlocked.bytes),{status:"plain"});
 assert.deepEqual(Buffer.from(await protectedFile.arrayBuffer()),protectedBytes);
