@@ -20,7 +20,7 @@ const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status
  "Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'",
 }});
 const clean=(s:string,n=80)=>s.replace(/[\u0000-\u001f\u007f]/g," ").trim().slice(0,n);
-const redact=(s:string)=>clean(s,220)
+const redact=(s:string,n=220)=>clean(s,n)
   .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g,"[correo]")
   .replace(/\b(?:\+?57)?3\d{9}\b/g,"[telefono]")
   .replace(/\b\d{6,}\b/g,"[numero]")
