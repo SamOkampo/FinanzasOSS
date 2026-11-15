@@ -4,6 +4,8 @@
 
 **Principios innegociables:** no crear gastos/ingresos ficticios, no duplicar transferencias, no suponer que Hapi está conectado, no ejecutar trading/retirar/depositar automáticamente, y no enviar datos bancarios personales a Qwen sin consentimiento explícito. D1 aísla todo por `owner_id`.
 
+> **Desarrollo del caso de aprendizaje `food`:** consultar [V41_QWEN_FOOD_CLARIFICATION_LEARNING.md](./V41_QWEN_FOOD_CLARIFICATION_LEARNING.md). Especifica alias, subcategorías, doble confirmación, alcance de preferencias, bloqueo de agregadores y pruebas. Solo diseño, sin modificar movimientos.
+
 ## A. Qwen: robotsito de finanzas + revisión proactiva
 
 ### A1. Chat de categoría dentro del overlay
