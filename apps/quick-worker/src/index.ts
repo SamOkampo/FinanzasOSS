@@ -13,6 +13,7 @@ import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
 import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
+import { REVIEW_CONFIRM_JS } from "./dashboard-review-confirm-v41-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
@@ -22,6 +23,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
+import { confirmReviewedStatementV41, statementReviewHistoryV41, ReviewConfirmationError } from "./statement-confirm-v41.js";
 import { inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
@@ -46,6 +48,7 @@ export interface QuickWorkerEnv {
   readonly DB: QuickD1;
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
+  readonly ALLOW_V41_CONFIRM_WRITES?: string;
   readonly ALLOW_SHORTCUT_WRITES?: string;
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
@@ -338,7 +341,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -401,6 +404,7 @@ export async function handleQuickRequest(
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
+    if (pathname === "/review-confirm-v41.js") return respondAsset(REVIEW_CONFIRM_JS,"application/javascript");
     if (pathname === "/document-inspect.js") return respondAsset(DOCUMENT_INSPECT_JS, "application/javascript");
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
@@ -421,7 +425,7 @@ export async function handleQuickRequest(
       requireSameOrigin(request);
       if(pathname==="/api/quick/v41/ai/document/inspect")
         return await inspectFinancialDocument(request,env.DB,owner,env);
-      const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname==="/api/quick/v41/reconcile/preview")?85000:4096);
+      const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/"))?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
         await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
@@ -437,6 +441,10 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
       if (pathname === "/api/quick/v41/reconcile/preview") return await previewReconciliationV41(env.DB,owner,data);
+       if (pathname === "/api/quick/v41/reconcile/confirm") {
+         if(env.ALLOW_V41_CONFIRM_WRITES!=="true") return respond({error:"La confirmación v41 aún no está habilitada en este entorno"},503);
+         return await confirmReviewedStatementV41(env.DB,owner,data);
+       }
       if (pathname === "/api/quick/import/commit") return await categorizedResponse(
         await commitStatement(env.DB, owner, data),env.DB,owner,env,null);
       if (pathname === "/api/quick/categories/set") return await setCategory(env.DB, owner, data);
@@ -473,7 +481,8 @@ export async function handleQuickRequest(
         }
         return respond({ email: identity.email, profile: "personal" });
       }
-      if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
+      if (pathname === "/api/quick/v41/reconcile/history") return await statementReviewHistoryV41(env.DB,owner);
+       if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
       if (pathname === "/api/quick/balances") return await verifiedBalances(env.DB,owner);
@@ -491,7 +500,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof DocumentInspectionError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof ReviewConfirmationError || error instanceof DocumentInspectionError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {

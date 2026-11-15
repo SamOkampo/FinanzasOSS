@@ -153,7 +153,7 @@ export async function reconciliationFromDocument(
  db:QuickD1,owner:string,markdown:string,documentType:string,
  tables:DocumentTable[],proposals:TableProposal[],opts:PlanningOptions,
 ):Promise<{available:boolean;reason:string;tableIndex:number|null;warnings:string[];
-  preview:unknown|null}>{
+  preview:unknown|null;prepared?:{rows:Record<string,string>[];mapping:{postedAt:string;description:string;amount:string;direction:string;currency:string;externalId:string};bankLabel:string;paymentMethod:string}}>{
  if(documentType!=="bank_statement")
    return {available:false,reason:"Solo se concilian extractos de cuentas bancarias COP; las tarjetas y las inversiones requieren otro libro contable.",tableIndex:null,warnings:[],preview:null};
  const bank=opts.bankLabel.trim();
@@ -172,15 +172,12 @@ export async function reconciliationFromDocument(
  if(!mapping.eligible)
    return {available:false,reason:mapping.warnings[0]||"No se pudo preparar una tabla.",tableIndex:best.index,
      warnings:mapping.warnings,preview:null};
- const result=await previewReconciliationV41(db,owner,{
-   rows:mapping.rows,
-   mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo",
-     currency:"Moneda",externalId:"Referencia"},
-   bankLabel:bank,paymentMethod:opts.paymentMethod,
- });
+ const prepared={rows:mapping.rows,mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo",
+     currency:"Moneda",externalId:"Referencia"},bankLabel:bank,paymentMethod:opts.paymentMethod};
+ const result=await previewReconciliationV41(db,owner,prepared);
  if(!result.ok)
    return {available:false,reason:"La tabla requiere corrección antes de conciliar.",tableIndex:best.index,
      warnings:mapping.warnings,preview:null};
  return {available:true,reason:"",tableIndex:best.index,warnings:mapping.warnings,
-   preview:await result.json()};
+   preview:await result.json(),prepared};
 }
