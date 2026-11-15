@@ -31,6 +31,10 @@ import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
+import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
+import { answerAssistant, assistantInbox, confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
+import { HAPI_JS } from "./dashboard-hapi.js";
+import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError, authenticatedShortcutOwner, parseShortcutJson } from "./shortcut-direct.js";
 import { saveIncome } from "./income-capture.js";
@@ -61,6 +65,9 @@ export interface QuickWorkerEnv {
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
+  readonly ALLOW_V41_ASSISTANT?: string;
+  readonly ALLOW_V41_ASSISTANT_AI?: string;
+  readonly ALLOW_V41_HAPI?: string;
   readonly ALLOW_DOCUMENT_ANALYSIS?: string;
   readonly ALLOW_STATEMENT_VISION?: string;
   readonly AI?: {
@@ -348,6 +355,7 @@ export async function handleQuickRequest(
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
     "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/statement-pdf-renderer.mjs", "/statement-pdf-render-worker.mjs", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
+    "/assistant.js", "/hapi.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -404,9 +412,16 @@ export async function handleQuickRequest(
         'data-analysis-available="'+String(documentAnalysisAvailable(env))+'"')
         .replace('data-vision-available="false"',
           'data-vision-available="'+String(env.ALLOW_STATEMENT_VISION==="true"&&Boolean(env.AI))+'"');
-      return respondAsset(html,"text/html");
+      return respondAsset(html
+        .replace('data-assistant-enabled="false"','data-assistant-enabled="'+String(env.ALLOW_V41_ASSISTANT==="true")+'"')
+        .replace('data-hapi-enabled="false"','data-hapi-enabled="'+String(env.ALLOW_V41_HAPI==="true")+'"'),"text/html");
     }
-    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
+    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS+ASSISTANT_CSS, "text/css");
+    if (pathname === "/assistant.js") {
+      return env.ALLOW_V41_ASSISTANT==="true"?respondAsset(ASSISTANT_JS,"application/javascript"):
+        respondAsset("", "application/javascript");
+    }
+    if (pathname === "/hapi.js") return respondAsset(env.ALLOW_V41_HAPI==="true"?HAPI_JS:"","application/javascript");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
     if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
     if (pathname === "/mobile-input.js") return respondAsset(MOBILE_INPUT_JS, "application/javascript");
@@ -447,6 +462,10 @@ export async function handleQuickRequest(
     });
   }
   try {
+    if(pathname.startsWith("/api/quick/v41/agent/")&&env.ALLOW_V41_ASSISTANT!=="true")
+      return respond({error:"El asistente no está habilitado en este entorno."},503);
+    if(pathname.startsWith("/api/quick/v41/hapi/")&&env.ALLOW_V41_HAPI!=="true")
+      return respond({error:"Hapi todavía no está habilitado en este entorno."},503);
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
           pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
@@ -456,6 +475,11 @@ export async function handleQuickRequest(
       if(pathname==="/api/quick/v41/ai/document/inspect")
         return await inspectFinancialDocument(request,env.DB,owner,env);
       const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/"))?85000:4096);
+      if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
+      if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
         await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
@@ -501,6 +525,8 @@ export async function handleQuickRequest(
       }
       if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
+      if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);
+      if (pathname === "/api/quick/v41/hapi/deposits") return await listHapiDeposits(env.DB,owner);
       if (pathname === "/api/quick/profile") {
         // Cloudflare Access supplies the authenticated identity. Never trust
         // an email or owner ID from URL parameters, headers or request bodies.
@@ -548,6 +574,10 @@ export default {
     if(controller.cron!=="30 1 * * *") return;
     try{await runScheduledCategoryBackfill(env);}
     catch{ /* Existing financial reminders must still execute after any AI failure. */ }
+    if(env.ALLOW_V41_ASSISTANT==="true"){
+      try{await sendAssistantDigest(env,controller.scheduledTime);}
+      catch{ /* A digest failure does not interrupt other reminders. */ }
+    }
     // Daily expense reminders are separate from Qwen's opt-in category questions.
     if(env.ALLOW_DAILY_REMINDERS==="true")
       await sendDailyReminders(env,controller.scheduledTime);
