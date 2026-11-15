@@ -121,9 +121,6 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
   if(!row||row.status==="needs_correction"||!row.direction||!row.date||!keys.has(choice.index))
    throw new ReviewConfirmationError("Fila inválida; corrígela antes de confirmar",422);
   const k=keys.get(choice.index)!;
-  if(choice.action==="import"&&((row.existing||[]).length>0||row.repeatOfIndex!=null)&&
-     choice.overridePossibleMatch!==true)
-   throw new ReviewConfirmationError("Debes aceptar expresamente las posibles coincidencias antes de importar",409);
   let existingSource:string|null=null,existingId:string|null=null,counterparty:string|null=null;
   if(choice.action==="already_exists"){
    existingSource=textField(choice.existingSource,32);
@@ -155,6 +152,14 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
    if(!same(old,item))throw new ReviewConfirmationError("Este movimiento ya fue revisado con otra decisión",409);
    replayed++;
   }else newEntries.push(item);
+ }
+ // Prior imports will now appear as possible matches; only NEW imports
+ // require the extra override. Replaying an identical decision does not.
+ for(const item of newEntries){
+  if(item.decision.action==="import"&&
+    ((item.row.existing||[]).length>0||item.row.repeatOfIndex!=null)&&
+    item.decision.overridePossibleMatch!==true)
+   throw new ReviewConfirmationError("Debes aceptar expresamente las posibles coincidencias antes de importar",409);
  }
  // A full idempotent replay is allowed even if these imports now appear in
  // the live matching list. Any NEW decision requires a fresh preview digest.
