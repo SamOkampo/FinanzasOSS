@@ -132,6 +132,15 @@ export async function listHapiActivity(db:QuickD1,owner:string):Promise<Response
  return respond({items:rows.results.map(row=>({id:row.id,...storedRow(row),linkedDeposit:row.linked===1})),pending:deposits.results});
 }
 
+export async function hapiPurchasesByAsset(db:QuickD1,owner:string,start:string,end:string){
+ const {results}=await db.prepare("SELECT COALESCE(symbol,'Activo sin identificar') AS label,"+
+   "CAST(SUM(amount_minor) AS TEXT) AS minor FROM quick_hapi_activity "+
+   "WHERE owner_id=? AND occurred_on>=? AND occurred_on<? AND kind IN ('buy','reinvestment') "+
+   "GROUP BY symbol ORDER BY SUM(amount_minor) DESC,label LIMIT 61")
+   .bind(owner,start,end).all<{label:string;minor:string}>();
+ return results;
+}
+
 export async function linkHapiActivityDeposit(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
  const data=raw as {activityId?:unknown;depositId?:unknown;confirmed?:unknown}|null;
  if(!data||data.confirmed!==true||typeof data.activityId!=="string"||!hashPattern.test(data.activityId)||

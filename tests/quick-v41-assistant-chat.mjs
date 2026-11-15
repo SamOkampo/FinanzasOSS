@@ -65,7 +65,27 @@ const deposits=await call("chat",{id:rid,turnId:crypto.randomUUID(),question:"¿
 assert.equal(deposits.data.turn.answer.totalMinor,"10000");
 assert.equal(deposits.data.turn.answer.points[0].label,"Plata Pay");
 assert.match((await call("chat",{id:rid,turnId:crypto.randomUUID(),question:"¿Llegó mi depósito desde Otro Banco a Hapi?"})).data.turn.answer.text,/No encontré aportes/);
-assert.equal((await call("chat?id="+rid)).data.turns.length,6);
+const activity=sql.prepare("INSERT INTO quick_hapi_activity(owner_id,id,occurred_on,kind,description,amount_minor,symbol,created_at) VALUES(?,?,?,?,?,?,?,?)");
+for(const [owner,day,kind,minor,symbol] of [
+ [A,"2026-10-02","buy",4600,"VT"],[A,"2026-10-03","reinvestment",300,"VT"],
+ [A,"2026-10-04","buy",1200,"SCHD"],[A,"2026-10-05","dividend",300,"VT"],
+ [A,"2026-10-06","sell",500,"VT"],[A,"2026-09-30","buy",800,"VT"],[B,"2026-10-05","buy",9200000,"VT"],
+])activity.run(owner,crypto.randomUUID().replace(/-/g,"").repeat(2),day,kind,"Actividad ficticia",minor,symbol,day+"T12:00:00Z");
+const purchaseQuestion={id:rid,turnId:crypto.randomUUID(),question:"¿Qué compré en Hapi en 2026-10?"};
+const purchases=(await call("chat",purchaseQuestion)).data.turn.answer;
+assert.equal(purchases.target,"/dashboard#portfolio");
+assert.equal(purchases.totalMinor,"6100");
+assert.deepEqual(purchases.points,[{label:"VT",minor:"4900"},{label:"SCHD",minor:"1200"}]);
+assert.equal((await call("chat",{...purchaseQuestion,turnId:crypto.randomUUID(),question:"¿Y en 2026-09?"})).data.turn.answer.totalMinor,"800");
+assert.equal((await call("chat",purchaseQuestion,B)).data.turn.answer.totalMinor,"9200000");
+assert.equal(aiCount,1,"Hapi activity queries do not use model inference");
+const portfolio=async()=>await (await handleQuickRequest(new Request("https://qa.example/api/quick/v41/hapi/portfolio"),
+  {...env,ALLOW_V41_HAPI:"true"},ctx(A))).json();
+assert.equal((await portfolio()).creditedAtLatestCutMinor,null,"Deposit credited after the report is excluded");
+sql.prepare("UPDATE quick_hapi_portfolio_snapshots SET as_of=? WHERE owner_id=?").run("2026-10-02",A);
+assert.equal((await portfolio()).creditedAtLatestCutMinor,"10000");
+assert.equal((await portfolio()).latest.totalMinor,"12345","Comparison never changes the value of the portfolio");
+assert.equal((await call("chat?id="+rid)).data.turns.length,8);
 assert.equal((await call("chat/delete",{id:rid,confirmed:true},B)).status,200);
 assert.equal((await call("chat?id="+rid)).status,200);
 assert.equal((await call("chat/delete",{id:rid,confirmed:false})).status,422);

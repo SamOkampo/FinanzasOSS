@@ -126,7 +126,12 @@ function snapshotDto(snapshot:Snapshot) {
 }
 export async function listHapiPortfolio(db:QuickD1,owner:string):Promise<Response>{
   const history=(await portfolioHistory(db,owner)).map(snapshotDto);
-  return response({provider:"hapi",currency:"USD",connection:"manual",latest:history[0]??null,
+  const latest=history[0]??null;
+  const contributions=latest?await db.prepare("SELECT CAST(SUM(usd_minor) AS TEXT) AS minor "+
+    "FROM quick_hapi_deposits WHERE owner_id=? AND usd_minor IS NOT NULL AND credited_on<=?")
+    .bind(owner,latest.asOf).first<{minor:string|null}>():null;
+  return response({provider:"hapi",currency:"USD",connection:"manual",latest,
+    creditedAtLatestCutMinor:contributions?.minor??null,
     history:history.map(({asOf,cashMinor,marketValueMinor,totalMinor})=>({asOf,cashMinor,marketValueMinor,totalMinor}))});
 }
 export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Promise<Response>{

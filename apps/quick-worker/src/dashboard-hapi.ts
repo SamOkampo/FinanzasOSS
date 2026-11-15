@@ -3,6 +3,11 @@ export const HAPI_HTML = `
   <h3>Hapi · Portafolio en USD</h3>
   <p id="hapi-valuation"></p>
   <ul id="hapi-positions"></ul>
+  <details id="hapi-comparison" hidden>
+    <summary>Aportes y valor del portafolio</summary>
+    <p>El valor del corte incluye efectivo y posiciones. Los aportes incluyen solo los abonos que registraste hasta esa fecha. La diferencia por sí sola no mide rentabilidad.</p>
+    <div id="hapi-comparison-bars" class="assistant-chat-chart"></div>
+  </details>
   <details id="hapi-reports" hidden><summary>Cortes anteriores</summary><ul id="hapi-reports-list"></ul></details>
   <details>
     <summary>Registrar corte del portafolio</summary>
@@ -139,6 +144,20 @@ export const HAPI_JS = String.raw`
       const item=document.createElement("li");
       item.textContent=position.symbol+" · "+position.quantity+" unidades · "+money(position.marketValueMinor,"USD");
       items.append(item);
+    }
+    const bars=node("comparison-bars");
+    bars.replaceChildren();
+    const credited=portfolio.creditedAtLatestCutMinor;
+    node("comparison").hidden=!snapshot||credited==null;
+    if(!snapshot||credited==null)return;
+    const comparison=[["Aportes acreditados",credited],["Valor del corte",snapshot.totalMinor]];
+    const max=Math.max(...comparison.map(([,minor])=>Math.abs(Number(minor))),1);
+    for(const [name,minor] of comparison){
+      const text=document.createElement("p"),meter=document.createElement("meter");
+      text.textContent=name+" · "+money(minor,"USD");
+      meter.min=0;meter.max=max;meter.value=Math.abs(Number(minor));
+      meter.setAttribute("aria-label",text.textContent);
+      bars.append(text,meter);
     }
   }
   function render(data){

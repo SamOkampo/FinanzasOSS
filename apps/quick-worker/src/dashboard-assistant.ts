@@ -33,6 +33,7 @@ export const ASSISTANT_HTML = `
           <button type="button" class="assistant-chip" data-question="¿Cuánto gasté por categoría este mes?">Gastos del mes</button>
           <button type="button" class="assistant-chip" data-question="¿Cuáles son mis aportes pendientes en Hapi?">Aportes Hapi</button>
           <button type="button" class="assistant-chip" data-question="¿Cómo va mi portafolio en Hapi?">Portafolio Hapi</button>
+          <button type="button" class="assistant-chip" data-question="¿Qué compré en Hapi este mes?">Compras en Hapi</button>
         </div>
       </div>
       <div id="assistant-chat-turns" role="log" aria-label="Conversación" aria-relevant="additions text"></div>
@@ -448,7 +449,9 @@ export const ASSISTANT_JS = String.raw`
       if(answer.totalMinor!==undefined&&answer.currency)card.append(el("strong",format(answer.totalMinor,answer.currency)));
       if(answer.points?.length&&answer.currency){
         const figure=el("figure","","assistant-chat-chart");
-        figure.append(el("figcaption",answer.topic==="spending"?"Gastos por categoría":answer.topic==="hapi_deposits"?"Acreditaciones por banco":"Valor por fecha de corte (magnitud de cada corte)"));
+        const titles={spending:"Gastos por categoría",hapi_deposits:"Acreditaciones por banco",
+          hapi_purchases:"Compras y reinversiones por activo",hapi_portfolio:"Valor por fecha de corte"};
+        figure.append(el("figcaption",titles[answer.topic]||"Importes registrados"));
         const max=Math.max(...answer.points.map(point=>Math.abs(Number(point.minor))),1);
         for(const point of answer.points){
           const description=point.label+" · "+format(point.minor,answer.currency);
