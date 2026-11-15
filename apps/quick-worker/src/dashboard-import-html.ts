@@ -160,6 +160,15 @@ export const IMPORTS_HTML = `
         <a href="/api/quick/export.xlsx" class="solid-button export-button" id="export-excel">Descargar Excel</a>
       </div>
     </details>
+    <details id="transfer-link-panel" class="import-disclosure import-secondary" data-transfer-links="false" hidden>
+      <summary>Transferencias entre cuentas y pagos de tarjeta</summary>
+      <div class="import-secondary-body">
+        <p>En cada extracto, marca la fila como «Transferencia propia» e indica el nombre exacto de la otra cuenta. Para un pago, selecciona «Tarjeta crédito» al revisar el extracto de la tarjeta.</p>
+        <button id="transfer-link-refresh" class="soft-button" type="button">Actualizar cruces</button>
+        <p id="transfer-link-status" role="status" aria-live="polite"></p>
+        <div id="transfer-link-results"></div>
+      </div>
+    </details>
     <button id="v41-history-open" class="soft-button import-history-link" type="button">Historial de importación</button>
   </div>
 </section>
