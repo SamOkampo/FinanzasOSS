@@ -214,7 +214,7 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
  // Verify winners after the transaction so racing conflicting decisions are
  // never reported as if they had been accepted.
  for(const item of prepared){
-  const saved=await db.prepare("SELECT id,row_key,row_hash,action,existing_source,existing_id,counterparty_label,ledger_entry_id "+
+  const saved=await db.prepare("SELECT id,row_key,row_hash,review_digest,action,existing_source,existing_id,counterparty_label,ledger_entry_id "+
    "FROM quick_statement_review_decisions WHERE owner_id=? AND row_key=? LIMIT 1")
    .bind(owner,item.rowKey).first<Entry>();
   if(!saved||!same(saved,item))
