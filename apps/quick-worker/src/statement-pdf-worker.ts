@@ -1,4 +1,5 @@
 import createQpdf, { type QpdfInstance } from "@neslinesli93/qpdf-wasm";
+import {readHapiPdf} from "./hapi-statement-reader.js";
 import {readStatementPdf} from "./statement-pdf-layout.js";
 
 type PdfReply =
@@ -63,8 +64,12 @@ export async function openStatementPdf(file: File, password: string, wasmUrl: st
 }
 
 if (typeof self !== "undefined") {
-  self.onmessage = async (event: MessageEvent<{ file: File; password: string; enableVision?: boolean }>) => {
-    const { file, password, enableVision } = event.data;
+  self.onmessage = async (event: MessageEvent<{ file: File; password: string; enableVision?: boolean; kind?: "hapi" }>) => {
+    const { file, password, enableVision, kind } = event.data;
+    if(kind==="hapi"){
+      self.postMessage({snapshot:await readHapiPdf(file)});
+      return;
+    }
     const result = await openStatementPdf(file, password, "/statement-pdf-engine.wasm");
     const bytes = result.status==="unlocked" ? result.bytes :
       result.status==="plain" ? new Uint8Array(await file.arrayBuffer()) : null;

@@ -129,7 +129,7 @@ export const ASSISTANT_JS = String.raw`
       const card=el("article","","ai-document-table");
       const title=el("strong",item.title+(item.severity==="important"?" · Atención":""));
       const link=el("a",item.target==="portfolio"?"Abrir Hapi":"Abrir Saldos","soft-button");
-      link.href=item.target==="portfolio"?"/dashboard#portfolio":"/dashboard#map";
+      link.href=item.target==="portfolio"?"/dashboard#portfolio":"/dashboard#connections";
       link.addEventListener("click",()=>dialog.close());
       const button=el("button","Posponer 24 horas","soft-button");
       button.type="button";

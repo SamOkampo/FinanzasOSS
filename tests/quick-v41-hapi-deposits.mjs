@@ -3,6 +3,8 @@ import {readFileSync,readdirSync} from "node:fs";
 import {DatabaseSync} from "node:sqlite";
 import {handleQuickRequest} from "../dist/apps/quick-worker/src/index.js";
 import {HAPI_JS} from "../dist/apps/quick-worker/src/dashboard-hapi.js";
+import {PDF} from "@libpdf/core";
+import {parseHapiReport,readHapiPdf} from "../dist/apps/quick-worker/src/hapi-statement-reader.js";
 
 const sql=new DatabaseSync(":memory:");
 const migrations=new URL("../apps/quick-worker/migrations/",import.meta.url);
@@ -79,6 +81,25 @@ assert.equal((await req("portfolio",{...snapshot,cashUsd:"1.70"})).status,409);
 await req("portfolio",{...snapshot,asOf:"2026-10-12",cashUsd:"0",positions:[]});
 assert.equal((await req("portfolio")).data.latest.id,cut.data.id);
 assert.deepEqual((await req("portfolio")).data.history.map(x=>x.asOf),["2026-10-13","2026-10-12"]);
+assert.equal((await req("portfolio",null,B)).data.latest,null);
+const reportText=[
+  "Hapi · Apex Clearing", "Statement period: October 1, 2026 - October 31, 2026",
+  "Cash Balance $15.00 $10.00", "Total Priced Portfolio $150.00 $210.00",
+  "Portfolio Summary", "Symbol Quantity Price Market Value", "VT 1.12345678 $100.00 $112.35",
+  "QQQM 0.43825 $200.00 $87.65", "Account Activity", "VT 1.00 $1.00 $1.00",
+];
+assert.equal(parseHapiReport(reportText.join("\n")).totalUsd,"210.00");
+assert.equal(parseHapiReport(reportText.join("\n").replace("$210.00","$210.01")),null);
+assert.equal(parseHapiReport(reportText.join("\n").replace("Cash Balance","Buying Power")),null);
+const pdf=PDF.create(),page=pdf.addPage({size:"letter"});
+reportText.forEach((row,index)=>page.drawText(row.replace("·","/"),{x:32,y:765-index*20,fontSize:11}));
+const pdfFile=new File([await pdf.save()],"estado-hapi-ficticio.pdf",{type:"application/pdf"});
+const snapshotPreview=await readHapiPdf(pdfFile);
+assert.equal(snapshotPreview.positions[0].quantity,"1.12345678");
+assert.equal(sql.prepare("SELECT count(*) AS n FROM quick_hapi_portfolio_snapshots").get().n,2);
+const imported={asOf:snapshotPreview.asOf,cashUsd:snapshotPreview.cashUsd,positions:snapshotPreview.positions,confirmed:true};
+assert.equal((await req("portfolio",imported)).status,201);
+assert.equal((await req("portfolio",imported)).status,200);
 assert.equal((await req("portfolio",null,B)).data.latest,null);
 new Function(HAPI_JS);
 console.log("v41 Hapi: isolated manual COP/USD transfers, explicit confirmations, exact FX, unique source and receipt, no ledger writes PASSED");

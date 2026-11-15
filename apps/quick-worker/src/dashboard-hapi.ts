@@ -6,6 +6,12 @@ export const HAPI_HTML = `
   <details id="hapi-reports" hidden><summary>Cortes anteriores</summary><ul id="hapi-reports-list"></ul></details>
   <details>
     <summary>Registrar corte del portafolio</summary>
+    <form id="hapi-pdf" class="assistant-fields" autocomplete="off">
+      <label>Reporte mensual en PDF <input id="hapi-pdf-file" type="file" accept="application/pdf,.pdf" required></label>
+      <p>El PDF se lee en este dispositivo. Revisa el corte antes de guardarlo.</p>
+      <button class="soft-button" type="submit">Leer corte del PDF</button>
+      <p id="hapi-pdf-status" aria-live="polite"></p>
+    </form>
     <form id="hapi-snapshot" class="assistant-fields" autocomplete="off">
       <label>Fecha del reporte <input id="hapi-asof" type="date" required></label>
       <label>Efectivo neto en USD <input id="hapi-cash" inputmode="decimal" required></label>
@@ -72,7 +78,7 @@ export const HAPI_JS = String.raw`
     for(const input of node("manual").querySelectorAll("input"))input.disabled=!manual;
   }
   const positionFields=node("position-fields");
-  function addPosition(){
+  function addPosition(position){
     if(positionFields.children.length>=60)return;
     const field=document.createElement("fieldset");
     const heading=document.createElement("legend");
@@ -84,14 +90,14 @@ export const HAPI_JS = String.raw`
       ["marketValueUsd","Valor de mercado en USD","decimal",18],
     ]){
       const group=document.createElement("label"),input=document.createElement("input");
-      input.name=name;input.inputMode=mode;input.maxLength=limit;input.required=true;
+      input.name=name;input.inputMode=mode;input.maxLength=limit;input.required=true;input.value=position?.[name]||"";
       group.append(label,input);field.append(group);
     }
     const remove=document.createElement("button");
     remove.className="soft-button";remove.type="button";remove.textContent="Quitar posición";
     remove.addEventListener("click",()=>field.remove());
     field.append(remove);positionFields.append(field);
-    field.querySelector("input").focus();
+    if(!position)field.querySelector("input").focus();
   }
   function renderPortfolio(portfolio){
     const snapshot=portfolio.latest;
@@ -191,7 +197,33 @@ export const HAPI_JS = String.raw`
     }catch(error){status.textContent=error.message;}
     finally{busy=false;button.disabled=false;}
   });
-  node("add-position").addEventListener("click",addPosition);
+  node("add-position").addEventListener("click",()=>addPosition());
+  node("pdf").addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(busy)return;
+    const form=event.currentTarget,button=form.querySelector("button"),notice=node("pdf-status");
+    const file=node("pdf-file").files[0];
+    if(!file)return;
+    busy=true;button.disabled=true;
+    notice.textContent="Leyendo el reporte…";
+    try{
+      const worker=new Worker("/statement-pdf-worker.js?v=hapi-1");
+      const snapshot=await new Promise(resolve=>{
+        const timeout=setTimeout(()=>{worker.terminate();resolve(null);},20000);
+        function done(result){clearTimeout(timeout);worker.terminate();resolve(result);}
+        worker.onmessage=event=>done(event.data.snapshot);
+        worker.onerror=()=>done(null);
+        worker.postMessage({file,kind:"hapi"});
+      });
+      if(!snapshot)throw Error("No se pudo verificar el corte de este PDF. Usa el reporte digital sin clave o ingresa los valores manualmente.");
+      node("asof").value=snapshot.asOf;node("cash").value=snapshot.cashUsd;
+      positionFields.replaceChildren();snapshot.positions.forEach(addPosition);
+      node("snapshot-confirm").checked=false;
+      form.reset();
+      notice.textContent="Corte preparado. Revisa el efectivo y las posiciones antes de guardar.";
+    }catch(error){notice.textContent=error.message;}
+    finally{busy=false;button.disabled=false;}
+  });
   node("snapshot").addEventListener("submit",async event=>{
     event.preventDefault();
     if(busy||!node("snapshot-confirm").checked)return;
