@@ -11,10 +11,10 @@ export class ReviewConfirmationError extends Error {
 type DecisionAction="import"|"already_exists"|"own_transfer"|"skip";
 type Decision={index:number;action:DecisionAction;existingSource?:string;existingId?:string;
  counterpartyLabel?:string;overridePossibleMatch?:boolean};
-type PreviewRow={index:number;status:string;direction:"credit"|"debit"|null;date:string|null;
+export type PreviewRow={index:number;status:string;direction:"credit"|"debit"|null;date:string|null;
  description:string;amountCOP:string|null;existing:{source:string;id:string}[];
  repeatOfIndex?:number|null;issues:string[]};
-type Preview={reviewDigest:string;rows:PreviewRow[];bankLabel:string};
+export type Preview={reviewDigest:string;rows:PreviewRow[];bankLabel:string};
 type Entry={id:string;row_key:string;row_hash:string;review_digest:string;action:string;
  existing_source:string|null;existing_id:string|null;counterparty_label:string|null;
  ledger_entry_id:string|null};
@@ -81,6 +81,31 @@ function same(saved:Entry,p:Pending):boolean{
   saved.existing_source===p.existingSource&&saved.existing_id===p.existingId&&
   saved.counterparty_label===p.counterparty&&saved.ledger_entry_id===p.entryId;
 }
+export async function statementRowKeys(preview:Preview,paymentMethod:string,rawRows:readonly Record<string,string>[],
+ mapping:{externalId?:string}){
+ const occurrences=new Map<string,number>();
+ const keys=new Map<number,{rowKey:string;rowHash:string}>();
+ const externalRefs=new Set<string>();
+ for(const row of preview.rows){
+  if(row.status==="needs_correction"||!row.direction||!row.date)continue;
+  const amount=minorOf(row.amountCOP);
+  const ref=mapping.externalId?String(rawRows[row.index]?.[mapping.externalId]||"").trim():"";
+  const common=JSON.stringify([normalize(preview.bankLabel),paymentMethod,row.direction,
+    row.date,amount,normalize(row.description)]);
+  const extKey=JSON.stringify([normalize(preview.bankLabel),paymentMethod,"ref",ref]);
+  if(ref){
+   if(externalRefs.has(extKey))throw new ReviewConfirmationError("Referencia bancaria repetida en el extracto; revisa el archivo",409);
+   externalRefs.add(extKey);
+  }
+  const occurrence=occurrences.get(common)||0;
+  occurrences.set(common,occurrence+1);
+  const source=ref?extKey:common+"|"+occurrence;
+  const rowKey="v41_"+await digest(source);
+  const rowHash=await digest(JSON.stringify([common,ref,occurrence]));
+  keys.set(row.index,{rowKey,rowHash});
+ }
+ return keys;
+}
 export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
  const {d,decisions}=validate(raw);
  if(!db.batch)throw new ReviewConfirmationError("La transacción atómica D1 no está disponible",503);
@@ -94,27 +119,7 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
   preview.reviewDigest!==await reviewDigestV41(preview.bankLabel,d.paymentMethod as string,preview.rows);
  const rawRows=d.rows as Record<string,string>[];
  const mapping=d.mapping as {externalId?:string};
- const occurrences=new Map<string,number>();
- const keys=new Map<number,{rowKey:string;rowHash:string}>();
- const externalRefs=new Set<string>();
- for(const row of preview.rows){
-  if(row.status==="needs_correction"||!row.direction||!row.date)continue;
-  const amount=minorOf(row.amountCOP);
-  const ref=mapping.externalId?String(rawRows[row.index]?.[mapping.externalId]||"").trim():"";
-  const common=JSON.stringify([normalize(preview.bankLabel),d.paymentMethod,row.direction,
-    row.date,amount,normalize(row.description)]);
-  const extKey=JSON.stringify([normalize(preview.bankLabel),d.paymentMethod,"ref",ref]);
-  if(ref){
-   if(externalRefs.has(extKey))throw new ReviewConfirmationError("Referencia bancaria repetida en el extracto; revisa el archivo",409);
-   externalRefs.add(extKey);
-  }
-  const occurrence=occurrences.get(common)||0;
-  occurrences.set(common,occurrence+1);
-  const source=ref?extKey:common+"|"+occurrence;
-  const rowKey="v41_"+await digest(source);
-  const rowHash=await digest(JSON.stringify([common,ref,occurrence]));
-  keys.set(row.index,{rowKey,rowHash});
- }
+ const keys=await statementRowKeys(preview,d.paymentMethod as string,rawRows,mapping);
  const prepared:Pending[]=[];
  for(const choice of decisions){
   const row=preview.rows.find(x=>x.index===choice.index);

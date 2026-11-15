@@ -26,17 +26,21 @@ const response=(body:unknown,status=200)=>Response.json(body,{status,headers:{
   "Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'",
 }});
 
+export function readUnlinkedStatementSides(db:QuickD1,owner:string){
+  return db.prepare("SELECT s.id,s.bank_label,s.counterparty_label,s.payment_method,s.occurred_on,s.description,s.direction,s.amount_minor "+
+      "FROM "+source+" s WHERE s.owner_id=? AND s.action='own_transfer' AND "+
+      "lower(trim(s.counterparty_label)) NOT IN "+hapiNames+" AND lower(trim(s.bank_label)) NOT IN "+hapiNames+" "+
+      "AND NOT EXISTS (SELECT 1 FROM "+links+" l WHERE l.owner_id=s.owner_id AND "+
+      "((s.direction='debit' AND l.debit_id=s.id) OR (s.direction='credit' AND l.credit_id=s.id))) "+
+      "ORDER BY s.occurred_on DESC,s.id LIMIT 50").bind(owner).all<Side>();
+}
+
 export async function listStatementLinks(db:QuickD1,owner:string):Promise<Response>{
   const [candidates,pending,history]=await Promise.all([
     db.prepare("SELECT "+columns+","+kind+" kind FROM "+source+" d JOIN "+source+" c ON "+paired+
       " WHERE d.owner_id=? AND "+missing+
       " ORDER BY max(d.occurred_on,c.occurred_on) DESC,d.id,c.id LIMIT 50").bind(owner).all<Candidate>(),
-    db.prepare("SELECT s.id,s.bank_label,s.counterparty_label,s.payment_method,s.occurred_on,s.description,s.direction,s.amount_minor "+
-      "FROM "+source+" s WHERE s.owner_id=? AND s.action='own_transfer' AND "+
-      "lower(trim(s.counterparty_label)) NOT IN "+hapiNames+" AND lower(trim(s.bank_label)) NOT IN "+hapiNames+" "+
-      "AND NOT EXISTS (SELECT 1 FROM "+links+" l WHERE l.owner_id=s.owner_id AND "+
-      "((s.direction='debit' AND l.debit_id=s.id) OR (s.direction='credit' AND l.credit_id=s.id))) "+
-      "ORDER BY s.occurred_on DESC,s.id LIMIT 50").bind(owner).all<Side>(),
+    readUnlinkedStatementSides(db,owner),
     db.prepare("SELECT l.id,l.kind,l.confirmed_at,"+columns+" FROM "+links+" l "+
       "JOIN "+source+" d ON d.owner_id=l.owner_id AND d.id=l.debit_id "+
       "JOIN "+source+" c ON c.owner_id=l.owner_id AND c.id=l.credit_id "+

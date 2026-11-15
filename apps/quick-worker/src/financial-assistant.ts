@@ -4,7 +4,7 @@ import { QWEN_MODEL, QWEN_OPTIONS, qwenJson } from "./ai-model.js";
 import { merchantKey, protectCategoryText } from "./category-automation.js";
 import { categoryPushConfigured, sendOwnerCategoryQuestion } from "./push.js";
 import { ALERT_RULES, creditSchedule, defaultAlertRules, markAlertsNotified, openOperationalAlerts, readAlertRules,
-  saveCreditDue, snoozeOperationalAlert } from "./assistant-alerts.js";
+  reconciliationNotificationRules, saveCreditDue, snoozeOperationalAlert } from "./assistant-alerts.js";
 
 // Cron Trigger times are UTC. Bogotá is UTC−05:00 year-round.
 export const ASSISTANT_DAILY_CRON = "0 1 * * *";
@@ -68,9 +68,15 @@ export async function assistantInbox(db:QuickD1,owner:string,env:QuickWorkerEnv)
     readAlertRules(db,owner),
     creditSchedule(db,owner),
   ]);
+  const enabledRules=defaultAlertRules();
+  if(env.ALLOW_V41_REVIEW_DRAFTS!=="true"){
+    enabledRules.possible_duplicate=false;
+    enabledRules.import_unreviewed=false;
+  }
+  if(env.ALLOW_V41_TRANSFER_LINKS!=="true")enabledRules.unmatched_internal_transfer=false;
   const [drafts,alerts]=await Promise.all([
     Promise.all(rows.results.map(item=>readDraft(db,owner,item.source,item.id))),
-    openOperationalAlerts(db,owner,Date.now(),defaultAlertRules()),
+    openOperationalAlerts(db,owner,Date.now(),enabledRules),
   ]);
   return reply({
     items:rows.results.map(({id,source,merchant,question,version},index)=>{
@@ -81,7 +87,7 @@ export async function assistantInbox(db:QuickD1,owner:string,env:QuickWorkerEnv)
         draft:draft?{category:draft.category,subcategory:draft.subcategory,token:draft.token}:null};
     }),
     taxonomy:PRECISE_TAXONOMY, notifications:pref?.enabled===1,
-    alerts, rules, ruleLabels:ALERT_RULES, credit,
+    alerts, rules, ruleLabels:Object.fromEntries(Object.entries(ALERT_RULES).filter(([rule])=>enabledRules[rule as keyof typeof enabledRules])), credit,
     pushConfigured:categoryPushConfigured(env),
     noticeSchedule:ASSISTANT_LOCAL_TIME,
     aiAvailable:env.ALLOW_V41_ASSISTANT_AI==="true"&&Boolean(env.AI),
@@ -183,7 +189,8 @@ export async function setAssistantNotices(db:QuickD1,owner:string,raw:unknown):P
   const notice=db.prepare("INSERT INTO quick_agent_notice_settings(owner_id,enabled) VALUES(?,?) "+
     "ON CONFLICT(owner_id) DO UPDATE SET enabled=excluded.enabled").bind(owner,data.enabled?1:0);
   const edits=Object.entries(preferences).map(([rule,enabled])=>
-    db.prepare("INSERT INTO quick_agent_alert_rules(owner_id,rule,enabled) VALUES(?,?,?) "+
+    db.prepare("INSERT INTO "+(reconciliationNotificationRules.has(rule)?"quick_agent_review_notification_rules":"quick_agent_alert_rules")+
+      "(owner_id,rule,enabled) VALUES(?,?,?) "+
       "ON CONFLICT(owner_id,rule) DO UPDATE SET enabled=excluded.enabled").bind(owner,rule,enabled?1:0));
   if(!db.batch)return reply({error:"Preferencias temporalmente no disponibles."},503);
   await db.batch([notice,...edits]);
@@ -214,6 +221,8 @@ export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sen
   const day=dayInBogota(now);
   for(const {owner_id:owner,last_fingerprint:previous} of ownerRows.results){
     const rules=await readAlertRules(env.DB,owner);
+    if(env.ALLOW_V41_REVIEW_DRAFTS!=="true"){rules.possible_duplicate=false;rules.import_unreviewed=false;}
+    if(env.ALLOW_V41_TRANSFER_LINKS!=="true")rules.unmatched_internal_transfer=false;
     const items=rules.unclassified_movement?(await queue(env.DB,owner)).results:[];
     const alerts=(await openOperationalAlerts(env.DB,owner,now,rules)).filter(alert=>!alert.notified);
     const signature=items.map(({source,id})=>source+":"+id).sort().join("|");

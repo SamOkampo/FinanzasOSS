@@ -9,6 +9,7 @@ export const TRANSFER_LINKS_JS=String.raw`
   const refresh=document.getElementById("transfer-link-refresh");
   const money=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP"});
   let busy=false;
+  const focusId=new URL(location.href).searchParams.get("transfer");
   function element(tag,content,className){
     const node=document.createElement(tag);
     if(content)node.textContent=content;
@@ -56,11 +57,16 @@ export const TRANSFER_LINKS_JS=String.raw`
         target.append(card);
       }
     }
+    let focused;
     for(const row of data.pending){
       const side=row.direction==="debit"?"Salida":"Abono";
-      pending.append(element("p",side+" · "+row.occurred_on+" · "+row.bank_label+" · "+
-        row.counterparty_label+" · "+money.format(row.amount_minor/100)));
+      const entry=element("p",side+" · "+row.occurred_on+" · "+row.bank_label+" · "+
+        row.counterparty_label+" · "+money.format(row.amount_minor/100));
+      pending.append(entry);
+      if(row.id===focusId){focused=entry;entry.tabIndex=-1;}
+
     }
+    if(focused){pending.open=true;focused.focus();}
   }
   async function update(body){
     if(busy)return;
@@ -76,5 +82,6 @@ export const TRANSFER_LINKS_JS=String.raw`
   }
   panel.addEventListener("toggle",()=>{if(panel.open)update();});
   refresh.addEventListener("click",()=>update());
+  if(focusId)panel.open=true;
 })();
 `;

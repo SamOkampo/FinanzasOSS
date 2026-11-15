@@ -25,6 +25,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
+import { discardStatementDraft, openStatementDraft, saveStatementDraft } from "./statement-review-drafts.js";
 import { confirmStatementLink, listStatementLinks } from "./statement-transfer-links.js";
 import { confirmReviewedStatementV41, statementReviewHistoryV41, ReviewConfirmationError } from "./statement-confirm-v41.js";
 import { documentAnalysisAvailable,inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
@@ -59,6 +60,7 @@ export interface QuickWorkerEnv {
   readonly ALLOW_WRITES?: string;
   readonly ALLOW_V41_CONFIRM_WRITES?: string;
   readonly ALLOW_V41_TRANSFER_LINKS?: string;
+  readonly ALLOW_V41_REVIEW_DRAFTS?: string;
   readonly ALLOW_SHORTCUT_WRITES?: string;
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
@@ -418,6 +420,7 @@ export async function handleQuickRequest(
           'data-vision-available="'+String(env.ALLOW_STATEMENT_VISION==="true"&&Boolean(env.AI))+'"');
       return respondAsset(html
         .replace('data-assistant-enabled="false"','data-assistant-enabled="'+String(env.ALLOW_V41_ASSISTANT==="true")+'"')
+        .replace('data-review-drafts="false"','data-review-drafts="'+String(env.ALLOW_V41_REVIEW_DRAFTS==="true")+'"')
         .replace('data-transfer-links="false"','data-transfer-links="'+String(env.ALLOW_V41_TRANSFER_LINKS==="true")+'"')
         .replace('data-hapi-enabled="false"','data-hapi-enabled="'+String(env.ALLOW_V41_HAPI==="true")+'"'),"text/html");
     }
@@ -475,6 +478,8 @@ export async function handleQuickRequest(
       return respond({error:"El asistente no está habilitado en este entorno."},503);
     if(pathname.startsWith("/api/quick/v41/hapi/")&&env.ALLOW_V41_HAPI!=="true")
       return respond({error:"Hapi todavía no está habilitado en este entorno."},503);
+    if(pathname.startsWith("/api/quick/v41/reconcile/draft")&&env.ALLOW_V41_REVIEW_DRAFTS!=="true")
+      return respond({error:"Las revisiones guardadas no están habilitadas."},503);
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
           pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
@@ -508,6 +513,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/v41/reconcile/draft") return await saveStatementDraft(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/reconcile/draft/discard") return await discardStatementDraft(env.DB,owner,data);
       if (pathname === "/api/quick/v41/reconcile/links"){
         if(env.ALLOW_V41_TRANSFER_LINKS!=="true")return respond({error:"La conciliación entre cuentas no está habilitada."},503);
         return await confirmStatementLink(env.DB,owner,data);
@@ -556,6 +563,8 @@ export async function handleQuickRequest(
         }
         return respond({ email: identity.email, profile: "personal" });
       }
+      if (pathname === "/api/quick/v41/reconcile/draft")
+        return await openStatementDraft(env.DB,owner,new URL(request.url).searchParams.get("id")??"");
       if (pathname === "/api/quick/v41/reconcile/links"){
         if(env.ALLOW_V41_TRANSFER_LINKS!=="true")return respond({error:"La conciliación entre cuentas no está habilitada."},503);
         return await listStatementLinks(env.DB,owner);

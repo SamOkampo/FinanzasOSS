@@ -128,9 +128,20 @@ export const ASSISTANT_JS = String.raw`
     for(const item of alerts){
       const card=el("article","","ai-document-table");
       const title=el("strong",item.title+(item.severity==="important"?" · Atención":""));
-      const link=el("a",item.target==="portfolio"?"Abrir Hapi":"Abrir Saldos","soft-button");
-      link.href=item.target==="portfolio"?"/dashboard#portfolio":"/dashboard#connections";
-      link.addEventListener("click",()=>dialog.close());
+      let link;
+      if(item.target==="review"){
+        link=el("button",item.rule==="possible_duplicate"?"Revisar coincidencias":"Retomar revisión","soft-button");
+        link.type="button";
+        link.addEventListener("click",()=>{
+          dialog.close();
+          document.dispatchEvent(new CustomEvent("finanzasoss:v41-open-saved-review",
+            {detail:{id:item.targetId,duplicate:item.rule==="possible_duplicate"}}));
+        });
+      }else{
+        link=el("a",item.target==="portfolio"?"Abrir Hapi":item.target==="transfer"?"Ver transferencia":"Abrir Saldos","soft-button");
+        link.href=item.target==="portfolio"?"/dashboard#portfolio":item.target==="transfer"?"/dashboard?transfer="+item.targetId+"#imports":"/dashboard#connections";
+        link.addEventListener("click",()=>dialog.close());
+      }
       const button=el("button","Posponer 24 horas","soft-button");
       button.type="button";
       button.addEventListener("click",async()=>{

@@ -1,20 +1,27 @@
 import type {QuickD1} from "./index.js";
 import {readVerifiedBalances} from "./bank-reconciliation.js";
+import {listPendingStatementDrafts} from "./statement-review-drafts.js";
+import {readUnlinkedStatementSides} from "./statement-transfer-links.js";
 
 export const ALERT_RULES = {
   unclassified_movement:"Compras por clasificar",
   unreconciled_balance:"Diferencias de saldo",
   hapi_deposit_pending:"Aportes pendientes en Hapi",
   credit_payment_due:"Pagos de tarjeta próximos",
+  possible_duplicate:"Posibles duplicados en extractos",
+  unmatched_internal_transfer:"Transferencias sin vincular",
+  import_unreviewed:"Revisiones de extractos pendientes",
 } as const;
 type Rule = keyof typeof ALERT_RULES;
+export const reconciliationNotificationRules=new Set<string>(["possible_duplicate","unmatched_internal_transfer","import_unreviewed"]);
 type Alert = {
   key:string;
   fingerprint:string;
   rule:Exclude<Rule,"unclassified_movement">;
   title:string;
   detail:string;
-  target:"balance"|"portfolio";
+  target:"balance"|"portfolio"|"review"|"transfer";
+  targetId?:string;
   severity:"important"|"review"|"info";
 };
 type CreditDue = {account_id:string;bank_label:string;due_on:string;paid:number};
@@ -27,14 +34,15 @@ function dayOffset(day:string,days:number):string {
   return new Date(Date.parse(day+"T12:00:00Z")+days*86400000).toISOString().slice(0,10);
 }
 export async function readAlertRules(db:QuickD1,owner:string) {
-  const stored=await db.prepare("SELECT rule,enabled FROM quick_agent_alert_rules WHERE owner_id=?")
-    .bind(owner).all<{rule:Rule;enabled:number}>();
+  const stored=await db.prepare("SELECT rule,enabled FROM quick_agent_alert_rules WHERE owner_id=? "+
+    "UNION ALL SELECT rule,enabled FROM quick_agent_review_notification_rules WHERE owner_id=?")
+    .bind(owner,owner).all<{rule:Rule;enabled:number}>();
   const rules=defaultAlertRules();
   for(const row of stored.results)rules[row.rule]=row.enabled===1;
   return rules;
 }
 export function defaultAlertRules():Record<Rule,boolean>{
-  return {unclassified_movement:true,unreconciled_balance:true,hapi_deposit_pending:true,credit_payment_due:true};
+  return Object.fromEntries(Object.keys(ALERT_RULES).map(rule=>[rule,true])) as Record<Rule,boolean>;
 }
 export async function operationalAlerts(db:QuickD1,owner:string,now:number,rules:Record<Rule,boolean>):Promise<Alert[]> {
   const day=localDay(now), end=dayOffset(day,7);
@@ -48,6 +56,10 @@ export async function operationalAlerts(db:QuickD1,owner:string,now:number,rules
       "JOIN quick_balance_accounts a ON a.owner_id=d.owner_id AND a.id=d.account_id "+
       "WHERE d.owner_id=? AND d.paid=0 AND d.due_on<=? ORDER BY d.due_on,d.account_id LIMIT 30")
       .bind(owner,end).all<CreditDue>()).results:[];
+  const [drafts,unlinked]=await Promise.all([
+    (rules.import_unreviewed||rules.possible_duplicate)?listPendingStatementDrafts(db,owner):[],
+    rules.unmatched_internal_transfer?readUnlinkedStatementSides(db,owner).then(result=>result.results):[],
+  ]);
   return [
     ...dues.map(({account_id,bank_label,due_on}):Alert=>({
       key:"credit:"+account_id+":"+due_on,fingerprint:due_on+(due_on<day?":overdue":":due"),rule:"credit_payment_due",
@@ -61,6 +73,23 @@ export async function operationalAlerts(db:QuickD1,owner:string,now:number,rules
         title:label,detail:"Diferencia de "+cop.format(Number(differenceMinor)/100)+
           " entre los cortes y los movimientos registrados.",target:"balance",severity:"review"}];
     }),
+    ...drafts.flatMap((item):Alert[]=>{
+      const duplicate=rules.possible_duplicate&&item.duplicates>0;
+      if(!duplicate&&!rules.import_unreviewed)return [];
+      return [{key:"draft:"+item.id,fingerprint:[item.pending,item.duplicates,item.invalid].join("|"),
+        rule:duplicate?"possible_duplicate":"import_unreviewed",target:"review",targetId:item.id,severity:"review",
+        title:item.bank_label,detail:item.pending+" filas pendientes"+(item.duplicates?
+          " · "+item.duplicates+" con posibles coincidencias dentro o fuera del extracto":"")+
+          (item.invalid?" · "+item.invalid+" por corregir":"")+".",
+      }];
+    }),
+    ...unlinked.map((item):Alert=>({
+      key:"transfer:"+item.id,fingerprint:item.id,rule:"unmatched_internal_transfer",
+      title:item.bank_label+" · "+item.counterparty_label,
+      detail:(item.direction==="debit"?"Salida":"Abono")+" del "+item.occurred_on+
+        " por "+cop.format(item.amount_minor/100)+" pendiente de vincular.",
+      target:"transfer",targetId:item.id,severity:"info",
+    })),
     ...pending.map(({id,bank_label,debited_on,cop_minor}):Alert=>({
       key:"hapi:"+id,fingerprint:debited_on+":"+cop_minor,rule:"hapi_deposit_pending",title:"Aporte de "+bank_label,
       detail:"Salida del "+debited_on+" pendiente de acreditación en Hapi.",target:"portfolio",severity:"info",

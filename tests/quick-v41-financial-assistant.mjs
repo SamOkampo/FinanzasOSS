@@ -33,7 +33,7 @@ function seed(owner,id,merchant){
 seed(A,ids[0],"Wompi SAS");seed(B,ids[1],"Perfil B");seed(A,ids[2],"Cafetería Demo");seed(A,ids[3],"Extracto Demo");
 const original=sql.prepare("SELECT * FROM quick_shortcut_expenses ORDER BY id").all();
 let calls=0;
-const env={DB,ACCESS_AUD:"agent-qa",ALLOW_WRITES:"true",ALLOW_V41_ASSISTANT:"true",ALLOW_V41_ASSISTANT_AI:"true",
+const env={DB,ALLOW_V41_CONFIRM_WRITES:"true",ALLOW_V41_REVIEW_DRAFTS:"true",ALLOW_V41_TRANSFER_LINKS:"true",ACCESS_AUD:"agent-qa",ALLOW_WRITES:"true",ALLOW_V41_ASSISTANT:"true",ALLOW_V41_ASSISTANT_AI:"true",
   ALLOW_PUSH_SEND:"false",ALLOW_CATEGORY_PUSH_SEND:"true",ALLOW_PUSH_SUBSCRIPTIONS:"true",
   VAPID_PUBLIC_KEY:"a".repeat(87),VAPID_PRIVATE_JWK:"test-signing-key",VAPID_SUBJECT:"mailto:qa@example.com",
   AI:{async run(model,input){calls++;assert.doesNotMatch(JSON.stringify(input),/123456789|secret@example\.com/);
@@ -130,5 +130,32 @@ await sendAssistantDigest(env,Date.parse("2026-11-20T01:00:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-21T01:00:00Z"),dispatch);
 assert.deepEqual(delivered,[A,A],"The new balance alert is sent once and disabled Hapi alerts do not push");
 assert.equal(sql.prepare("SELECT count(*) AS n FROM quick_agent_alert_state WHERE notified_at IS NOT NULL").get().n,1);
+const draftInput={bankLabel:"Banco Ficticio",paymentMethod:"debit_card",
+  mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo"},
+  rows:[{Fecha:"2026-10-02",Concepto:"Wompi SAS",Importe:"1500",Tipo:"debit"}]};
+async function reconcile(path,data,owner=A){
+ const ctx={access:{aud:env.ACCESS_AUD,async getIdentity(){return {user_uuid:owner};}}};
+ const response=await handleQuickRequest(new Request("https://qa.example/api/quick/v41/reconcile/"+path,
+   {method:"POST",headers:{Origin:"https://qa.example","Content-Type":"application/json"},body:JSON.stringify(data)}),env,ctx);
+ return {status:response.status,body:await response.json()};
+}
+const draft=await reconcile("draft",draftInput);
+assert.equal(draft.status,200);
+assert.ok((await request("inbox")).body.alerts.some(a=>a.rule==="possible_duplicate"&&a.targetId===draft.body.id));
+assert.ok(!(await request("inbox",null,B)).body.alerts.some(a=>a.targetId===draft.body.id));
+await request("preferences",{enabled:true,confirmed:true,rules:{possible_duplicate:false}});
+assert.ok((await request("inbox")).body.alerts.some(a=>a.rule==="possible_duplicate"),"Push settings do not hide inbox items");
+const transferId="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const destination="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeef";
+const insertTransfer=sql.prepare("INSERT INTO quick_statement_review_decisions(id,owner_id,row_key,row_hash,review_digest,bank_label,"+
+  "payment_method,direction,occurred_on,amount_minor,description,action,counterparty_label) "+
+  "VALUES(?,?,?,?,?,?,'bank_transfer',?,'2026-10-01',100000,'Prueba','own_transfer',?)");
+insertTransfer.run(transferId,A,transferId,"test-hash","0".repeat(64),"Banco Uno","debit","Banco Dos");
+assert.ok((await request("inbox")).body.alerts.some(a=>a.rule==="unmatched_internal_transfer"&&a.targetId===transferId));
+insertTransfer.run(destination,A,destination,"test-hash","0".repeat(64),"Banco Dos","credit","Banco Uno");
+assert.equal((await reconcile("links",{debitId:transferId,creditId:destination,confirmed:true})).status,201);
+assert.ok(!(await request("inbox")).body.alerts.some(a=>a.rule==="unmatched_internal_transfer"));
+await reconcile("draft/discard",{id:draft.body.id,confirmed:true});
+assert.ok(!(await request("inbox")).body.alerts.some(a=>a.targetId===draft.body.id));
 new Function(ASSISTANT_JS);
 console.log("v41 financial assistant: persisted drafts, explicit confirmation, tenant isolation, exact merchant learning and daily digest PASSED");
