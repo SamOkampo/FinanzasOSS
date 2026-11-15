@@ -8,9 +8,24 @@ export const ASSISTANT_HTML = `
   <p id="assistant-status" role="status" aria-live="polite"></p>
   <label class="ai-document-consent">
     <input id="assistant-notices" type="checkbox" disabled>
-    <span>Avisarme de compras pendientes de clasificar</span>
+    <span>Avisarme de pendientes financieros</span>
   </label>
   <p class="budget-note" id="assistant-notice-hint"></p>
+  <details id="assistant-notice-rules">
+    <summary>Tipos de aviso</summary>
+    <div class="assistant-fields" id="assistant-rule-list"></div>
+  </details>
+  <section id="assistant-alerts" class="assistant-fields" aria-label="Alertas financieras"></section>
+  <details id="assistant-credit">
+    <summary>Vencimientos de tarjetas</summary>
+    <p id="assistant-credit-empty" hidden>Primero registra la tarjeta en Saldos.</p>
+    <form id="assistant-credit-form" class="assistant-fields">
+      <label>Tarjeta <select id="assistant-credit-account" required></select></label>
+      <label>Fecha de vencimiento <input id="assistant-credit-date" type="date" required></label>
+      <button type="submit" class="soft-button">Guardar vencimiento verificado</button>
+    </form>
+    <div id="assistant-credit-list" class="assistant-fields"></div>
+  </details>
   <div id="assistant-items"></div>
   <section id="assistant-movement" hidden>
     <button id="assistant-back" type="button" class="soft-button">Volver a pendientes</button>
@@ -66,6 +81,12 @@ export const ASSISTANT_JS = String.raw`
   let current=null,draft=null,taxonomy={},busy=false;
   const base="/api/quick/v41/agent/";
   function message(value){status.textContent=value;}
+  function el(tag,text,className){
+    const node=document.createElement(tag);
+    if(text)node.textContent=text;
+    if(className)node.className=className;
+    return node;
+  }
   async function request(path,data){
     const options=data?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}:{};
     const response=await fetch(base+path,{...options,cache:"no-store",credentials:"same-origin"});
@@ -90,6 +111,8 @@ export const ASSISTANT_JS = String.raw`
     if(busy)return;
     current=item;
     list.hidden=true;
+    byId("alerts").hidden=true;
+    byId("credit").hidden=true;
     panel.hidden=false;
     answer.value="";
     ai.checked=false;
@@ -99,10 +122,67 @@ export const ASSISTANT_JS = String.raw`
     message(item.draft?"Puedes continuar con la aclaración que guardaste.":"");
     answer.focus();
   }
+  function renderAlerts(alerts){
+    const box=byId("alerts");
+    box.replaceChildren();
+    for(const item of alerts){
+      const card=el("article","","ai-document-table");
+      const title=el("strong",item.title+(item.severity==="important"?" · Atención":""));
+      const link=el("a",item.target==="portfolio"?"Abrir Hapi":"Abrir Saldos","soft-button");
+      link.href=item.target==="portfolio"?"/dashboard#portfolio":"/dashboard#map";
+      link.addEventListener("click",()=>dialog.close());
+      const button=el("button","Posponer 24 horas","soft-button");
+      button.type="button";
+      button.addEventListener("click",async()=>{
+        button.disabled=true;
+        try{await request("snooze",{key:item.key});await inbox();}
+        catch(error){button.disabled=false;message(error.message);}
+      });
+      card.append(title,el("p",item.detail),link,button);
+      box.append(card);
+    }
+  }
+  function renderCredit(credit){
+    const select=byId("credit-account"),list=byId("credit-list");
+    select.replaceChildren(new Option("Elige una tarjeta",""),...credit.accounts.map(item=>new Option(item.bank_label,item.id)));
+    byId("credit-form").hidden=!credit.accounts.length;
+    byId("credit-empty").hidden=Boolean(credit.accounts.length);
+    list.replaceChildren();
+    for(const item of credit.dues){
+      const row=el("article","","ai-document-table");
+      const button=el("button","Marcar como pagado","soft-button");
+      button.type="button";
+      button.addEventListener("click",async()=>{
+        button.disabled=true;
+        try{await request("credit-due",{account:item.account_id,dueOn:item.due_on,paid:true,confirmed:true});await inbox();}
+        catch(error){button.disabled=false;message(error.message);}
+      });
+      row.append(el("p",item.bank_label+" · "+item.due_on),button);
+      list.append(row);
+    }
+  }
+  function renderRules(data){
+    const list=byId("rule-list");
+    list.replaceChildren();
+    for(const [key,name] of Object.entries(data.ruleLabels)){
+      const label=el("label","","ai-document-consent"),input=el("input");
+      input.type="checkbox";input.checked=data.rules[key];
+      input.addEventListener("change",async()=>{
+        input.disabled=true;
+        try{await request("preferences",{enabled:notices.checked,confirmed:true,rules:{[key]:input.checked}});}
+        catch(error){input.checked=!input.checked;message(error.message);}
+        finally{input.disabled=false;}
+      });
+      label.append(input,el("span",name));
+      list.append(label);
+    }
+  }
   async function inbox(){
     current=null;
     panel.hidden=true;
     list.hidden=false;
+    byId("alerts").hidden=false;
+    byId("credit").hidden=false;
     list.replaceChildren();
     notices.disabled=true;
     message("Cargando pendientes…");
@@ -110,6 +190,9 @@ export const ASSISTANT_JS = String.raw`
       const data=await request("inbox");
       taxonomy=data.taxonomy;
       notices.checked=data.notifications;
+      renderAlerts(data.alerts);
+      renderCredit(data.credit);
+      renderRules(data);
       ai.closest("label").hidden=!data.aiAvailable;
       byId("notice-hint").textContent=data.pushConfigured?
         "Revisamos tus pendientes a las "+data.noticeSchedule+" (Bogotá). Los avisos llegan a dispositivos con notificaciones activas.":
@@ -123,7 +206,9 @@ export const ASSISTANT_JS = String.raw`
         button.addEventListener("click",()=>openMovement(item));
         list.append(button);
       }
-      message(data.items.length?data.items.length+" compras por revisar en esta lista.":"No tienes compras pendientes de clasificar.");
+      const count=data.items.length+data.alerts.length;
+      launcher.textContent=count?"Qwen · "+count:"Qwen";
+      message(count?count+" pendientes para revisar.":"No tienes pendientes para revisar.");
     }catch(error){message(error.message);}
   }
   function open(){if(!dialog.open){dialog.showModal();inbox();}}
@@ -134,6 +219,17 @@ export const ASSISTANT_JS = String.raw`
     if(location.hash==="#qwen")history.replaceState(null,"",location.pathname+location.search+"#plan");
   });
   byId("back").addEventListener("click",()=>{if(!busy)inbox();});
+  byId("credit-form").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const button=event.currentTarget.querySelector("button");
+    button.disabled=true;
+    try{
+      await request("credit-due",{account:byId("credit-account").value,dueOn:byId("credit-date").value,paid:false,confirmed:true});
+      byId("credit-date").value="";
+      await inbox();
+    }catch(error){message(error.message);}
+    finally{button.disabled=false;}
+  });
   category.addEventListener("change",()=>{
     options(subcategory,taxonomy[category.value]||[]);
     byId("confirmation").hidden=true;

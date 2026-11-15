@@ -32,7 +32,8 @@ import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation,
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
-import { ASSISTANT_DAILY_CRON, answerAssistant, assistantInbox, confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
+import { ASSISTANT_DAILY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
+  confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { HAPI_JS } from "./dashboard-hapi.js";
 import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit, listHapiPortfolio, saveHapiPortfolio } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -483,6 +484,8 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/snooze") return await assistantSnooze(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/credit-due") return await assistantCreditDue(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await saveHapiPortfolio(env.DB,owner,data);
