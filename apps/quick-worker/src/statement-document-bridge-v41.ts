@@ -50,6 +50,7 @@ export function normalizeStatementDate(raw:string):string|null{
   const match=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(value);
   if(!match)return null;
   const [,dd,mm,yyyy]=match;
+  if(!dd||!mm||!yyyy)return null;
   const date=yyyy+"-"+mm.padStart(2,"0")+"-"+dd.padStart(2,"0");
   const parsed=new Date(date+"T12:00:00Z");
   return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===date?
@@ -95,7 +96,7 @@ export function normalizeDirection(raw:string):"debit"|"credit"|null{
   if(/^(credit|credito|abono|ingreso|entrada|c|cr)$/.test(v))return "credit";
   return null;
 }
-function getCell(row:string[],headers:string[],column:string|null):string{
+function getCell(row:string[],headers:string[],column:string|null|undefined):string{
   if(!column)return "";
   const i=headers.indexOf(column);
   return i>=0?row[i]??"":"";
