@@ -90,9 +90,8 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
  const previewResponse=await previewReconciliationV41(db,owner,input);
  if(!previewResponse.ok)throw new ReviewConfirmationError("Extracto inválido",422);
  const preview=await previewResponse.json() as Preview;
- if(preview.reviewDigest!==d.expectedDigest ||
-    preview.reviewDigest!==await reviewDigestV41(preview.bankLabel,d.paymentMethod as string,preview.rows))
-  throw new ReviewConfirmationError("La conciliación cambió. Vuelve a revisarla antes de confirmar",409);
+ const digestChanged=preview.reviewDigest!==d.expectedDigest ||
+  preview.reviewDigest!==await reviewDigestV41(preview.bankLabel,d.paymentMethod as string,preview.rows);
  const rawRows=d.rows as Record<string,string>[];
  const mapping=d.mapping as {externalId?:string};
  const occurrences=new Map<string,number>();
@@ -157,6 +156,10 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
    replayed++;
   }else newEntries.push(item);
  }
+ // A full idempotent replay is allowed even if these imports now appear in
+ // the live matching list. Any NEW decision requires a fresh preview digest.
+ if(digestChanged && newEntries.length>0)
+  throw new ReviewConfirmationError("La conciliación cambió. Vuelve a revisarla antes de confirmar",409);
  if(newEntries.length){
   const now=new Date().toISOString();
   const stmts=[];
