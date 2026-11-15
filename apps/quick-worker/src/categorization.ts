@@ -2,6 +2,7 @@
 // AI sends only minimized merchant labels after an explicit tap; no amounts,
 // bank details, Access identity, transaction IDs, or full statements leave D1.
 import type {QuickD1,QuickWorkerEnv} from "./index.js";
+import {QWEN_MODEL,QWEN_OPTIONS} from "./ai-model.js";
 import { learnCategory } from "./category-automation.js";
 import { classifyQuickEconomicMovement } from "./economic-review.js";
 
@@ -204,9 +205,9 @@ export async function qwenSuggestions(db:QuickD1,owner:string,env:QuickWorkerEnv
  const catalog=JSON.stringify(TAXONOMY);
  let response:unknown;
  try{
-   response=await env.AI.run("@cf/qwen/qwen3-30b-a3b-fp8",{
+   response=await env.AI.run(QWEN_MODEL,{
      messages:[{role:"system",content:system},{role:"user",content:JSON.stringify({catalog,movements:modelInputs})}],
-     max_tokens:900,temperature:0.1,stream:false,
+     max_completion_tokens:900,...QWEN_OPTIONS,
    });
  }catch{return reply({error:"Qwen temporarily unavailable. Manual categories still work."},502);}
  const record=response as {response?:string;choices?:Array<{message?:{content?:string}}>};
