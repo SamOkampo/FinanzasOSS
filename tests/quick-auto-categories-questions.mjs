@@ -23,7 +23,7 @@ const base="https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
 let aiCalls=0,aiText="";
 const env={DB:db,ACCESS_AUD:"test-category-auto",ALLOW_WRITES:"true",ALLOW_AI_SUGGESTIONS:"true",
  ALLOW_PUSH_SEND:"false",AI:{async run(model,input){
-   assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");
+   assert.equal(model,"@cf/qwen/qwen3.8-27b");
    aiCalls++;aiText=JSON.stringify(input);
    const parsed=JSON.parse(input.messages[1].content);
    if(parsed.clarification){

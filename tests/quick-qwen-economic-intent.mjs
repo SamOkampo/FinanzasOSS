@@ -33,7 +33,7 @@ add("55555555-5555-4555-8555-555555555555","Compré un portátil","debit_card",B
 let calls=0,rawInput="";
 const env={DB:db,ALLOW_AI_SUGGESTIONS:"true",ALLOW_PUSH_SEND:"false",AI:{async run(model,input){
  calls++;rawInput=JSON.stringify(input);
- assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");
+ assert.equal(model,"@cf/qwen/qwen3.8-27b");
  assert.ok(input.messages[0].content.includes("/no_think"),"Qwen must be instructed to return JSON without consuming tokens in reasoning");
  const request=JSON.parse(input.messages[1].content);
  const suggestions=request.movements.map(({index,concept})=>{

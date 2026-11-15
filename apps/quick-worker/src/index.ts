@@ -12,6 +12,7 @@ import { STUDIO_JS } from "./dashboard-studio-js.js";
 import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
+import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
@@ -21,6 +22,7 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
+import { inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
@@ -54,7 +56,12 @@ export interface QuickWorkerEnv {
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
-  readonly AI?: {run(model:string,input:{messages:{role:string;content:string}[];max_tokens:number;temperature:number;stream:boolean}):Promise<unknown>};
+  readonly AI?: {
+    run(model:string,input:{messages:{role:string;content:string}[];
+      max_tokens?:number;max_completion_tokens?:number;
+      reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean}):Promise<unknown>;
+    toMarkdown?(document:{name:string;blob:Blob}):Promise<unknown>;
+  };
 }
 export interface QuickWorkerContext {
   readonly access?: {
@@ -331,7 +338,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -394,6 +401,7 @@ export async function handleQuickRequest(
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
+    if (pathname === "/document-inspect.js") return respondAsset(DOCUMENT_INSPECT_JS, "application/javascript");
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
@@ -407,9 +415,12 @@ export async function handleQuickRequest(
   }
   try {
     if (request.method === "POST") {
-      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview")
+      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
+          pathname !== "/api/quick/v41/ai/document/inspect")
         return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
+      if(pathname==="/api/quick/v41/ai/document/inspect")
+        return await inspectFinancialDocument(request,env.DB,owner,env);
       const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname==="/api/quick/v41/reconcile/preview")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
@@ -480,7 +491,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof DocumentInspectionError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
