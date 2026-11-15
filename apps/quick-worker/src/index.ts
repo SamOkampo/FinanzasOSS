@@ -37,6 +37,7 @@ import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
 import { ASSISTANT_DAILY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
   confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
+import { hapiActivityCommit, hapiActivityPreview, linkHapiActivityDeposit, listHapiActivity } from "./hapi-activity.js";
 import { HAPI_JS } from "./dashboard-hapi.js";
 import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit, listHapiPortfolio, saveHapiPortfolio } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -74,6 +75,7 @@ export interface QuickWorkerEnv {
   readonly ALLOW_V41_ASSISTANT?: string;
   readonly ALLOW_V41_ASSISTANT_AI?: string;
   readonly ALLOW_V41_HAPI?: string;
+  readonly ALLOW_V41_HAPI_ACTIVITY?: string;
   readonly ALLOW_DOCUMENT_ANALYSIS?: string;
   readonly ALLOW_STATEMENT_VISION?: string;
   readonly AI?: {
@@ -422,6 +424,7 @@ export async function handleQuickRequest(
         .replace('data-assistant-enabled="false"','data-assistant-enabled="'+String(env.ALLOW_V41_ASSISTANT==="true")+'"')
         .replace('data-review-drafts="false"','data-review-drafts="'+String(env.ALLOW_V41_REVIEW_DRAFTS==="true")+'"')
         .replace('data-transfer-links="false"','data-transfer-links="'+String(env.ALLOW_V41_TRANSFER_LINKS==="true")+'"')
+        .replace('data-hapi-activity="false"','data-hapi-activity="'+String(env.ALLOW_V41_HAPI==="true"&&env.ALLOW_V41_HAPI_ACTIVITY==="true")+'"')
         .replace('data-hapi-enabled="false"','data-hapi-enabled="'+String(env.ALLOW_V41_HAPI==="true")+'"'),"text/html");
     }
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS+ASSISTANT_CSS, "text/css");
@@ -480,6 +483,8 @@ export async function handleQuickRequest(
       return respond({error:"Hapi todavía no está habilitado en este entorno."},503);
     if(pathname.startsWith("/api/quick/v41/reconcile/draft")&&env.ALLOW_V41_REVIEW_DRAFTS!=="true")
       return respond({error:"Las revisiones guardadas no están habilitadas."},503);
+    if(pathname.startsWith("/api/quick/v41/hapi/activity")&&env.ALLOW_V41_HAPI_ACTIVITY!=="true")
+      return respond({error:"La actividad de Hapi no está habilitada."},503);
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
           pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
@@ -489,7 +494,7 @@ export async function handleQuickRequest(
       if(pathname==="/api/quick/v41/ai/document/inspect")
         return await inspectFinancialDocument(request,env.DB,owner,env);
       const statementBody=pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/")||
-        pathname==="/api/quick/v41/hapi/portfolio";
+        pathname==="/api/quick/v41/hapi/portfolio"||pathname.startsWith("/api/quick/v41/hapi/activity/");
       const data = await parseJson(request,statementBody?85000:4096);
       if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
@@ -497,6 +502,9 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/agent/snooze") return await assistantSnooze(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/credit-due") return await assistantCreditDue(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/preview") return await hapiActivityPreview(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/commit") return await hapiActivityCommit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/link") return await linkHapiActivityDeposit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await saveHapiPortfolio(env.DB,owner,data);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
@@ -552,6 +560,7 @@ export async function handleQuickRequest(
     } else if (request.method === "GET") {
       if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);
       if (pathname === "/api/quick/v41/hapi/deposits") return await listHapiDeposits(env.DB,owner);
+      if (pathname === "/api/quick/v41/hapi/activity") return await listHapiActivity(env.DB,owner);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await listHapiPortfolio(env.DB,owner);
       if (pathname === "/api/quick/profile") {
         // Cloudflare Access supplies the authenticated identity. Never trust

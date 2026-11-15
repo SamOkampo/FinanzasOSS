@@ -21,6 +21,26 @@ export const HAPI_HTML = `
       <button class="solid-button" type="submit">Guardar corte</button>
     </form>
   </details>
+  <details id="hapi-activity" data-hapi-activity="false" hidden>
+    <summary>Actividad de Hapi en USD</summary>
+    <form id="hapi-activity-read" class="assistant-fields">
+      <label>Reporte digital en PDF <input id="hapi-activity-pdf" type="file" accept="application/pdf,.pdf" required></label>
+      <button class="soft-button" type="submit">Preparar actividad</button>
+    </form>
+    <p>El PDF se lee en este dispositivo. Guarda solo las filas que puedas verificar en tu reporte.</p>
+    <p id="hapi-activity-status" role="status" aria-live="polite"></p>
+    <form id="hapi-activity-review" class="assistant-fields" hidden>
+      <label>Bloque de revisión <select id="hapi-activity-page"></select></label>
+      <div id="hapi-activity-rows" class="assistant-fields"></div>
+      <label class="ai-document-consent"><input id="hapi-activity-ack" type="checkbox" required>
+        <span>Comparé las filas seleccionadas con mi reporte de Hapi.</span></label>
+      <button id="hapi-activity-save" class="solid-button" type="submit">Guardar filas seleccionadas</button>
+    </form>
+    <details>
+      <summary>Historial de actividad</summary>
+      <div id="hapi-activity-history" class="assistant-fields"></div>
+    </details>
+  </details>
   <h4>Aportes</h4>
   <p>Registro manual. Usa el movimiento de tu banco y el comprobante de acreditación de Hapi.</p>
   <button type="button" class="soft-button" id="hapi-refresh">Actualizar aportes</button>
@@ -197,6 +217,121 @@ export const HAPI_JS = String.raw`
     }catch(error){status.textContent=error.message;}
     finally{busy=false;button.disabled=false;}
   });
+  function readPdf(file,kind){
+    return new Promise(resolve=>{
+      const worker=new Worker("/statement-pdf-worker.js?v=hapi-2");
+      const timeout=setTimeout(()=>done(null),20000);
+      function done(result){clearTimeout(timeout);worker.terminate();resolve(result);}
+      worker.onmessage=event=>done(event.data);
+      worker.onerror=()=>done(null);
+      worker.postMessage({file,kind});
+    });
+  }
+  const activityPanel=node("activity");
+  if(activityPanel?.dataset.hapiActivity==="true")setupActivity();
+  function setupActivity(){
+    activityPanel.hidden=false;
+    const notice=node("activity-status"),review=node("activity-review"),page=node("activity-page");
+    const ack=node("activity-ack"),save=node("activity-save"),list=node("activity-rows");
+    const types={deposit:"Depósito",withdrawal:"Retiro",buy:"Compra",sell:"Venta",
+      dividend:"Dividendo",fee:"Comisión",interest:"Interés",tax:"Retención",reinvestment:"Reinversión"};
+    let report=null,preview=null,working=false;
+    const label=(tag,text)=>{const item=document.createElement(tag);item.textContent=text;return item;};
+    const usd=value=>money(Number(value)*100,"USD");
+    const checked=()=>[...list.querySelectorAll("input:checked")].map(input=>Number(input.value));
+    const sync=()=>{save.disabled=working||!ack.checked||!checked().length;};
+    function title(row){return row.date+" · "+types[row.kind]+" · "+usd(row.amountUsd);}
+    function detail(row){
+      return [row.description,row.symbol,row.quantity?row.quantity+" unidades":"",row.reference?"Ref. "+row.reference:""]
+        .filter(Boolean).join(" · ");
+    }
+    async function loadActivity(){
+      const data=await request("activity"),history=node("activity-history");
+      history.replaceChildren();
+      if(!data.items.length)history.append(label("p","Todavía no hay actividad registrada."));
+      for(const row of data.items){
+        const card=document.createElement("article");
+        card.className="ai-document-table";
+        card.append(label("strong",title(row)),label("p",detail(row)));
+        if(row.kind==="deposit"&&row.linkedDeposit)card.append(label("p","Vinculado a un aporte"));
+        if(row.kind==="deposit"&&!row.linkedDeposit){
+          const candidates=data.pending.filter(d=>d.debited_on<=row.date);
+          if(candidates.length){
+            const form=document.createElement("form"),field=document.createElement("label"),select=document.createElement("select");
+            form.className="assistant-fields";select.required=true;field.textContent="Salida de tu banco en COP";
+            select.append(new Option("Elige el aporte pendiente",""),...candidates.map(d=>new Option(
+              d.debited_on+" · "+d.bank_label+" · "+money(d.cop_minor,"COP"),d.id)));
+            field.append(select);
+            const button=label("button","Vincular depósito");button.className="soft-button";
+            form.append(field,button);card.append(form);
+            form.addEventListener("submit",async event=>{
+              event.preventDefault();
+              if(working||!select.value||!window.confirm("¿La salida en COP y este depósito en USD corresponden al mismo aporte?"))return;
+              working=true;button.disabled=true;
+              try{
+                await request("activity/link",{activityId:row.id,depositId:select.value,confirmed:true});
+                await Promise.all([loadActivity(),load()]);
+                notice.textContent="Depósito vinculado con la salida de tu banco.";
+              }catch(error){notice.textContent=error.message;}
+              finally{working=false;button.disabled=false;}
+            });
+          }
+        }
+        history.append(card);
+      }
+    }
+    function preparePage(){
+      ack.checked=false;list.replaceChildren();sync();
+      const offset=Number(page.value)*60;
+      for(const item of preview.items.slice(offset,offset+60)){
+        const field=document.createElement("label"),check=document.createElement("input");
+        field.className="ai-document-consent";check.type="checkbox";check.value=item.index;
+        check.disabled=item.status!=="new";
+        const suffix=item.status==="exists"?" · Ya guardada":item.status==="conflict"?" · Referencia en conflicto":"";
+        field.append(check,label("span",title(item.row)+" · "+detail(item.row)+suffix));
+        check.addEventListener("change",sync);
+        list.append(field);
+      }
+      review.hidden=false;
+      notice.textContent=report.total+" movimientos leídos"+(report.unread?" · "+report.unread+" filas requieren revisión en el PDF.":".");
+    }
+    node("activity-read").addEventListener("submit",async event=>{
+      event.preventDefault();
+      if(working)return;
+      const button=event.currentTarget.querySelector("button"),file=node("activity-pdf").files[0];
+      if(!file)return;
+      working=true;button.disabled=true;page.disabled=true;review.hidden=true;
+      notice.textContent="Leyendo la actividad en tu dispositivo…";
+      try{
+        const parsed=(await readPdf(file,"hapi-activity"))?.activity;
+        if(!parsed?.rows.length)throw Error("Este PDF no devolvió movimientos verificables. Usa el reporte digital sin clave.");
+        if(parsed.total>200)throw Error("Este reporte supera 200 movimientos. Usa un reporte de un período más corto.");
+        report=parsed;
+        preview=await request("activity/preview",{rows:report.rows});
+        page.replaceChildren(...Array.from({length:Math.ceil(report.total/60)},(_,i)=>
+          new Option("Filas "+(i*60+1)+" a "+Math.min((i+1)*60,report.total),i)));
+        preparePage();
+      }catch(error){notice.textContent=error.message;}
+      finally{working=false;button.disabled=false;page.disabled=false;sync();}
+    });
+    page.addEventListener("change",()=>{if(!working&&preview)preparePage();});
+    ack.addEventListener("change",sync);
+    review.addEventListener("submit",async event=>{
+      event.preventDefault();
+      if(working||!preview||!ack.checked||!checked().length)return;
+      working=true;page.disabled=true;sync();
+      try{
+        const result=await request("activity/commit",{rows:report.rows,selected:checked(),digest:preview.digest,confirmed:true});
+        const [,updated]=await Promise.all([loadActivity(),request("activity/preview",{rows:report.rows})]);
+        preview=updated;preparePage();
+        notice.textContent=result.created+" filas nuevas · "+result.alreadySaved+" ya guardadas.";
+      }catch(error){notice.textContent=error.message;}
+      finally{working=false;page.disabled=false;sync();}
+    });
+    activityPanel.addEventListener("toggle",()=>{
+      if(activityPanel.open)loadActivity().catch(error=>{notice.textContent=error.message;});
+    });
+  }
   node("add-position").addEventListener("click",()=>addPosition());
   node("pdf").addEventListener("submit",async event=>{
     event.preventDefault();
@@ -207,14 +342,7 @@ export const HAPI_JS = String.raw`
     busy=true;button.disabled=true;
     notice.textContent="Leyendo el reporte…";
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=hapi-1");
-      const snapshot=await new Promise(resolve=>{
-        const timeout=setTimeout(()=>{worker.terminate();resolve(null);},20000);
-        function done(result){clearTimeout(timeout);worker.terminate();resolve(result);}
-        worker.onmessage=event=>done(event.data.snapshot);
-        worker.onerror=()=>done(null);
-        worker.postMessage({file,kind:"hapi"});
-      });
+      const snapshot=(await readPdf(file,"hapi"))?.snapshot;
       if(!snapshot)throw Error("No se pudo verificar el corte de este PDF. Usa el reporte digital sin clave o ingresa los valores manualmente.");
       node("asof").value=snapshot.asOf;node("cash").value=snapshot.cashUsd;
       positionFields.replaceChildren();snapshot.positions.forEach(addPosition);
