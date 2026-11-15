@@ -15,10 +15,10 @@ type PreviewRow={index:number;status:string;direction:"credit"|"debit"|null;date
  description:string;amountCOP:string|null;existing:{source:string;id:string}[];
  repeatOfIndex?:number|null;issues:string[]};
 type Preview={reviewDigest:string;rows:PreviewRow[];bankLabel:string};
-type Entry={id:string;row_key:string;row_hash:string;action:string;
+type Entry={id:string;row_key:string;row_hash:string;review_digest:string;action:string;
  existing_source:string|null;existing_id:string|null;counterparty_label:string|null;
  ledger_entry_id:string|null};
-type Pending={row:PreviewRow;decision:Decision;rowKey:string;rowHash:string;
+type Pending={row:PreviewRow;decision:Decision;rowKey:string;rowHash:string;reviewDigest:string;
  entryId:string|null;existingSource:string|null;existingId:string|null;counterparty:string|null};
 const actions=new Set(["import","already_exists","own_transfer","skip"]);
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{
@@ -77,7 +77,7 @@ function validate(body:unknown){
  return {d,decisions};
 }
 function same(saved:Entry,p:Pending):boolean{
- return saved.row_hash===p.rowHash&&saved.action===p.decision.action&&
+ return saved.row_hash===p.rowHash&&saved.review_digest===p.reviewDigest&&saved.action===p.decision.action&&
   saved.existing_source===p.existingSource&&saved.existing_id===p.existingId&&
   saved.counterparty_label===p.counterparty&&saved.ledger_entry_id===p.entryId;
 }
@@ -137,7 +137,7 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
   }else if(choice.counterpartyLabel!==undefined)
    throw new ReviewConfirmationError("La cuenta contraparte solo aplica a transferencias propias");
   const entryId=choice.action==="import"?"v41_"+await digest(k.rowKey+"|ledger"):null;
-  prepared.push({row,decision:choice,rowKey:k.rowKey,rowHash:k.rowHash,
+  prepared.push({row,decision:choice,rowKey:k.rowKey,rowHash:k.rowHash,reviewDigest:d.expectedDigest as string,
    existingSource,existingId,counterparty,entryId});
  }
  // Preflight: deterministic fingerprint replays exactly; divergent meaning is
@@ -145,7 +145,7 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
  let replayed=0;
  const newEntries:Pending[]=[];
  for(const item of prepared){
-  const old=await db.prepare("SELECT id,row_key,row_hash,action,existing_source,existing_id,counterparty_label,ledger_entry_id "+
+  const old=await db.prepare("SELECT id,row_key,row_hash,review_digest,action,existing_source,existing_id,counterparty_label,ledger_entry_id "+
    "FROM quick_statement_review_decisions WHERE owner_id=? AND row_key=? LIMIT 1")
    .bind(owner,item.rowKey).first<Entry>();
   if(old){
@@ -173,10 +173,10 @@ export async function confirmReviewedStatementV41(db:QuickD1,owner:string,raw:un
    const amount=minorOf(row.amountCOP);
    const decisionId=crypto.randomUUID();
    stmts.push(db.prepare("INSERT INTO quick_statement_review_decisions("+
-    "id,owner_id,row_key,row_hash,bank_label,payment_method,direction,occurred_on,amount_minor,description,"+
+    "id,owner_id,row_key,row_hash,review_digest,bank_label,payment_method,direction,occurred_on,amount_minor,description,"+
     "action,existing_source,existing_id,counterparty_label,ledger_entry_id,created_at) "+
-    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,row_key) DO NOTHING")
-    .bind(decisionId,owner,rowKey,rowHash,preview.bankLabel,d.paymentMethod as string,row.direction,
+    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,row_key) DO NOTHING")
+    .bind(decisionId,owner,rowKey,rowHash,item.reviewDigest,preview.bankLabel,d.paymentMethod as string,row.direction,
       row.date,amount,row.description,decision.action,existingSource,existingId,counterparty,entryId,now));
    if(decision.action==="import"){
     const date=row.date+"T17:00:00.000Z";
