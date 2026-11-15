@@ -37,4 +37,9 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
  .import-file-picker{display:grid}
  .import-file-picker .solid-button,.import-hub #ai-document-inspect{width:100%}
 }
+
+.import-local-group > summary{border-bottom:1px solid var(--rule);color:var(--ink)}
+.import-local-rows{list-style:none;padding:0;margin:0}
+.import-local-rows li{display:grid;gap:4px;padding:9px 0;border-bottom:1px solid var(--rule);overflow-wrap:anywhere;font-size:.88rem}
+.import-local-rows li span{color:var(--ink-muted);font-variant-numeric:tabular-nums}
 `;

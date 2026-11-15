@@ -1,4 +1,5 @@
 import createQpdf, { type QpdfInstance } from "@neslinesli93/qpdf-wasm";
+import {readDaviviendaPdf} from "./davivienda-pdf.js";
 
 type PdfReply =
   | { status: "plain" | "password_required" | "incorrect_password" | "unreadable" | "too_large" }
@@ -65,6 +66,12 @@ if (typeof self !== "undefined") {
   self.onmessage = async (event: MessageEvent<{ file: File; password: string }>) => {
     const { file, password } = event.data;
     const result = await openStatementPdf(file, password, "/statement-pdf-engine.wasm");
-    self.postMessage(result, {transfer: result.status === "unlocked" ? [result.bytes.buffer] : []});
+    const bytes = result.status==="unlocked" ? result.bytes :
+      result.status==="plain" ? new Uint8Array(await file.arrayBuffer()) : null;
+    let statement = null;
+    if(bytes){
+      try { statement = await readDaviviendaPdf(bytes); } catch { /* Use the existing inspection flow. */ }
+    }
+    self.postMessage({...result,statement}, {transfer: result.status === "unlocked" ? [result.bytes.buffer] : []});
   };
 }

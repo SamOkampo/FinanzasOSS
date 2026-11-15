@@ -13,10 +13,12 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   const passwordForm=byId("ai-document-password-form"),password=byId("ai-document-password"),
     fileStatus=byId("ai-document-file-status"),unlockButton=passwordForm?.querySelector("button");
   const pick=byId("ai-document-pick"),filename=byId("ai-document-filename"),
-    openPassword=byId("ai-document-password-open"),controls=byId("ai-document-analysis-controls");
+    openPassword=byId("ai-document-password-open"),controls=byId("ai-document-analysis-controls"),
+    localResults=byId("ai-document-local-results"),localStatus=byId("ai-document-local-status"),
+    localGroups=byId("ai-document-local-groups");
   if(!file||!consent||!button||!feedback||!results||!summary||!tables||!bank||!method||
     !recon||!reconSummary||!reconRows||!passwordForm||!password||!fileStatus||!unlockButton||
-    !pick||!filename||!openPassword||!controls)return;
+    !pick||!filename||!openPassword||!controls||!localResults||!localStatus||!localGroups)return;
   const labels={bank_statement:"Extracto bancario",card_statement:"Extracto de tarjeta de crédito",
     investment_statement:"Estado de inversiones",non_financial:"No parece un documento financiero",
     unknown:"Documento no identificado"};
@@ -56,9 +58,35 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if(txt!==undefined)el.textContent=txt;
     return el;
   };
+  function showDaviviendaPreview(statement){
+    const money=new Intl.NumberFormat("es-CO",{minimumFractionDigits:2,maximumFractionDigits:2});
+    for(const [title,rows] of [["Cuenta de ahorros",statement.savings],["Bolsillo",statement.pocket]]){
+      if(!rows.length)continue;
+      const group=elt("details","import-disclosure import-local-group");
+      group.append(elt("summary","",title+" · "+rows.length));
+      const list=elt("ul","import-local-rows");
+      for(const row of rows){
+        const item=elt("li");
+        item.append(elt("strong","",row.description));
+        item.append(elt("span","",row.date.split("-").reverse().join("/")+" · "+
+          (row.direction==="credit"?"Abono":"Cargo")+" · $"+money.format(Number(row.amount))));
+        list.append(item);
+      }
+      group.append(list);
+      localGroups.append(group);
+    }
+    const count=statement.savings.length+statement.pocket.length;
+    const note=statement.savingsTotals==="mismatch"?
+      " El total de los movimientos de ahorros difiere del resumen del banco. Revisa ambos en el PDF.":
+      "";
+    const issues=statement.issues?" Hay "+statement.issues+" fila(s) que requieren revisión en el PDF.":"";
+    announce(localStatus,count+" movimientos leídos · "+statement.period+"."+note+issues,Boolean(note||issues));
+    localResults.hidden=false;
+  }
   function reset(){
     document.dispatchEvent(new Event("finanzasoss:v41-invalidated"));
     results.hidden=true;tables.replaceChildren();summary.textContent="";
+    localResults.hidden=true;localGroups.replaceChildren();
     recon.hidden=true;reconRows.replaceChildren();reconSummary.textContent="";
     analysisTask?.abort();
     analysisTask=null;
@@ -88,15 +116,17 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         case "plain":
         case "unlocked": {
           const unlocked=result.status==="unlocked";
-          readyFile=unlocked?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):item;
+          readyFile=result.statement?null:
+            unlocked?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):item;
           openPassword.hidden=unlocked;
           setPasswordOpen(false);
           announce(fileStatus,unlocked?"PDF desbloqueado.":pass?"Este PDF se abre sin contraseña.":"PDF listo.");
           if(pass){
-            const next=unlocked?(analysisAvailable?consent:pick):openPassword;
+            const next=unlocked?(readyFile&&analysisAvailable?consent:pick):openPassword;
             next.focus({preventScroll:true});
           }
           reset();
+          if(result.statement)showDaviviendaPreview(result.statement);
           return;
         }
         case "password_required":
@@ -120,7 +150,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.5");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
@@ -189,6 +219,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         }
         throw new Error(payload.error||"No fue posible analizar este documento.");
       }
+      const tableHelp=tables.closest("details");
+      if(tableHelp){tableHelp.hidden=!payload.tables.length;tableHelp.open=false;}
       tables.replaceChildren();
       summary.textContent=(labels[payload.documentType]||labels.unknown)+
         " · "+payload.tables.length+" tabla(s) detectada(s). "+payload.explanation;
@@ -220,7 +252,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       recon.hidden=false;
       reconRows.replaceChildren();
       if(!match?.available){
-        reconSummary.textContent=match?.reason||"Completa el banco para conciliar este documento.";
+        reconSummary.textContent=payload.tables.length?(match?.reason||"Completa el banco para conciliar."):"";
       }else{
         const preview=match.preview||{};
         const count=preview.counts||{};
@@ -253,7 +285,10 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         document.dispatchEvent(new CustomEvent("finanzasoss:v41-preview",{
           detail:{input:match.prepared,result:match.preview,origin:"document"}}));
       results.hidden=false;
-      announce(feedback,"Vista previa lista. Revisa los movimientos antes de guardar.");
+      announce(feedback,match?.available&&match.preview?.count?
+        "Vista previa lista. Revisa los movimientos antes de guardar.":
+        payload.tables.length?"El análisis no preparó movimientos para revisar.":
+        "El lector recibió texto, pero no pudo reconstruir las tablas de movimientos.",!match?.available);
       results.scrollIntoView?.({behavior:"smooth",block:"nearest"});
     }catch(e){
       if(!task.signal.aborted)announce(feedback,e instanceof Error?e.message:"No se pudo revisar el documento.",true);

@@ -22,6 +22,11 @@ export const IMPORTS_HTML = `
         <button type="submit" class="solid-button">Desbloquear PDF</button>
       </form>
       <p id="ai-document-file-status" class="import-file-status" role="status" aria-live="polite"></p>
+      <section id="ai-document-local-results" class="ai-document-results" aria-labelledby="ai-document-local-title" hidden>
+        <h3 id="ai-document-local-title">Movimientos de Davivienda</h3>
+        <p id="ai-document-local-status" class="import-file-status" role="status" aria-live="polite"></p>
+        <div id="ai-document-local-groups"></div>
+      </section>
       <div id="ai-document-analysis-controls" data-analysis-available="false" hidden>
         <div class="import-options">
           <label for="ai-document-bank">Banco del extracto
@@ -56,7 +61,7 @@ export const IMPORTS_HTML = `
       </section>
       <details class="import-disclosure import-help">
         <summary>Cómo funciona y privacidad</summary>
-        <p>La clave se usa en tu dispositivo. Si autorizas el análisis, Cloudflare recibe el archivo desbloqueado para extraer contenido y Qwen recibe un resumen de su estructura.</p>
+        <p>La clave se usa en tu dispositivo. Los extractos Davivienda compatibles se leen ahí mismo. Para otros formatos, puedes autorizar a Cloudflare a leer el archivo desbloqueado y a Qwen a analizar su estructura.</p>
         <p>Revisa las sugerencias antes de guardar. FinanzasOSS compara extractos bancarios en COP con tus movimientos registrados cuando indicas el banco.</p>
       </details>
     </section>
