@@ -34,6 +34,7 @@ import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation,
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
+import { askAssistant, deleteAssistantConversation, listAssistantConversations } from "./assistant-conversations.js";
 import { ASSISTANT_DAILY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
   confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
@@ -74,6 +75,7 @@ export interface QuickWorkerEnv {
   readonly ALLOW_AI_SUGGESTIONS?: string;
   readonly ALLOW_V41_ASSISTANT?: string;
   readonly ALLOW_V41_ASSISTANT_AI?: string;
+  readonly ALLOW_V41_ASSISTANT_CHAT?: string;
   readonly ALLOW_V41_HAPI?: string;
   readonly ALLOW_V41_HAPI_ACTIVITY?: string;
   readonly ALLOW_DOCUMENT_ANALYSIS?: string;
@@ -421,6 +423,7 @@ export async function handleQuickRequest(
         .replace('data-vision-available="false"',
           'data-vision-available="'+String(env.ALLOW_STATEMENT_VISION==="true"&&Boolean(env.AI))+'"');
       return respondAsset(html
+        .replace('data-assistant-chat="false"','data-assistant-chat="'+String(env.ALLOW_V41_ASSISTANT_CHAT==="true")+'"')
         .replace('data-assistant-enabled="false"','data-assistant-enabled="'+String(env.ALLOW_V41_ASSISTANT==="true")+'"')
         .replace('data-review-drafts="false"','data-review-drafts="'+String(env.ALLOW_V41_REVIEW_DRAFTS==="true")+'"')
         .replace('data-transfer-links="false"','data-transfer-links="'+String(env.ALLOW_V41_TRANSFER_LINKS==="true")+'"')
@@ -485,6 +488,8 @@ export async function handleQuickRequest(
       return respond({error:"Las revisiones guardadas no están habilitadas."},503);
     if(pathname.startsWith("/api/quick/v41/hapi/activity")&&env.ALLOW_V41_HAPI_ACTIVITY!=="true")
       return respond({error:"La actividad de Hapi no está habilitada."},503);
+    if(pathname.startsWith("/api/quick/v41/agent/chat")&&env.ALLOW_V41_ASSISTANT_CHAT!=="true")
+      return respond({error:"El historial de consultas no está habilitado."},503);
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
           pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
@@ -496,6 +501,8 @@ export async function handleQuickRequest(
       const statementBody=pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/")||
         pathname==="/api/quick/v41/hapi/portfolio"||pathname.startsWith("/api/quick/v41/hapi/activity/");
       const data = await parseJson(request,statementBody?85000:4096);
+      if (pathname === "/api/quick/v41/agent/chat") return await askAssistant(env.DB,owner,env,data);
+      if (pathname === "/api/quick/v41/agent/chat/delete") return await deleteAssistantConversation(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
@@ -558,6 +565,8 @@ export async function handleQuickRequest(
       }
       if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
+      if (pathname === "/api/quick/v41/agent/chat")
+        return await listAssistantConversations(env.DB,owner,new URL(request.url).searchParams.get("id"));
       if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);
       if (pathname === "/api/quick/v41/hapi/deposits") return await listHapiDeposits(env.DB,owner);
       if (pathname === "/api/quick/v41/hapi/activity") return await listHapiActivity(env.DB,owner);

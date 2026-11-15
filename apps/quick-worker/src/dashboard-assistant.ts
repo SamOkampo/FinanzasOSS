@@ -5,6 +5,31 @@ export const ASSISTANT_HTML = `
     <h2 id="assistant-title">Asistente Qwen</h2>
     <form method="dialog"><button class="soft-button" aria-label="Cerrar asistente">Cerrar</button></form>
   </div>
+  <details id="assistant-chat" data-assistant-chat="false" hidden>
+    <summary>Consultas y gráficos</summary>
+    <div class="assistant-fields">
+      <label>Historial de conversaciones <select id="assistant-chat-history"></select></label>
+      <div class="assistant-chat-actions">
+        <button type="button" class="soft-button" id="assistant-chat-new">Nueva conversación</button>
+        <button type="button" class="soft-button" id="assistant-chat-delete" hidden>Borrar conversación</button>
+      </div>
+      <p id="assistant-chat-status" role="status" aria-live="polite"></p>
+      <div id="assistant-chat-turns" class="assistant-fields"></div>
+      <form id="assistant-chat-form" class="assistant-fields" autocomplete="off">
+        <label>Pregunta sobre tus registros <input id="assistant-chat-question" maxlength="200" required placeholder="Ej.: ¿En qué gasté este mes?"></label>
+        <p class="budget-note">Las preguntas y respuestas quedan en tu historial privado.</p>
+        <div class="assistant-chat-actions">
+          <button type="button" class="soft-button" data-question="¿Cuánto gasté por categoría este mes?">Gastos del mes</button>
+          <button type="button" class="soft-button" data-question="¿Cuáles son mis aportes pendientes en Hapi?">Aportes Hapi</button>
+          <button type="button" class="soft-button" data-question="¿Cómo va mi portafolio en Hapi?">Portafolio Hapi</button>
+        </div>
+        <label class="ai-document-consent" id="assistant-chat-ai-label" hidden><input id="assistant-chat-ai" type="checkbox">
+          <span>Autorizo enviarle a Qwen el texto para interpretar la pregunta.</span>
+        </label>
+        <button type="submit" class="solid-button">Consultar</button>
+      </form>
+    </div>
+  </details>
   <p id="assistant-status" role="status" aria-live="polite"></p>
   <label class="ai-document-consent">
     <input id="assistant-notices" type="checkbox" disabled>
@@ -53,6 +78,12 @@ export const ASSISTANT_HTML = `
 </dialog>`;
 
 export const ASSISTANT_CSS = `
+.assistant-chat-actions{display:flex;flex-wrap:wrap;gap:8px}
+.assistant-chat-turn{padding:12px;border:1px solid var(--rule);border-radius:12px;overflow-wrap:anywhere}
+.assistant-chat-chart{margin:12px 0}
+.assistant-chat-chart p{margin:6px 0}
+.assistant-chat-chart meter{width:100%;height:12px;display:block}
+
 .assistant-launch{position:fixed;z-index:7;right:20px;bottom:22px;min-height:44px}
 .assistant-dialog{width:min(94%,510px);max-height:85vh;max-height:85dvh;border:1px solid var(--rule);border-radius:18px;
   background:var(--surface);color:var(--ink);padding:20px;overflow:auto}
@@ -205,6 +236,7 @@ export const ASSISTANT_JS = String.raw`
       renderCredit(data.credit);
       renderRules(data);
       ai.closest("label").hidden=!data.aiAvailable;
+      byId("chat-ai-label").hidden=!data.aiAvailable;
       byId("notice-hint").textContent=data.pushConfigured?
         "Revisamos tus pendientes a las "+data.noticeSchedule+" (Bogotá). Los avisos llegan a dispositivos con notificaciones activas.":
         "Los avisos de este entorno todavía no están habilitados.";
@@ -222,6 +254,97 @@ export const ASSISTANT_JS = String.raw`
       message(count?count+" pendientes para revisar.":"No tienes pendientes para revisar.");
     }catch(error){message(error.message);}
   }
+  function setupChat(section){
+    const history=byId("chat-history"),turns=byId("chat-turns"),output=byId("chat-status");
+    const input=byId("chat-question"),form=byId("chat-form"),remove=byId("chat-delete"),fresh=byId("chat-new");
+    const send=form.querySelector("[type=submit]"),consent=byId("chat-ai");
+    let id="",loaded=false,working=false,retry=null;
+    const format=(amount,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(amount)/100);
+    function render(turn){
+      const card=el("article","","assistant-chat-turn"),answer=turn.answer;
+      card.append(el("strong",turn.question),el("p",answer.text));
+      if(answer.totalMinor!==undefined&&answer.currency)card.append(el("strong",format(answer.totalMinor,answer.currency)));
+      if(answer.points?.length&&answer.currency){
+        const figure=el("figure","","assistant-chat-chart");
+        figure.append(el("figcaption",answer.topic==="spending"?"Gastos por categoría":answer.topic==="hapi_deposits"?"Acreditaciones por banco":"Valor por fecha de corte (magnitud de cada corte)"));
+        const max=Math.max(...answer.points.map(point=>Math.abs(Number(point.minor))),1);
+        for(const point of answer.points){
+          const description=point.label+" · "+format(point.minor,answer.currency);
+          const meter=el("meter");
+          meter.min=0;meter.max=max;meter.value=Math.abs(Number(point.minor));
+          meter.setAttribute("aria-label",description);
+          figure.append(el("p",description),meter);
+        }
+        card.append(figure);
+      }
+      if(answer.target){
+        const link=el("a",answer.source,"soft-button");
+        link.href=answer.target;link.addEventListener("click",()=>dialog.close());card.append(link);
+      }
+      turns.append(card);
+    }
+    function freshThread(){
+      id=crypto.randomUUID();retry=null;turns.replaceChildren();history.value="";
+      remove.hidden=true;input.value="";consent.checked=false;output.textContent="";
+    }
+    async function loadHistory(){
+      const data=await request("chat");
+      history.replaceChildren(new Option("Nueva conversación",""),...data.items.map(item=>new Option(item.title,item.id)));
+      history.value=data.items.some(item=>item.id===id)?id:"";
+      remove.hidden=!history.value;
+      loaded=true;
+    }
+    function setBusy(value){
+      working=value;history.disabled=value;send.disabled=value;remove.disabled=value;fresh.disabled=value;
+      input.readOnly=value;
+    }
+    section.addEventListener("toggle",async()=>{
+      if(!section.open||loaded||working)return;
+      setBusy(true);
+      try{freshThread();await loadHistory();}
+      catch(error){output.textContent=error.message;}
+      finally{setBusy(false);}
+    });
+    fresh.addEventListener("click",()=>{if(!working){freshThread();input.focus();}});
+    for(const button of section.querySelectorAll("[data-question]"))
+      button.addEventListener("click",()=>{if(!working){input.value=button.dataset.question;input.focus();}});
+    history.addEventListener("change",async()=>{
+      if(working)return;
+      if(!history.value){freshThread();return;}
+      setBusy(true);output.textContent="Cargando conversación…";
+      try{
+        const data=await request("chat?id="+encodeURIComponent(history.value));
+        id=data.thread.id;retry=null;input.value="";consent.checked=false;turns.replaceChildren();
+        data.turns.forEach(render);remove.hidden=false;output.textContent="";
+      }catch(error){output.textContent=error.message;history.value=id; }
+      finally{setBusy(false);}
+    });
+    form.addEventListener("submit",async event=>{
+      event.preventDefault();
+      const question=input.value.trim();
+      if(working||!question)return;
+      if(!id)id=crypto.randomUUID();
+      if(!retry||retry.question!==question)retry={id,question,turnId:crypto.randomUUID()};
+      setBusy(true);output.textContent="Consultando tus registros…";
+      try{
+        const data=await request("chat",{...retry,allowAI:consent.checked});
+        render(data.turn);retry=null;input.value="";consent.checked=false;
+        remove.hidden=false;output.textContent="";
+        try{await loadHistory();}catch{loaded=false;output.textContent="Consulta guardada. Vuelve a abrir el asistente para actualizar el historial.";}
+      }catch(error){output.textContent=error.message;}
+      finally{setBusy(false);}
+    });
+    remove.addEventListener("click",async()=>{
+      if(working||!id||!window.confirm("¿Borrar esta conversación?"))return;
+      setBusy(true);
+      try{await request("chat/delete",{id,confirmed:true});freshThread();await loadHistory();output.textContent="Conversación borrada.";}
+      catch(error){output.textContent=error.message;}
+      finally{setBusy(false);}
+    });
+    section.hidden=false;
+  }
+  const chatSection=byId("chat");
+  if(chatSection?.dataset.assistantChat==="true")setupChat(chatSection);
   function open(){if(!dialog.open){dialog.showModal();inbox();}}
   launcher.addEventListener("click",open);
   if(location.hash==="#qwen")open();
