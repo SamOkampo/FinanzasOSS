@@ -11,7 +11,7 @@ for(const name of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_sho
  "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test",
  "0010_categories_ai","0011_category_auto_questions","0012_statement_credits",
  "0013_income_capture","0014_verified_balance_snapshots",
- "0015_statement_review_confirmations"]){
+ "0015_statement_review_confirmations","0019_agent_operational_alerts","0021_statement_review_drafts"]){
  sqlDb.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+name+".sql",import.meta.url),"utf8"));
 }
 const store={
@@ -62,6 +62,18 @@ assert.equal(preview.status,200,JSON.stringify(preview.body));
 assert.match(preview.body.reviewDigest,/^[a-f0-9]{64}$/);
 assert.equal(preview.body.stored,false);
 assert.equal(preview.body.rows[0].existing[0].id,seedId);
+const draftPath="/api/quick/v41/reconcile/draft", draftEnv={ALLOW_V41_REVIEW_DRAFTS:"true"};
+assert.equal((await call(draftPath,A,input)).status,503);
+const storedDraft=await call(draftPath,A,{...input,rows:rows.map(row=>({...row,Extra:"No guardar columna sin asignar"}))},draftEnv);
+assert.equal(storedDraft.status,200);
+assert.equal(storedDraft.body.pending,4);
+assert.equal((await call(draftPath,A,input,draftEnv)).body.id,storedDraft.body.id);
+const resumePath=draftPath+"?id="+storedDraft.body.id;
+assert.equal((await call(resumePath,B,null,draftEnv)).status,404);
+const resume=await call(resumePath,A,null,draftEnv);
+assert.equal(resume.body.result.reviewDigest,preview.body.reviewDigest);
+assert.deepEqual(resume.body.result.rows.map(row=>row.index),[0,1,2,3]);
+assert.ok(resume.body.input.rows.every(row=>!Object.hasOwn(row,"Extra")));
 const decisions=[
  {index:0,action:"already_exists",existingSource:"accountless",existingId:seedId},
  {index:1,action:"own_transfer",counterpartyLabel:"Hapi bróker USD"},
@@ -75,11 +87,23 @@ assert.equal((await call("/api/quick/v41/reconcile/confirm",A,body,
 assert.equal((await call("/api/quick/v41/reconcile/confirm",A,body,
  {ALLOW_WRITES:"false"})).status,503);
 assert.equal(sqlDb.prepare("SELECT count(*) AS n FROM quick_statement_review_decisions").get().n,0);
+const firstDecision=await call("/api/quick/v41/reconcile/confirm",A,{...body,decisions:[decisions[0]]});
+assert.equal(firstDecision.status,200);
+const remaining=await call(resumePath,A,null,draftEnv);
+assert.deepEqual(remaining.body.result.rows.map(row=>row.index),[1,2,3]);
+assert.equal(remaining.body.input.rows.length,4,"Resume preserves original indexes and confirmation fingerprint");
 const saved=await call("/api/quick/v41/reconcile/confirm",A,body);
 assert.equal(saved.status,200,JSON.stringify(saved.body));
-assert.equal(saved.body.created,4);
+assert.equal(saved.body.created,3);
 assert.equal(saved.body.imported,2);
 assert.equal(saved.body.ownTransfers,1);
+assert.equal((await call(resumePath,A,null,draftEnv)).body.result.count,0);
+await call(draftPath+"/discard",B,{id:storedDraft.body.id,confirmed:true},draftEnv);
+assert.equal((await call(resumePath,A,null,draftEnv)).status,200);
+assert.equal((await call(draftPath+"/discard",A,{id:storedDraft.body.id},draftEnv)).status,422);
+await call(draftPath+"/discard",A,{id:storedDraft.body.id,confirmed:true},draftEnv);
+assert.equal((await call(resumePath,A,null,draftEnv)).status,404);
+
 assert.equal(sqlDb.prepare("SELECT count(*) AS n FROM quick_shortcut_expenses").get().n,before+1);
 assert.equal(sqlDb.prepare("SELECT count(*) AS n FROM quick_statement_credits").get().n,1);
 assert.equal(sqlDb.prepare("SELECT economic_purpose FROM quick_statement_credits").get().economic_purpose,"pending");

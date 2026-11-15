@@ -69,12 +69,13 @@ export function scanDocumentTables(markdown:string):{tables:TableInfo[];sectionH
  }
  return {tables,sectionHints:hints};
 }
-function evidenceMarkdown(markdown:string,scan:ReturnType<typeof scanDocumentTables>):string{
- const titleHints=markdown.split(/\r?\n/).map(s=>s.trim())
+function evidenceMarkdown(markdown:string,scan:ReturnType<typeof scanDocumentTables>,pdf:boolean):string{
+ const knownPdfHints=["extracto bancario","cuenta de ahorros","tarjeta de crédito","movimientos","portafolio","inversiones","Davivienda","RappiCuenta"];
+ const titleHints=pdf?knownPdfHints.filter(hint=>markdown.toLowerCase().includes(hint.toLowerCase())):markdown.split(/\r?\n/).map(s=>s.trim())
   .filter(s=>s && !s.startsWith("|") && !/^[-:\s]+$/.test(s)).slice(0,15)
   .map(s=>redact(s,140));
- return JSON.stringify({titleHints,sectionHints:scan.sectionHints,
-  tables:scan.tables.map(t=>({index:t.index,heading:t.heading,headers:t.headers,
+ return JSON.stringify({titleHints,sectionHints:pdf?[]:scan.sectionHints,
+  tables:scan.tables.map(t=>({index:t.index,heading:pdf?"":t.heading,headers:t.headers,
     rowCount:t.rowCount,sampleKinds:t.sampleKinds}))});
 }
 function validMapping(value:unknown,headers:string[]):Columns{
@@ -126,10 +127,15 @@ function acceptedType(name:string,bytes:Uint8Array):{extension:string;mime:strin
  }
  throw new DocumentInspectionError("Formato inválido o contenido no coincide con PDF, XLSX o CSV.");
 }
+export function documentAnalysisAvailable(env: QuickWorkerEnv): boolean {
+ return (env.ALLOW_DOCUMENT_ANALYSIS==="true"||env.ALLOW_AI_SUGGESTIONS==="true")&&
+   typeof env.AI?.toMarkdown==="function";
+}
+
 export async function inspectFinancialDocument(
  request:Request,db:QuickD1,owner:string,env:QuickWorkerEnv
 ):Promise<Response>{
- if(!env.AI||env.ALLOW_AI_SUGGESTIONS!=="true"||typeof env.AI.toMarkdown!=="function")
+ if(!documentAnalysisAvailable(env)||!env.AI?.toMarkdown)
    return reply({error:"Análisis documental con Qwen no disponible."},503);
  if(Number(request.headers.get("content-length")||0)>MAX_BYTES+20000)
    throw new DocumentInspectionError("El documento supera 4 MB.",413);
@@ -156,14 +162,18 @@ export async function inspectFinancialDocument(
  let converted:unknown;
  try{
    converted=await env.AI.toMarkdown({name:"extracto."+extension,blob:new Blob([bytes],{type:mime})});
- }catch{return reply({error:"No se pudo extraer la estructura del documento. Intenta otro archivo."},502);}
+ }catch{return reply({code:"document_conversion_unavailable",
+   error:"La lectura del documento falló. Vuelve a intentar en unos minutos."},502);}
  const v=Array.isArray(converted)?converted[0]:converted;
  const result=v as ConversionResult|null;
  if(!result||result.format==="error"||typeof result.data!=="string"||
-   !result.data.trim()||result.data.length>MAX_MARKDOWN)
-   return reply({error:"No fue posible extraer texto o tablas legibles; verifica el documento."},422);
+   !result.data.trim())
+   return reply({code:"document_unreadable",error:extension==="pdf"
+     ?"No pudimos extraer texto de este PDF. Si es un escaneo, prueba el PDF original del banco o exporta sus movimientos en Excel o CSV."
+     :"No pudimos leer el archivo. Verifica su formato o prueba con un CSV."},422);
+ if(result.data.length>MAX_MARKDOWN)return reply({error:"El extracto tiene demasiado contenido. Prueba con un período más corto."},422);
  const scan=scanDocumentTables(result.data);
- const evidence=evidenceMarkdown(result.data,scan);
+ const evidence=evidenceMarkdown(result.data,scan,extension==="pdf");
  if(evidence.length>24000)return reply({error:"Documento demasiado complejo para analizarlo de forma segura."},422);
  let modelResult:unknown;
  try{

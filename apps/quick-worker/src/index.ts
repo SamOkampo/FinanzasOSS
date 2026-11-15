@@ -1,3 +1,4 @@
+import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js";
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
@@ -13,6 +14,7 @@ import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
 import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
+import { STATEMENT_PDF_WORKER_JS, STATEMENT_PDF_WASM_BASE64, PDFJS_RENDERER_JS, PDFJS_WORKER_JS } from "../.generated/statement-pdf-worker-asset.js";
 import { REVIEW_CONFIRM_JS } from "./dashboard-review-confirm-v41-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
@@ -23,12 +25,22 @@ import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
+import { discardStatementDraft, openStatementDraft, saveStatementDraft } from "./statement-review-drafts.js";
+import { confirmStatementLink, listStatementLinks } from "./statement-transfer-links.js";
 import { confirmReviewedStatementV41, statementReviewHistoryV41, ReviewConfirmationError } from "./statement-confirm-v41.js";
-import { inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
+import { documentAnalysisAvailable,inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
+import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
+import { askAssistant, deleteAssistantConversation, listAssistantConversations } from "./assistant-conversations.js";
+import { ASSISTANT_DAILY_CRON, ASSISTANT_HOURLY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
+  confirmAssistant, forgetRememberedMerchant, listRememberedMerchants, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
+import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
+import { hapiActivityCommit, hapiActivityPreview, linkHapiActivityDeposit, listHapiActivity } from "./hapi-activity.js";
+import { HAPI_JS } from "./dashboard-hapi.js";
+import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit, listHapiPortfolio, saveHapiPortfolio } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
 import { enrollShortcut, shortcutStatus, revokeShortcut, shortcutExpense, browserExpense, shortcutFailure, ShortcutInputError, authenticatedShortcutOwner, parseShortcutJson } from "./shortcut-direct.js";
 import { saveIncome } from "./income-capture.js";
@@ -49,6 +61,8 @@ export interface QuickWorkerEnv {
   readonly ACCESS_AUD?: string;
   readonly ALLOW_WRITES?: string;
   readonly ALLOW_V41_CONFIRM_WRITES?: string;
+  readonly ALLOW_V41_TRANSFER_LINKS?: string;
+  readonly ALLOW_V41_REVIEW_DRAFTS?: string;
   readonly ALLOW_SHORTCUT_WRITES?: string;
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
@@ -59,8 +73,17 @@ export interface QuickWorkerEnv {
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
+  readonly ALLOW_V41_ASSISTANT?: string;
+  readonly ALLOW_V41_ASSISTANT_AI?: string;
+  readonly ALLOW_V41_ASSISTANT_CHAT?: string;
+  readonly ALLOW_V41_HAPI?: string;
+  readonly ALLOW_V41_HAPI_ACTIVITY?: string;
+  readonly ALLOW_DOCUMENT_ANALYSIS?: string;
+  readonly ALLOW_STATEMENT_VISION?: string;
   readonly AI?: {
-    run(model:string,input:{messages:{role:string;content:string}[];
+    run(model:string,input:{messages:{role:string;content:string|Array<
+      {type:"text";text:string}|{type:"image_url";image_url:{url:string}}
+    >}[];
       max_tokens?:number;max_completion_tokens?:number;
       reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean}):Promise<unknown>;
     toMarkdown?(document:{name:string;blob:Blob}):Promise<unknown>;
@@ -341,7 +364,8 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/statement-pdf-renderer.mjs", "/statement-pdf-render-worker.mjs", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
+    "/assistant.js", "/hapi.js", "/transfer-links.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -393,8 +417,26 @@ export async function handleQuickRequest(
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
     if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
-    if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
-    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
+    if (pathname === "/dashboard") {
+      const html=DASH_HTML.replace('data-analysis-available="false"',
+        'data-analysis-available="'+String(documentAnalysisAvailable(env))+'"')
+        .replace('data-vision-available="false"',
+          'data-vision-available="'+String(env.ALLOW_STATEMENT_VISION==="true"&&Boolean(env.AI))+'"');
+      return respondAsset(html
+        .replace('data-assistant-chat="false"','data-assistant-chat="'+String(env.ALLOW_V41_ASSISTANT_CHAT==="true")+'"')
+        .replace('data-assistant-enabled="false"','data-assistant-enabled="'+String(env.ALLOW_V41_ASSISTANT==="true")+'"')
+        .replace('data-review-drafts="false"','data-review-drafts="'+String(env.ALLOW_V41_REVIEW_DRAFTS==="true")+'"')
+        .replace('data-transfer-links="false"','data-transfer-links="'+String(env.ALLOW_V41_TRANSFER_LINKS==="true")+'"')
+        .replace('data-hapi-activity="false"','data-hapi-activity="'+String(env.ALLOW_V41_HAPI==="true"&&env.ALLOW_V41_HAPI_ACTIVITY==="true")+'"')
+        .replace('data-hapi-enabled="false"','data-hapi-enabled="'+String(env.ALLOW_V41_HAPI==="true")+'"'),"text/html");
+    }
+    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS+ASSISTANT_CSS, "text/css");
+    if (pathname === "/assistant.js") {
+      return env.ALLOW_V41_ASSISTANT==="true"?respondAsset(ASSISTANT_JS,"application/javascript"):
+        respondAsset("", "application/javascript");
+    }
+    if (pathname === "/transfer-links.js") return respondAsset(TRANSFER_LINKS_JS,"application/javascript");
+    if (pathname === "/hapi.js") return respondAsset(env.ALLOW_V41_HAPI==="true"?HAPI_JS:"","application/javascript");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
     if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
     if (pathname === "/mobile-input.js") return respondAsset(MOBILE_INPUT_JS, "application/javascript");
@@ -406,11 +448,31 @@ export async function handleQuickRequest(
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
     if (pathname === "/review-confirm-v41.js") return respondAsset(REVIEW_CONFIRM_JS,"application/javascript");
     if (pathname === "/document-inspect.js") return respondAsset(DOCUMENT_INSPECT_JS, "application/javascript");
+    if (pathname === "/statement-pdf-worker.js") {
+      const worker = respondAsset(STATEMENT_PDF_WORKER_JS, "application/javascript");
+      const engineUrl = new URL("/statement-pdf-engine.wasm", request.url);
+      worker.headers.set("Content-Security-Policy",
+        "default-src 'none'; script-src 'wasm-unsafe-eval'; connect-src " + engineUrl.href);
+      return worker;
+    }
+    if(pathname==="/statement-pdf-renderer.mjs")
+      return respondAsset(PDFJS_RENDERER_JS,"application/javascript");
+    if(pathname==="/statement-pdf-render-worker.mjs")
+      return respondAsset(PDFJS_WORKER_JS,"application/javascript");
+    if (pathname === "/statement-pdf-engine.wasm") {
+      return new Response(Uint8Array.from(atob(STATEMENT_PDF_WASM_BASE64), c=>c.charCodeAt(0)), {
+        headers: {"Content-Type":"application/wasm","Cache-Control":"no-store, private",
+          "X-Content-Type-Options":"nosniff"},
+      });
+    }
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
-    if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
+    if (pathname === "/dashboard-sw.js") {
+      const script=env.ALLOW_V41_ASSISTANT==="true"?DASH_SW.replace('/dashboard#plan','/dashboard#qwen-pending'):DASH_SW;
+      return respondAsset(script,"application/javascript");
+    }
     // An iOS home-screen icon requires PNG, not only a manifest SVG.
     return new Response(Uint8Array.from(atob(DASH_ICON_180_PNG_BASE64), (c) => c.charCodeAt(0)), {
       headers: { "Content-Type": "image/png", "Cache-Control": "no-store, private",
@@ -418,14 +480,41 @@ export async function handleQuickRequest(
     });
   }
   try {
+    if(pathname.startsWith("/api/quick/v41/agent/")&&env.ALLOW_V41_ASSISTANT!=="true")
+      return respond({error:"El asistente no está habilitado en este entorno."},503);
+    if(pathname.startsWith("/api/quick/v41/hapi/")&&env.ALLOW_V41_HAPI!=="true")
+      return respond({error:"Hapi todavía no está habilitado en este entorno."},503);
+    if(pathname.startsWith("/api/quick/v41/reconcile/draft")&&env.ALLOW_V41_REVIEW_DRAFTS!=="true")
+      return respond({error:"Las revisiones guardadas no están habilitadas."},503);
+    if(pathname.startsWith("/api/quick/v41/hapi/activity")&&env.ALLOW_V41_HAPI_ACTIVITY!=="true")
+      return respond({error:"La actividad de Hapi no está habilitada."},503);
+    if(pathname.startsWith("/api/quick/v41/agent/chat")&&env.ALLOW_V41_ASSISTANT_CHAT!=="true")
+      return respond({error:"El historial de consultas no está habilitado."},503);
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
-          pathname !== "/api/quick/v41/ai/document/inspect")
+          pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
         return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
+      if(pathname===STATEMENT_VISION_PATH)return await inspectStatementPage(request,env.DB,owner,env);
       if(pathname==="/api/quick/v41/ai/document/inspect")
         return await inspectFinancialDocument(request,env.DB,owner,env);
-      const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/"))?85000:4096);
+      const statementBody=pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/")||
+        pathname==="/api/quick/v41/hapi/portfolio"||pathname.startsWith("/api/quick/v41/hapi/activity/");
+      const data = await parseJson(request,statementBody?85000:4096);
+      if (pathname === "/api/quick/v41/agent/chat") return await askAssistant(env.DB,owner,env,data);
+      if (pathname === "/api/quick/v41/agent/chat/delete") return await deleteAssistantConversation(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
+      if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/merchants/forget") return await forgetRememberedMerchant(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/snooze") return await assistantSnooze(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/credit-due") return await assistantCreditDue(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/preview") return await hapiActivityPreview(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/commit") return await hapiActivityCommit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/link") return await linkHapiActivityDeposit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/portfolio") return await saveHapiPortfolio(env.DB,owner,data);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
         await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
@@ -440,6 +529,12 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/v41/reconcile/draft") return await saveStatementDraft(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/reconcile/draft/discard") return await discardStatementDraft(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/reconcile/links"){
+        if(env.ALLOW_V41_TRANSFER_LINKS!=="true")return respond({error:"La conciliación entre cuentas no está habilitada."},503);
+        return await confirmStatementLink(env.DB,owner,data);
+      }
       if (pathname === "/api/quick/v41/reconcile/preview") return await previewReconciliationV41(env.DB,owner,data);
        if (pathname === "/api/quick/v41/reconcile/confirm") {
          if(env.ALLOW_V41_CONFIRM_WRITES!=="true") return respond({error:"La confirmación v41 aún no está habilitada en este entorno"},503);
@@ -471,6 +566,14 @@ export async function handleQuickRequest(
       }
       if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
+      if (pathname === "/api/quick/v41/agent/chat")
+        return await listAssistantConversations(env.DB,owner,new URL(request.url).searchParams.get("id"));
+      if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);
+      if (pathname === "/api/quick/v41/agent/merchants")
+        return await listRememberedMerchants(env.DB,owner,new URL(request.url).searchParams.get("after"));
+      if (pathname === "/api/quick/v41/hapi/deposits") return await listHapiDeposits(env.DB,owner);
+      if (pathname === "/api/quick/v41/hapi/activity") return await listHapiActivity(env.DB,owner);
+      if (pathname === "/api/quick/v41/hapi/portfolio") return await listHapiPortfolio(env.DB,owner);
       if (pathname === "/api/quick/profile") {
         // Cloudflare Access supplies the authenticated identity. Never trust
         // an email or owner ID from URL parameters, headers or request bodies.
@@ -480,6 +583,12 @@ export async function handleQuickRequest(
           return respond({ error: "Authenticated email unavailable" }, 401);
         }
         return respond({ email: identity.email, profile: "personal" });
+      }
+      if (pathname === "/api/quick/v41/reconcile/draft")
+        return await openStatementDraft(env.DB,owner,new URL(request.url).searchParams.get("id")??"");
+      if (pathname === "/api/quick/v41/reconcile/links"){
+        if(env.ALLOW_V41_TRANSFER_LINKS!=="true")return respond({error:"La conciliación entre cuentas no está habilitada."},503);
+        return await listStatementLinks(env.DB,owner);
       }
       if (pathname === "/api/quick/v41/reconcile/history") return await statementReviewHistoryV41(env.DB,owner);
        if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
@@ -515,6 +624,10 @@ export default {
     return handleQuickRequest(request, env, ctx);
   },
   async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
+    if(controller.cron===ASSISTANT_HOURLY_CRON||controller.cron===ASSISTANT_DAILY_CRON){
+      if(env.ALLOW_V41_ASSISTANT==="true")await sendAssistantDigest(env,controller.scheduledTime);
+      return;
+    }
     if(controller.cron!=="30 1 * * *") return;
     try{await runScheduledCategoryBackfill(env);}
     catch{ /* Existing financial reminders must still execute after any AI failure. */ }

@@ -1,8 +1,6 @@
 # FinanzasOSS v41 · Qwen: resolución y aprendizaje de una respuesta «food»
 
-**Estado:** especificación técnica solamente. NO implementada ni desplegada; no modifica transacciones, cuentas, categorías o preferencias de propietarios reales. Complementa `V41_QWEN_DAILY_AGENT_HAPI_PORTFOLIO.md`.
-
-**Base revisada:** `apps/quick-worker/src/categorization.ts`, `category-automation.ts`, migraciones `0010_categories_ai.sql` y `0011_category_auto_questions.sql`. En v40 existen categorías automáticas, confirmaciones manuales y `quick_category_preferences`, pero el chat flotante v41 y su flujo de aprendizaje de dos etapas aún no existen.
+**Estado:** la v41 implementa el alias `food`, elección de subcategoría, confirmación individual y revocación de reglas por comercio. Consulta la [nota de cierre](./V41_IMPLEMENTATION_PROGRESS.md) para conocer las diferencias frente al diseño original.
 
 ## 1. Contrato semántico para «food»
 

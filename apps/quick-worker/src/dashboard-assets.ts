@@ -22,7 +22,7 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 self.addEventListener("push", (event) => {
   // Empty payload only. Do not reveal any amount, bank or account on locked screens.
   event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:"¿Qué fue esta compra? Revisa tus categorías pendientes.",
+    body:"Revisa los pendientes de tu perfil en FinanzasOSS.",
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
     tag:"finanzasoss-finance-review",
@@ -32,7 +32,8 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const target=new URL("/dashboard#plan",self.location.origin).href;
+    const section=event.notification.data?.url==="/dashboard#qwen"?"#qwen":"#plan";
+    const target=new URL("/dashboard"+section,self.location.origin).href;
     const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});
     for(const window of windows) {
       if(new URL(window.url).origin===self.location.origin){

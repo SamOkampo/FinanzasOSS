@@ -102,18 +102,21 @@ export function ruleCategory(merchant:string):{category:Category;subcategory:str
 }
 const fromEntries="SELECT id,'manual' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL "+
  "UNION ALL SELECT id,'accountless' source,amount_minor,currency,kind,merchant,occurred_at,bank_label,payment_method FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL";
-export async function ownerMovements(db:QuickD1,owner:string,limit=500):Promise<Movement[]>{
+export async function ownerMovements(db:QuickD1,owner:string,limit=500,range?:{start:string;end:string}):Promise<Movement[]>{
  const query="SELECT m.id,m.source,m.amount_minor,m.currency,m.kind,m.merchant,m.occurred_at,m.bank_label,m.payment_method,c.category,c.subcategory,c.classification_source,"+
  "a.category AS auto_category,a.subcategory AS auto_subcategory,a.confidence AS auto_confidence,"+
  "a.needs_review AS auto_needs_review,a.question AS auto_question,a.classification_source AS auto_source "+
  "FROM ("+fromEntries+") m LEFT JOIN quick_movement_categories c ON c.owner_id=? AND c.source=m.source AND c.movement_id=m.id "+
  "LEFT JOIN quick_auto_categories a ON a.owner_id=? AND a.source=m.source AND a.movement_id=m.id "+
+ (range?"WHERE datetime(m.occurred_at)>=datetime(?) AND datetime(m.occurred_at)<datetime(?) ":"")+
  "ORDER BY m.occurred_at DESC,m.id DESC LIMIT ?";
- const result=await db.prepare(query).bind(owner,owner,owner,owner,limit).all<Movement>();
+ const result=await db.prepare(query).bind(owner,owner,owner,owner,...(range?[range.start,range.end]:[]),limit).all<Movement>();
  return result.results;
 }
 export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
- const entries=await ownerMovements(db,owner,500);
+ return reply(summarizeCategories(await ownerMovements(db,owner,500)));
+}
+export function summarizeCategories(entries:readonly Movement[]){
  const total=new Map<string,number>();
  const economic=new Map<string,{minor:number;count:number}>();
  const items=entries.map(x=>{
@@ -149,12 +152,12 @@ export async function categoryReview(db:QuickD1,owner:string):Promise<Response>{
       ? "¿Cuál fue la finalidad de este movimiento? Si es entre tus cuentas, selecciónalo expresamente; si pagaste una compra o una deuda, elige su categoría."
       : manual?null:automatic?x.auto_question:"¿Qué fue este movimiento? Elige la categoría correcta."};
  });
- return reply({taxonomy:PRECISE_TAXONOMY,entries:items,summary:[...total].map(([category,minor])=>({
+ return {taxonomy:PRECISE_TAXONOMY,entries:items,summary:[...total].map(([category,minor])=>({
    category,amountCOP:(minor/100).toFixed(2)})),
    economicSummary:[...economic].map(([group,value])=>({
      group,count:value.count,amountCOP:(value.minor/100).toFixed(2)
    })),limitedTo:500,
-   notice:"El resumen por categorías cuenta solo consumos identificados. Deudas y transferencias dudosas van aparte y nunca se reclasifican en el ledger sin confirmación."});
+   notice:"El resumen por categorías cuenta solo consumos identificados. Deudas y transferencias dudosas van aparte y nunca se reclasifican en el ledger sin confirmación."};
 }
 export async function setCategory(db:QuickD1,owner:string,body:unknown):Promise<Response>{
  const x=origin(body,["source","id","category","subcategory","confirmed","rememberMerchant"]);

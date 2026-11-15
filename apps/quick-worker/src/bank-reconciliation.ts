@@ -87,16 +87,24 @@ async function bankFlow(db:QuickD1,owner:string,label:string,after:string,until:
  return {in_minor:Number(v?.in_minor||0),out_minor:Number(v?.out_minor||0),
    in_count:Number(v?.in_count||0),out_count:Number(v?.out_count||0)};
 }
-export async function verifiedBalances(db:QuickD1,owner:string):Promise<Response>{
+type VerifiedBalance = {
+ id:string;label:string;type:string;currency:string;hasSnapshot:boolean;
+ latest:{amountMinor:string;asOf:string;source:string}|null;
+ previous:{amountMinor:string;asOf:string}|null;
+ reconciliation:{status:string;expectedMinor:string;differenceMinor:string;incomingMinor:string;
+  outgoingMinor:string;incomingCount:number;outgoingCount:number;after:string;until:string;scope:string}|null;
+ connectionStatus:string;
+};
+export async function readVerifiedBalances(db:QuickD1,owner:string):Promise<VerifiedBalance[]>{
  const accounts=await db.prepare("SELECT id,owner_id,bank_label,account_type,currency "+
   "FROM quick_balance_accounts WHERE owner_id=? ORDER BY bank_label LIMIT 50").bind(owner).all<SqlAccount>();
- const items=[];
+ const items:VerifiedBalance[]=[];
  for(const account of accounts.results){
   const rows=await db.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at "+
     "FROM quick_balance_snapshots WHERE owner_id=? AND account_id=? "+
     "ORDER BY as_of DESC,id DESC LIMIT 2").bind(owner,account.id).all<SqlSnapshot>();
   const [latest,previous]=rows.results;
-  const item:Record<string,unknown>={
+  const item:VerifiedBalance={
     id:account.id,label:account.bank_label,type:account.account_type,currency:account.currency,
     hasSnapshot:Boolean(latest),latest:latest?{amountMinor:String(latest.amount_minor),asOf:latest.as_of,source:"user_verified"}:null,
     previous:previous?{amountMinor:String(previous.amount_minor),asOf:previous.as_of}:null,
@@ -117,6 +125,10 @@ export async function verifiedBalances(db:QuickD1,owner:string):Promise<Response
   }
   items.push(item);
  }
+ return items;
+}
+export async function verifiedBalances(db:QuickD1,owner:string):Promise<Response>{
+ const items=await readVerifiedBalances(db,owner);
  const aliases=await db.prepare(
   "SELECT bank_label AS label FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL "+
   "AND bank_label IS NOT NULL UNION SELECT bank_label FROM quick_income_entries "+

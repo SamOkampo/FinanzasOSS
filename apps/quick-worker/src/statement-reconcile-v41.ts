@@ -1,13 +1,13 @@
 import { reviewDigestV41 } from "./statement-review-digest-v41.js";
 // FinanzasOSS v41.1 - read-only statement reconciliation explorer.
 // Does NOT create/mutate any movements or attempt bank synchronization.
-import { previewMappedImport, type ImportColumnMapping, type RawImportRow } from "../../../packages/import-engine/src/mapping-preview.js";
+import { previewMappedImport, type ImportColumnMapping } from "../../../packages/import-engine/src/mapping-preview.js";
 import type { QuickD1 } from "./index.js";
 
 export class ReconcileInputError extends Error {
   constructor(message: string, readonly status=422) { super(message); }
 }
-type Body={rows:RawImportRow[];mapping:ImportColumnMapping;bankLabel:string;paymentMethod:string};
+type Body={rows:Record<string,string>[];mapping:ImportColumnMapping;bankLabel:string;paymentMethod:string};
 type Existing={id:string;source:string;label:string;amount_minor:number;occurred_at:string};
 const methods=new Set(["bank_transfer","debit_card","credit_card"]);
 const iso=/^\d{4}-\d{2}-\d{2}$/;
@@ -16,7 +16,7 @@ const response=(data:unknown,status=200)=>new Response(JSON.stringify(data),{sta
   "X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",
   "Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'",
 }});
-function validate(input:unknown):Body {
+export function validateStatementReview(input:unknown):Body {
   if(!input||typeof input!=="object"||Array.isArray(input))throw new ReconcileInputError("Se requiere un extracto CSV.");
   const p=input as Record<string,unknown>;
   if(Object.keys(p).some(k=>!["rows","mapping","bankLabel","paymentMethod"].includes(k)))
@@ -75,7 +75,7 @@ async function existing(db:QuickD1,owner:string,bank:string,day:string,minor:num
   return (await db.prepare(sql).bind(owner,bank,minor,day,owner,bank,minor,day).all<Existing>()).results;
 }
 export async function previewReconciliationV41(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
-  const input=validate(raw);
+  const input=validateStatementReview(raw);
   const rows=previewMappedImport(input.rows,input.mapping);
   const fingerprints=new Map<string,number>();
   const review=[];

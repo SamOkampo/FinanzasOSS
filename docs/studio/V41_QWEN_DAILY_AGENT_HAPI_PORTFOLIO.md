@@ -1,10 +1,10 @@
 # FinanzasOSS v41 — Adenda aprobada: Qwen agente financiero diario + Hapi como inversión (no banco)
 
-**Estado:** especificación de diseño, NO implementada ni desplegada. Base Studio revisada: `feature/studio-on-device-ios-qa-20261028` (Worker D1 + Access, PWA, CSV débitos, clasificación Qwen, Push, saldo verificado).
+**Estado:** especificación original aprobada. La [nota de cierre de la v41](./V41_IMPLEMENTATION_PROGRESS.md) indica qué se implementó, las diferencias frente al diseño y la verificación pendiente en el dispositivo.
 
 **Principios innegociables:** no crear gastos/ingresos ficticios, no duplicar transferencias, no suponer que Hapi está conectado, no ejecutar trading/retirar/depositar automáticamente, y no enviar datos bancarios personales a Qwen sin consentimiento explícito. D1 aísla todo por `owner_id`.
 
-> **Desarrollo del caso de aprendizaje `food`:** consultar [V41_QWEN_FOOD_CLARIFICATION_LEARNING.md](./V41_QWEN_FOOD_CLARIFICATION_LEARNING.md). Especifica alias, subcategorías, doble confirmación, alcance de preferencias, bloqueo de agregadores y pruebas. Solo diseño, sin modificar movimientos.
+> **Desarrollo del caso de aprendizaje `food`:** consultar [V41_QWEN_FOOD_CLARIFICATION_LEARNING.md](./V41_QWEN_FOOD_CLARIFICATION_LEARNING.md). Especifica alias, subcategorías, doble confirmación, alcance de preferencias, bloqueo de agregadores y pruebas. La nota de cierre documenta su implementación.
 
 ## A. Qwen: robotsito de finanzas + revisión proactiva
 
