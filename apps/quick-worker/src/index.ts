@@ -13,6 +13,7 @@ import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
 import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
+import { STATEMENT_PDF_WORKER_JS, STATEMENT_PDF_WASM_BASE64 } from "../.generated/statement-pdf-worker-asset.js";
 import { REVIEW_CONFIRM_JS } from "./dashboard-review-confirm-v41-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
@@ -341,7 +342,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -406,6 +407,19 @@ export async function handleQuickRequest(
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
     if (pathname === "/review-confirm-v41.js") return respondAsset(REVIEW_CONFIRM_JS,"application/javascript");
     if (pathname === "/document-inspect.js") return respondAsset(DOCUMENT_INSPECT_JS, "application/javascript");
+    if (pathname === "/statement-pdf-worker.js") {
+      const worker = respondAsset(STATEMENT_PDF_WORKER_JS, "application/javascript");
+      const engineUrl = new URL("/statement-pdf-engine.wasm", request.url);
+      worker.headers.set("Content-Security-Policy",
+        "default-src 'none'; script-src 'wasm-unsafe-eval'; connect-src " + engineUrl.href);
+      return worker;
+    }
+    if (pathname === "/statement-pdf-engine.wasm") {
+      return new Response(Uint8Array.from(atob(STATEMENT_PDF_WASM_BASE64), c=>c.charCodeAt(0)), {
+        headers: {"Content-Type":"application/wasm","Cache-Control":"no-store, private",
+          "X-Content-Type-Options":"nosniff"},
+      });
+    }
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
