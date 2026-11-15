@@ -82,6 +82,10 @@ export const IMPORTS_HTML = `
               </label>
             </div>
             <p>Coteja las filas con el PDF. Puedes conciliar extractos de cuentas bancarias en COP, hasta 50 movimientos a la vez.</p>
+            <label class="ai-document-consent" for="ai-document-vision-cop" hidden>
+              <input id="ai-document-vision-cop" type="checkbox">
+              <span>Confirmo que las filas sin moneda visible están en pesos colombianos (COP).</span>
+            </label>
             <button id="ai-document-vision-reconcile" type="button" class="solid-button" disabled>Conciliar movimientos en COP</button>
             <p id="ai-document-vision-reconcile-status" class="import-file-status" role="status" aria-live="polite"></p>
           </section>

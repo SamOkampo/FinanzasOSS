@@ -36,7 +36,7 @@ export function parseStatementVision(value:unknown){
     const currency=["COP","USD","EUR","USDC"].includes(row.currency)?row.currency as string:null;
     const direction=row.direction==="debit"||row.direction==="credit"?row.direction as "debit"|"credit":null;
     if(!date&&!description&&!amount){partial=true;return [];}
-    const amountCOP=currency==="COP"&&amount?normalizeCOP(amount):null;
+    const amountCOP=(currency==="COP"||currency===null)&&amount?normalizeCOP(amount):null;
     if(!date||!description||!amount||!currency||!direction||(currency==="COP"&&!amountCOP))partial=true;
     return [{date,description:description||null,amount,currency,direction,amountCOP}];
   });

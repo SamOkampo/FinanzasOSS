@@ -18,6 +18,7 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .import-hub #ai-document-password{width:100%;min-width:0;font-size:16px;min-height:44px}
 .import-hub .ai-document-studio .ai-document-consent{margin:12px 0;padding:10px;gap:9px}
 .import-hub .ai-document-studio .ai-document-consent input{min-height:0;padding:0}
+.import-hub .ai-document-studio .ai-document-consent[hidden]{display:none}
 .import-hub #ai-document-vision-options .import-options{grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr))}
 .import-hub #ai-document-inspect{margin:0}
 .import-hub .ai-document-results{margin:0}

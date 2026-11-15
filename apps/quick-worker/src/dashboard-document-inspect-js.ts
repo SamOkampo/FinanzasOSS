@@ -35,18 +35,25 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     visionFirst=byId("ai-document-vision-first"),visionResults=byId("ai-document-vision-results"),
     visionIssues=byId("ai-document-vision-issues"),visionGroups=byId("ai-document-vision-groups"),
     visionCount=byId("ai-document-vision-count"),visionBank=byId("ai-document-vision-bank"),
-    visionMethod=byId("ai-document-vision-method"),visionScope=byId("ai-document-vision-scope"),
+    visionMethod=byId("ai-document-vision-method"),visionScope=byId("ai-document-vision-scope"),visionCOP=byId("ai-document-vision-cop"),
     visionReview=byId("ai-document-vision-reconcile"),visionReviewStatus=byId("ai-document-vision-reconcile-status");
   if(!visionOptions||!visionStart||!visionConsent||!visionStatus||!visionFirst||!visionResults||!visionIssues||
-    !visionGroups||!visionCount||!visionBank||!visionMethod||!visionScope||!visionReview||!visionReviewStatus)return;
+    !visionGroups||!visionCount||!visionBank||!visionMethod||!visionScope||!visionCOP||!visionReview||!visionReviewStatus)return;
   const visionAvailable=visionOptions.dataset.visionAvailable==="true";
   let visionFile=null,visionTask=null,visionReviewTask=null,visionReviewActive=false;
   const visionPages=new Map();
+  function selectedVisionRows(){
+    const scope=visionScope.value;
+    if(scope==="all")return [...visionPages.values()].sort((a,b)=>a.page-b.page).flatMap(group=>group.rows);
+    const [page,start]=scope.split(":").map(Number);
+    return visionPages.get(page)?.rows.slice(start,start+50)||[];
+  }
   function updateVision(){
     visionOptions.hidden=!visionAvailable||!visionFile;
     visionStart.disabled=visionOptions.hidden||!visionConsent.checked||Boolean(visionTask);
     visionFirst.disabled=Boolean(visionTask);
     visionCount.disabled=Boolean(visionTask);
+    visionCOP.closest("label").hidden=!selectedVisionRows().some(row=>!row.currency);
     visionReview.disabled=Boolean(visionTask||visionReviewTask)||!visionScope.value||!visionBank.value.trim();
   }
   function resetVisionReview(){
@@ -70,6 +77,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     visionOptions.open=false;
     visionFirst.value="1";
     visionCount.value="1";
+    visionCOP.checked=false;
     visionPages.clear();
     visionGroups.replaceChildren();
     visionScope.replaceChildren();
@@ -155,6 +163,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if(!visionFirst.reportValidity()||!visionCount.reportValidity())return;
     const first=visionFirst.valueAsNumber;
     const pages=visionCount.valueAsNumber;
+    visionCOP.checked=false;
     resetVisionReview();
     const fileToRender=visionFile;
     const task=new AbortController();
@@ -164,9 +173,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     const groups=[];
     let loading=null,failed=0,incomplete=0,total=0,last=0;
     try{
-      const engine=await import("/statement-pdf-renderer.mjs?v=41.8");
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.9");
       if(task.signal.aborted)return;
-      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.8";
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.9";
       const bytes=new Uint8Array(await fileToRender.arrayBuffer());
       if(task.signal.aborted)return;
       loading=engine.getDocument({data:bytes,
@@ -259,6 +268,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       visionPages.clear();
       visionGroups.replaceChildren();
       visionScope.replaceChildren();
+      visionCOP.checked=false;
       visionResults.hidden=true;
       resetVisionReview();
     }
@@ -341,7 +351,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.8");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.9");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
@@ -423,17 +433,17 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     results.hidden=false;
     results.scrollIntoView?.({behavior:"smooth",block:"nearest"});
   }
-  for(const [element,event] of [[visionBank,"input"],[visionMethod,"change"],[visionScope,"change"]])
+  for(const [element,event] of [[visionBank,"input"],[visionMethod,"change"],[visionCOP,"change"]])
     element.addEventListener(event,resetVisionReview);
+  visionScope.addEventListener("change",()=>{
+    visionCOP.checked=false;
+    resetVisionReview();
+  });
   visionReview.addEventListener("click",async()=>{
     if(visionReview.disabled)return;
     const source=visionScope.selectedOptions[0].textContent;
-    const scope=visionScope.value;
-    const [page,start]=scope.split(":").map(Number);
-    const selected=scope==="all"?
-      [...visionPages.values()].sort((a,b)=>a.page-b.page).flatMap(group=>group.rows):
-      visionPages.get(page)?.rows.slice(start,start+50);
-    if(!selected?.length)return;
+    const selected=selectedVisionRows();
+    if(!selected.length)return;
     reset();
     const tableHelp=tables.closest("details");
     if(tableHelp)tableHelp.hidden=true;
@@ -443,7 +453,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     const input={
       rows:selected.map(row=>({
         Fecha:row.date||"",Concepto:row.description||"",
-        Importe:row.amountCOP||"",Tipo:row.direction||"",Moneda:row.currency||"INVALIDA",
+        Importe:row.amountCOP||"",Tipo:row.direction||"",Moneda:row.currency||(visionCOP.checked?"COP":"INVALIDA"),
       })),
       mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo",currency:"Moneda"},
       bankLabel:visionBank.value.trim(),paymentMethod:visionMethod.value,

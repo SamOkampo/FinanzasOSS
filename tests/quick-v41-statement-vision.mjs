@@ -54,4 +54,10 @@ assert.equal(parseStatementVision({response:"Salida incompleta"}),null);
 assert.equal(parseStatementVision({response:{rows:[{
   date:"2026-10-02",description:"Compra",amount:"1.2.34",currency:"COP",direction:"debit",
 }],partial:false}}).partial,true);
+const missingCurrency=parseStatementVision({response:{rows:[{
+  date:"2026-10-02",description:"Compra",amount:"1.234,56",currency:null,direction:"debit",
+}],partial:false}});
+assert.equal(missingCurrency.rows[0].currency,null);
+assert.equal(missingCurrency.rows[0].amountCOP,"1234.56");
+assert.equal(missingCurrency.partial,true);
 console.log("Qwen vision: owner and consent gates, page payload, quota and uncertain fields PASSED");
