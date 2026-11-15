@@ -12,6 +12,7 @@ import { STUDIO_JS } from "./dashboard-studio-js.js";
 import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
+import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
 import { studioCapabilities } from "./studio-capabilities.js";
@@ -337,7 +338,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -400,6 +401,7 @@ export async function handleQuickRequest(
     if (pathname === "/budgets.js") return respondAsset(BUDGET_JS, "application/javascript");
     if (pathname === "/movement-editor.js") return respondAsset(MOVEMENT_EDITOR_JS, "application/javascript");
     if (pathname === "/statement-import.js") return respondAsset(IMPORT_JS, "application/javascript");
+    if (pathname === "/document-inspect.js") return respondAsset(DOCUMENT_INSPECT_JS, "application/javascript");
     if (pathname === "/insights.js") return respondAsset(INSIGHTS_JS, "application/javascript");
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
