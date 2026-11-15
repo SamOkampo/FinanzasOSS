@@ -25,7 +25,7 @@ import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyRemind
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
 import { confirmReviewedStatementV41, statementReviewHistoryV41, ReviewConfirmationError } from "./statement-confirm-v41.js";
-import { inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
+import { documentAnalysisAvailable,inspectFinancialDocument,DocumentInspectionError } from "./document-inspection-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
@@ -60,6 +60,7 @@ export interface QuickWorkerEnv {
   readonly VAPID_PRIVATE_JWK?: string;
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
+  readonly ALLOW_DOCUMENT_ANALYSIS?: string;
   readonly AI?: {
     run(model:string,input:{messages:{role:string;content:string}[];
       max_tokens?:number;max_completion_tokens?:number;
@@ -394,7 +395,11 @@ export async function handleQuickRequest(
     if (pathname === "/") return respondAsset(QUICK_HTML, "text/html");
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
     if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
-    if (pathname === "/dashboard") return respondAsset(DASH_HTML, "text/html");
+    if (pathname === "/dashboard") {
+      return respondAsset(documentAnalysisAvailable(env)
+        ? DASH_HTML.replace('data-analysis-available="false"', 'data-analysis-available="true"')
+        : DASH_HTML, "text/html");
+    }
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
     if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");

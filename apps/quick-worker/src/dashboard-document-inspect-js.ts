@@ -12,8 +12,11 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     reconSummary=byId("ai-document-reconcile-summary"),reconRows=byId("ai-document-reconcile-rows");
   const passwordForm=byId("ai-document-password-form"),password=byId("ai-document-password"),
     fileStatus=byId("ai-document-file-status"),unlockButton=passwordForm?.querySelector("button");
+  const pick=byId("ai-document-pick"),filename=byId("ai-document-filename"),
+    openPassword=byId("ai-document-password-open"),controls=byId("ai-document-analysis-controls");
   if(!file||!consent||!button||!feedback||!results||!summary||!tables||!bank||!method||
-    !recon||!reconSummary||!reconRows||!passwordForm||!password||!fileStatus||!unlockButton)return;
+    !recon||!reconSummary||!reconRows||!passwordForm||!password||!fileStatus||!unlockButton||
+    !pick||!filename||!openPassword||!controls)return;
   const labels={bank_statement:"Extracto bancario",card_statement:"Extracto de tarjeta de crédito",
     investment_statement:"Estado de inversiones",non_financial:"No parece un documento financiero",
     unknown:"Documento no identificado"};
@@ -26,9 +29,26 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     needs_type:"Cargo por clasificar",possible_transfer:"Posible transferencia propia",
     repeated_in_file:"Se parece a otra fila del documento",needs_correction:"Fila para corregir"};
   const maxBytes=4000000;
+  const analysisAvailable=controls.dataset.analysisAvailable==="true";
   let readyFile=null,pdfTask=null,analysisTask=null,selection=0;
+  pick.disabled=false;
+  pick.addEventListener("click",()=>file.click());
+  function announce(element,message,error=false){
+    element.textContent=message;
+    element.toggleAttribute("data-error",error);
+  }
+  function setPasswordOpen(open){
+    passwordForm.hidden=!open;
+    openPassword.setAttribute("aria-expanded",String(open));
+  }
+  openPassword.addEventListener("click",()=>{
+    setPasswordOpen(passwordForm.hidden);
+    if(!passwordForm.hidden)password.focus();
+    else password.value="";
+  });
   function updateButton(){
-    button.disabled=Boolean(analysisTask)||!consent.checked||!readyFile;
+    controls.hidden=!analysisAvailable||!readyFile;
+    button.disabled=controls.hidden||Boolean(analysisTask)||!consent.checked;
   }
   const elt=(tag,cls,txt)=>{
     const el=document.createElement(tag);
@@ -42,7 +62,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     recon.hidden=true;reconRows.replaceChildren();reconSummary.textContent="";
     analysisTask?.abort();
     analysisTask=null;
-    feedback.textContent=readyFile?"Revisa y autoriza el análisis del documento.":"Ningún archivo ha sido enviado.";
+    announce(feedback,readyFile&&!analysisAvailable?"El análisis con Qwen está desactivado en este entorno.":"");
     updateButton();
   }
   consent.addEventListener("change",reset);
@@ -55,33 +75,49 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   function preparePdf(item,pass){
     const current=selection;
     unlockButton.disabled=true;
-    fileStatus.textContent=pass?"Desbloqueando el PDF en este dispositivo…":"Verificando el PDF…";
+    openPassword.disabled=true;
+    readyFile=null;
+    reset();
+    announce(fileStatus,pass?"Desbloqueando PDF…":"Comprobando el PDF…");
     const done=(result)=>{
       if(current!==selection)return;
       stopPdfTask();
       unlockButton.disabled=false;
+      openPassword.disabled=false;
       switch(result.status){
         case "plain":
-        case "unlocked":
-          readyFile=result.status==="plain"?item:new File([result.bytes],"extracto.pdf",{type:"application/pdf"});
-          passwordForm.hidden=true;
-          fileStatus.textContent=result.status==="unlocked"?"PDF desbloqueado. La contraseña se usó solo en este dispositivo.":"PDF listo para analizar.";
+        case "unlocked": {
+          const unlocked=result.status==="unlocked";
+          readyFile=unlocked?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):item;
+          openPassword.hidden=unlocked;
+          setPasswordOpen(false);
+          announce(fileStatus,unlocked?"PDF desbloqueado.":pass?"Este PDF se abre sin contraseña.":"PDF listo.");
+          if(pass){
+            const next=unlocked?(analysisAvailable?consent:pick):openPassword;
+            next.focus({preventScroll:true});
+          }
           reset();
           return;
+        }
         case "password_required":
-        case "incorrect_password":
-          passwordForm.hidden=false;
-          fileStatus.textContent=result.status==="password_required"?
-            "El PDF está protegido. Escribe la contraseña con la que lo abres.":
-            "Contraseña incorrecta. Intenta de nuevo.";
+        case "incorrect_password": {
+          const incorrect=result.status==="incorrect_password";
+          openPassword.hidden=true;
+          setPasswordOpen(true);
+          announce(fileStatus,incorrect?"Contraseña incorrecta. Intenta de nuevo.":"Este PDF está protegido. Escribe su contraseña.",incorrect);
+          if(incorrect)password.focus();
           return;
+        }
         case "too_large":
-          fileStatus.textContent="El PDF supera el límite de 4 MB tras abrirse.";
-          break;
+          openPassword.hidden=true;
+          setPasswordOpen(false);
+          announce(fileStatus,"El PDF desbloqueado supera 4 MB.",true);
+          return;
         default:
-          fileStatus.textContent="No pudimos abrir este PDF. Verifica que puedes abrirlo en Archivos e inténtalo de nuevo.";
+          openPassword.hidden=false;
+          setPasswordOpen(Boolean(pass));
+          announce(fileStatus,pass?"No pudimos abrir este PDF. Revisa la clave o elige otra copia.":"No pudimos leer este PDF. Si está protegido, ingresa su contraseña.",true);
       }
-      passwordForm.hidden=true;
     };
     try{
       const worker=new Worker("/statement-pdf-worker.js");
@@ -98,39 +134,45 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     readyFile=null;
     consent.checked=false;
     password.value="";
-    passwordForm.hidden=true;
+    setPasswordOpen(false);
+    openPassword.hidden=true;
+    openPassword.disabled=false;
     unlockButton.disabled=false;
-    fileStatus.textContent="";
+    announce(fileStatus,"");
     reset();
     const item=file.files?.[0];
+    filename.textContent=item?.name||"";
+    pick.textContent=item?"Cambiar archivo":"Elegir archivo";
     if(!item)return;
-    if(item.size<1||item.size>maxBytes){fileStatus.textContent="Selecciona un archivo de máximo 4 MB.";return;}
-    if(/\.pdf$/i.test(item.name)){preparePdf(item,"");return;}
-    if(!/\.(xlsx|csv)$/i.test(item.name)){fileStatus.textContent="Selecciona PDF, Excel XLSX o CSV.";return;}
+    if(item.size<1||item.size>maxBytes){announce(fileStatus,"Selecciona un archivo de máximo 4 MB.",true);return;}
+    if(/\.pdf$/i.test(item.name)){openPassword.hidden=false;preparePdf(item,"");return;}
+    if(!/\.(xlsx|csv)$/i.test(item.name)){announce(fileStatus,"Selecciona PDF, Excel o CSV.",true);return;}
     readyFile=item;
     reset();
   });
   passwordForm.addEventListener("submit",event=>{
     event.preventDefault();
     const item=file.files?.[0];
-    if(!item||pdfTask||passwordForm.hidden||!password.value)return;
+    if(!item||!/\.pdf$/i.test(item.name)||pdfTask||passwordForm.hidden||!password.value)return;
     const pass=password.value;
     password.value="";
     preparePdf(item,pass);
   });
-  bank.addEventListener("input",()=>{document.dispatchEvent(new Event("finanzasoss:v41-invalidated"));if(!analysisTask&&results.hidden===false){
-    recon.hidden=true;reconRows.replaceChildren();reconSummary.textContent="";
-    feedback.textContent="Cambiaste el banco: vuelve a analizar para evitar coincidencias con otra entidad.";
-  }});
-  method.addEventListener("change",()=>document.dispatchEvent(new Event("finanzasoss:v41-invalidated")));
+  function updateAccount(){
+    const hadPreview=Boolean(analysisTask)||!results.hidden;
+    reset();
+    if(hadPreview)announce(feedback,"Vuelve a analizar con los datos actualizados.");
+  }
+  bank.addEventListener("input",updateAccount);
+  method.addEventListener("change",updateAccount);
   button.addEventListener("click",async()=>{
-    if(analysisTask||!consent.checked||!readyFile)return;
+    if(!analysisAvailable||analysisTask||!consent.checked||!readyFile)return;
     const item=readyFile;
     reset();
     const task=new AbortController();
     analysisTask=task;
     updateButton();
-    feedback.textContent="Convirtiendo el archivo y consultando a Qwen 3.8…";
+    announce(feedback,"Analizando el extracto…");
     try{
       const body=new FormData();body.append("file",item);body.append("consent","true");
       body.append("bankLabel",bank.value.trim());body.append("paymentMethod",method.value);
@@ -139,7 +181,14 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       });
       const payload=await r.json().catch(()=>({}));
       if(task.signal.aborted)return;
-      if(!r.ok)throw new Error(payload.error||"No fue posible inspeccionar este documento.");
+      if(!r.ok){
+        if(payload.code==="document_unreadable"&&item===file.files?.[0]&&/\.pdf$/i.test(item.name)){
+          openPassword.hidden=false;
+          setPasswordOpen(true);
+          announce(fileStatus,"Si tu PDF pide una clave al abrirlo, escríbela aquí.");
+        }
+        throw new Error(payload.error||"No fue posible analizar este documento.");
+      }
       tables.replaceChildren();
       summary.textContent=(labels[payload.documentType]||labels.unknown)+
         " · "+payload.tables.length+" tabla(s) detectada(s). "+payload.explanation;
@@ -204,10 +253,10 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         document.dispatchEvent(new CustomEvent("finanzasoss:v41-preview",{
           detail:{input:match.prepared,result:match.preview,origin:"document"}}));
       results.hidden=false;
-      feedback.textContent="Análisis y conciliación previa terminados. Ningún movimiento fue importado ni modificado.";
+      announce(feedback,"Vista previa lista. Revisa los movimientos antes de guardar.");
       results.scrollIntoView?.({behavior:"smooth",block:"nearest"});
     }catch(e){
-      if(!task.signal.aborted)feedback.textContent=e instanceof Error?e.message:"No se pudo revisar el documento.";
+      if(!task.signal.aborted)announce(feedback,e instanceof Error?e.message:"No se pudo revisar el documento.",true);
     }finally{
       if(analysisTask===task){analysisTask=null;updateButton();}
     }

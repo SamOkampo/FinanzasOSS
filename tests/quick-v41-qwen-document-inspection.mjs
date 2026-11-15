@@ -127,6 +127,20 @@ const quota=sql.prepare("SELECT owner_id,hits FROM quick_ai_daily_quotas ORDER B
 assert.deepEqual(quota.map(x=>x.hits),[1,1]);
 const disabled=await call(form(),A,base,{...env,ALLOW_AI_SUGGESTIONS:"false"});
 assert.equal(disabled.status,503,"Model must remain switchable off");
+const errorAi={...ai,async toMarkdown(){return {format:"error"};}};
+const unreadable=await call(form(true,"ficticio.pdf","%PDF-1.7 ficticio"),A,base,{...env,AI:errorAi});
+assert.equal(unreadable.status,422);
+assert.equal(unreadable.data.code,"document_unreadable");
+assert.match(unreadable.data.error,/PDF original del banco/);
+assert.deepEqual(counts(),before);
+
+const dashboard=async extra=>handleQuickRequest(new Request(base+"/dashboard"),extra,principal(A));
+const isolatedAnalysis={...env,ALLOW_AI_SUGGESTIONS:"false",ALLOW_DOCUMENT_ANALYSIS:"true"};
+assert.match(await (await dashboard(isolatedAnalysis)).text(),/data-analysis-available="true"/);
+assert.match(await (await dashboard({...isolatedAnalysis,ALLOW_DOCUMENT_ANALYSIS:"false"})).text(),
+ /data-analysis-available="false"/);
+assert.ok(DASH_HTML.indexOf('id="ai-document-pick"')<DASH_HTML.indexOf('Importar CSV manualmente'));
+assert.match(DASH_HTML,/id="ai-document-password-open"[^>]+aria-controls="ai-document-password-form"/);
 assert.match(DASH_HTML,/id="ai-document-consent"/);
 assert.match(DASH_HTML,/\/document-inspect\.js/);
 assert.match(DOCUMENT_INSPECT_JS,/\/api\/quick\/v41\/ai\/document\/inspect/);

@@ -126,10 +126,15 @@ function acceptedType(name:string,bytes:Uint8Array):{extension:string;mime:strin
  }
  throw new DocumentInspectionError("Formato inválido o contenido no coincide con PDF, XLSX o CSV.");
 }
+export function documentAnalysisAvailable(env: QuickWorkerEnv): boolean {
+ return (env.ALLOW_DOCUMENT_ANALYSIS==="true"||env.ALLOW_AI_SUGGESTIONS==="true")&&
+   typeof env.AI?.toMarkdown==="function";
+}
+
 export async function inspectFinancialDocument(
  request:Request,db:QuickD1,owner:string,env:QuickWorkerEnv
 ):Promise<Response>{
- if(!env.AI||env.ALLOW_AI_SUGGESTIONS!=="true"||typeof env.AI.toMarkdown!=="function")
+ if(!documentAnalysisAvailable(env)||!env.AI?.toMarkdown)
    return reply({error:"Análisis documental con Qwen no disponible."},503);
  if(Number(request.headers.get("content-length")||0)>MAX_BYTES+20000)
    throw new DocumentInspectionError("El documento supera 4 MB.",413);
@@ -156,12 +161,16 @@ export async function inspectFinancialDocument(
  let converted:unknown;
  try{
    converted=await env.AI.toMarkdown({name:"extracto."+extension,blob:new Blob([bytes],{type:mime})});
- }catch{return reply({error:"No se pudo extraer la estructura del documento. Intenta otro archivo."},502);}
+ }catch{return reply({code:"document_conversion_unavailable",
+   error:"La lectura del documento falló. Vuelve a intentar en unos minutos."},502);}
  const v=Array.isArray(converted)?converted[0]:converted;
  const result=v as ConversionResult|null;
  if(!result||result.format==="error"||typeof result.data!=="string"||
-   !result.data.trim()||result.data.length>MAX_MARKDOWN)
-   return reply({error:"No fue posible extraer texto o tablas legibles; verifica el documento."},422);
+   !result.data.trim())
+   return reply({code:"document_unreadable",error:extension==="pdf"
+     ?"No pudimos extraer texto de este PDF. Si es un escaneo, prueba el PDF original del banco o exporta sus movimientos en Excel o CSV."
+     :"No pudimos leer el archivo. Verifica su formato o prueba con un CSV."},422);
+ if(result.data.length>MAX_MARKDOWN)return reply({error:"El extracto tiene demasiado contenido. Prueba con un período más corto."},422);
  const scan=scanDocumentTables(result.data);
  const evidence=evidenceMarkdown(result.data,scan);
  if(evidence.length>24000)return reply({error:"Documento demasiado complejo para analizarlo de forma segura."},422);
