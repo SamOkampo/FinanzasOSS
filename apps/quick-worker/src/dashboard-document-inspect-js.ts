@@ -31,16 +31,18 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     needs_type:"Cargo por clasificar",possible_transfer:"Posible transferencia propia",
     repeated_in_file:"Se parece a otra fila del documento",needs_correction:"Fila para corregir"};
   const visionOptions=byId("ai-document-vision-options"),visionStart=byId("ai-document-vision-start"),
-    visionConsent=byId("ai-document-vision-consent"),visionStatus=byId("ai-document-vision-status"),
+    visionAuto=byId("ai-document-vision-auto"),visionCancel=byId("ai-document-vision-cancel"),visionStatus=byId("ai-document-vision-status"),
     visionFirst=byId("ai-document-vision-first"),visionResults=byId("ai-document-vision-results"),
     visionIssues=byId("ai-document-vision-issues"),visionGroups=byId("ai-document-vision-groups"),
     visionCount=byId("ai-document-vision-count"),visionBank=byId("ai-document-vision-bank"),
     visionMethod=byId("ai-document-vision-method"),visionScope=byId("ai-document-vision-scope"),visionCOP=byId("ai-document-vision-cop"),
     visionReview=byId("ai-document-vision-reconcile"),visionReviewStatus=byId("ai-document-vision-reconcile-status");
-  if(!visionOptions||!visionStart||!visionConsent||!visionStatus||!visionFirst||!visionResults||!visionIssues||
+  if(!visionOptions||!visionStart||!visionAuto||!visionCancel||!visionStatus||!visionFirst||!visionResults||!visionIssues||
     !visionGroups||!visionCount||!visionBank||!visionMethod||!visionScope||!visionCOP||!visionReview||!visionReviewStatus)return;
   const visionAvailable=visionOptions.dataset.visionAvailable==="true";
-  let visionFile=null,visionTask=null,visionReviewTask=null,visionReviewActive=false;
+  let visionFile=null,visionTask=null,visionReviewTask=null,visionReviewActive=false,allowAutomaticVision=false;
+  visionAuto.checked=false;
+  visionAuto.closest("label").hidden=!visionAvailable;
   const visionPages=new Map();
   function selectedVisionRows(){
     const scope=visionScope.value;
@@ -50,7 +52,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   }
   function updateVision(){
     visionOptions.hidden=!visionAvailable||!visionFile;
-    visionStart.disabled=visionOptions.hidden||!visionConsent.checked||Boolean(visionTask);
+    visionStart.disabled=visionOptions.hidden||Boolean(visionTask);
+    visionCancel.hidden=!visionTask;
     visionFirst.disabled=Boolean(visionTask);
     visionCount.disabled=Boolean(visionTask);
     visionCOP.closest("label").hidden=!selectedVisionRows().some(row=>!row.currency);
@@ -73,7 +76,6 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     visionTask?.abort();
     visionTask=null;
     visionFile=null;
-    visionConsent.checked=false;
     visionOptions.open=false;
     visionFirst.value="1";
     visionCount.value="1";
@@ -159,7 +161,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if([...visionScope.options].some(item=>item.value===prior))visionScope.value=prior;
   }
   async function runVision(){
-    if(visionTask||!visionFile||!visionConsent.checked)return;
+    if(visionTask||!visionFile||!visionAvailable)return;
     if(!visionFirst.reportValidity()||!visionCount.reportValidity())return;
     const first=visionFirst.valueAsNumber;
     const pages=visionCount.valueAsNumber;
@@ -173,9 +175,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     const groups=[];
     let loading=null,failed=0,incomplete=0,total=0,last=0;
     try{
-      const engine=await import("/statement-pdf-renderer.mjs?v=41.9");
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.10");
       if(task.signal.aborted)return;
-      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.9";
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.10";
       const bytes=new Uint8Array(await fileToRender.arrayBuffer());
       if(task.signal.aborted)return;
       loading=engine.getDocument({data:bytes,
@@ -209,7 +211,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
           canvas.height=0;
           source.cleanup();
         }
-        if(task.signal.aborted||!visionConsent.checked)return;
+        if(task.signal.aborted)return;
         if(!image){failed++;continue;}
         const body=new FormData();
         body.append("image",image,"pagina.jpg");
@@ -238,7 +240,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         (last<Math.min(total,20)?" Puedes continuar desde la página "+(last+1)+".":"")+
         (total>20?" La lectura visual admite las primeras 20 páginas.":""),!count||Boolean(failed||pending||incomplete));
     }catch(error){
-      if(!task.signal.aborted)announce(visionStatus,error?.message?.startsWith("Alcanzaste")?
+      if(task.signal.aborted&&visionTask===task)announce(visionStatus,"Lectura visual cancelada.");
+      else if(!task.signal.aborted)announce(visionStatus,error?.message?.startsWith("Alcanzaste")?
         error.message:"No se pudo completar la lectura visual. Revisa las páginas procesadas o vuelve a intentar.",true);
     }finally{
       if(loading&&!task.signal.aborted)await loading.destroy().catch(()=>{});
@@ -260,19 +263,9 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     }
   }
   visionStart.addEventListener("click",runVision);
-  visionConsent.addEventListener("change",()=>{
-    if(!visionConsent.checked){
-      visionTask?.abort();
-      visionTask=null;
-      announce(visionStatus,"");
-      visionPages.clear();
-      visionGroups.replaceChildren();
-      visionScope.replaceChildren();
-      visionCOP.checked=false;
-      visionResults.hidden=true;
-      resetVisionReview();
-    }
-    updateVision();
+  visionCancel.addEventListener("click",()=>{
+    visionTask?.abort();
+    announce(visionStatus,"Lectura visual cancelada.");
   });
   function reset(){
     resetVisionReview();
@@ -311,23 +304,35 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         case "unlocked": {
           const unlocked=result.status==="unlocked";
           const opened=unlocked&&result.bytes?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):unlocked?null:item;
-          readyFile=result.statement?null:opened;
+          const hasMovements=result.statement?.groups.some(group=>group.rows.length>0);
+          const useVisualFallback=visionAvailable&&opened&&!hasMovements;
+          readyFile=hasMovements?null:opened;
           visionFile=opened;
           updateVision();
           openPassword.hidden=unlocked;
           setPasswordOpen(false);
           announce(fileStatus,unlocked?"PDF desbloqueado.":pass?"Este PDF se abre sin contraseña.":"PDF listo.");
+          reset();
+          if(hasMovements)showLocalPreview(result.statement);
+          if(useVisualFallback){
+            visionOptions.open=true;
+            announce(visionStatus,result.issue==="page_limit"?
+              "El PDF supera las 20 páginas de la lectura local. Puedes usar Qwen para leer páginas concretas.":
+              "La lectura local no encontró movimientos. Puedes leer las páginas con Qwen.");
+            if(allowAutomaticVision)runVision();
+          }else if(visionAvailable&&visionFile&&(result.statement?.issues||result.statement?.totalsDiffer)){
+            visionOptions.open=true;
+          }else if(result.issue==="no_text"){
+            announce(feedback,"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
+          }else if(result.issue==="page_limit"){
+            announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
+          }
+          allowAutomaticVision=false;
           if(pass){
-            const next=unlocked?(readyFile&&analysisAvailable?consent:pick):openPassword;
+            const next=useVisualFallback?
+              (visionTask?visionCancel:visionStart):unlocked?(readyFile&&analysisAvailable?consent:pick):openPassword;
             next.focus({preventScroll:true});
           }
-          reset();
-          if(result.statement)showLocalPreview(result.statement);
-          if(result.issue==="no_text")announce(feedback,visionAvailable?
-            "Este PDF parece un escaneo. Abre «Leer páginas con Qwen».":"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
-          if(visionAvailable&&visionFile&&(result.issue==="no_text"||result.statement?.issues||result.statement?.totalsDiffer))
-            visionOptions.open=true;
-          if(result.issue==="page_limit")announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
           return;
         }
         case "password_required":
@@ -351,7 +356,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.9");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.10");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
@@ -375,6 +380,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     announce(fileStatus,"");
     reset();
     const item=file.files?.[0];
+    allowAutomaticVision=visionAvailable&&visionAuto.checked&&Boolean(item&&/\.pdf$/i.test(item.name));
+    visionAuto.checked=false;
     filename.textContent=item?.name||"";
     pick.textContent=item?"Cambiar archivo":"Elegir archivo";
     if(!item)return;

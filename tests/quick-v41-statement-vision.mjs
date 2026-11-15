@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import {runInNewContext} from "node:vm";
 import {handleQuickRequest} from "../dist/apps/quick-worker/src/index.js";
+import {DOCUMENT_INSPECT_JS} from "../dist/apps/quick-worker/src/dashboard-document-inspect-js.js";
 import {parseStatementVision,STATEMENT_VISION_PATH} from "../dist/apps/quick-worker/src/statement-vision.js";
 
 const origin="https://finanzasoss.test";
@@ -61,3 +63,91 @@ assert.equal(missingCurrency.rows[0].currency,null);
 assert.equal(missingCurrency.rows[0].amountCOP,"1234.56");
 assert.equal(missingCurrency.partial,true);
 console.log("Qwen vision: owner and consent gates, page payload, quota and uncertain fields PASSED");
+
+const fields=new Map();
+function element(){
+  const listeners=new Map();
+  return {
+    dataset:{},label:{},value:"",files:[],checked:false,hidden:false,options:[],
+    addEventListener(event,listener){listeners.set(event,listener);},
+    fire(event){return listeners.get(event)?.({preventDefault(){}});},
+    querySelector(){return element();},closest(){return this.label;},setAttribute(){},
+    replaceChildren(){this.options=[];},append(child){this.options.push(child);},
+    toggleAttribute(){},focus(){},reportValidity(){return true;},
+    get valueAsNumber(){return Number(this.value);},
+  };
+}
+const get=id=>{
+  if(!fields.has(id))fields.set(id,element());
+  return fields.get(id);
+};
+const document={
+  getElementById:get,dispatchEvent(){},
+  createElement(tag){return tag==="canvas"?{toBlob(resolve){resolve(new Blob([jpeg],{type:"image/jpeg"}));}}:element();},
+};
+const browserFile=get("ai-document-file");
+const automatic=get("ai-document-vision-auto");
+const options=get("ai-document-vision-options");
+options.dataset.visionAvailable="true";
+const uploads=[];
+let activeWorker;
+const renderer={
+  GlobalWorkerOptions:{},AnnotationMode:{DISABLE:0},
+  getDocument(){return {promise:Promise.resolve({numPages:2,async getPage(){
+    return {getViewport(){return {width:100,height:200};},render(){return {promise:Promise.resolve()};},cleanup(){}};
+  }}),async destroy(){}};},
+};
+runInNewContext(DOCUMENT_INSPECT_JS.replace(/import\("\/statement-pdf-renderer\.mjs[^"]*"\)/,"loadRenderer()"),{
+  document,File,FormData,Event,AbortController,clearTimeout,setTimeout,
+  loadRenderer:async()=>renderer,
+  Worker:class {
+    constructor(){activeWorker=this;}
+    postMessage(data){this.data=data;}
+    terminate(){}
+    reply(data){this.onmessage({data});}
+  },
+  async fetch(url,options){
+    assert.equal(url,STATEMENT_VISION_PATH);
+    assert.equal(options.body.get("consent"),"true");
+    const page=Number(options.body.get("page"));
+    uploads.push(page);
+    return {ok:true,async json(){return {page,rows:[],partial:false};}};
+  },
+});
+function choosePdf(){
+  browserFile.files=[new File(["synthetic"],"extracto.pdf",{type:"application/pdf"})];
+  browserFile.fire("change");
+}
+const waitForRender=()=>new Promise(resolve=>setImmediate(resolve));
+choosePdf();
+activeWorker.reply({status:"plain",issue:"no_text"});
+assert.equal(options.open,true);
+assert.deepEqual(uploads,[]);
+await get("ai-document-vision-start").fire("click");
+assert.deepEqual(uploads,[1]);
+
+automatic.checked=true;
+choosePdf();
+assert.equal(automatic.checked,false,"The authorization is for the selected PDF only");
+activeWorker.reply({status:"plain",statement:{title:"Extracto",groups:[{title:"Movimientos",rows:[
+  {description:"Compra local",date:"2026-10-02",direction:"debit",amount:"COP 1200",page:1},
+]}]}});
+await waitForRender();
+assert.deepEqual(uploads,[1],"A successful local read does not send an image");
+
+choosePdf();
+activeWorker.reply({status:"plain"});
+await waitForRender();
+assert.equal(options.open,true,"A PDF with text but zero detected rows also opens the fallback");
+assert.deepEqual(uploads,[1]);
+
+automatic.checked=true;
+choosePdf();
+activeWorker.reply({status:"password_required"});
+assert.deepEqual(uploads,[1],"No image is sent before the PDF is unlocked");
+get("ai-document-password").value="clave ficticia";
+get("ai-document-password-form").fire("submit");
+activeWorker.reply({status:"unlocked",bytes:new Uint8Array([1,2,3]),issue:"no_text"});
+await waitForRender();
+assert.deepEqual(uploads,[1,1],"Prior consent starts the fallback on page 1 only");
+console.log("Qwen vision UI: local first, single-click consent, automatic fallback and encrypted PDF PASSED");

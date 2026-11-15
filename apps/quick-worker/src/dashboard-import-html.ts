@@ -9,6 +9,10 @@ export const IMPORTS_HTML = `
         <h2 id="document-ai-heading">Subir extracto</h2>
         <p>PDF, Excel o CSV · Hasta 4 MB</p>
       </div>
+      <label class="ai-document-consent" for="ai-document-vision-auto" hidden>
+        <input id="ai-document-vision-auto" type="checkbox">
+        <span>Si el próximo PDF no da movimientos con la lectura local, autorizo enviar su primera página a Cloudflare para leerla con Qwen.</span>
+      </label>
       <div class="import-file-picker">
         <button id="ai-document-pick" type="button" class="solid-button" aria-describedby="ai-document-filename" disabled>Elegir archivo</button>
         <input id="ai-document-file" type="file" accept=".pdf,.xlsx,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
@@ -27,32 +31,10 @@ export const IMPORTS_HTML = `
         <p id="ai-document-local-status" class="import-file-status" role="status" aria-live="polite"></p>
         <div id="ai-document-local-groups"></div>
       </section>
-      <div id="ai-document-analysis-controls" data-analysis-available="false" hidden>
-        <div class="import-options">
-          <label for="ai-document-bank">Banco del extracto
-            <input id="ai-document-bank" type="text" maxlength="80" placeholder="Ej. Davivienda" autocomplete="off">
-          </label>
-          <label for="ai-document-method">Medio de pago
-            <select id="ai-document-method">
-              <option value="bank_transfer">Cuenta bancaria</option>
-              <option value="debit_card">Tarjeta débito vinculada</option>
-            </select>
-          </label>
-        </div>
-        <label class="ai-document-consent" for="ai-document-consent">
-          <input id="ai-document-consent" type="checkbox">
-          <span>Autorizo a Cloudflare a procesar este archivo con Qwen para preparar la vista previa.</span>
-        </label>
-        <button type="button" class="solid-button" id="ai-document-inspect" disabled>Analizar extracto</button>
-      </div>
       <details id="ai-document-vision-options" class="import-disclosure import-secondary" data-vision-available="false" hidden>
         <summary>Leer páginas con Qwen</summary>
         <div class="import-secondary-body">
-          <p>Úsalo para escaneos o cuando falten movimientos. Qwen recibe una imagen de cada página seleccionada con los datos visibles del extracto. El límite es de 5 análisis de Qwen por día y perfil, compartidos con el análisis de documentos.</p>
-          <label class="ai-document-consent" for="ai-document-vision-consent">
-            <input id="ai-document-vision-consent" type="checkbox">
-            <span>Autorizo el envío de las imágenes a Cloudflare para leerlas con Qwen.</span>
-          </label>
+          <p>Al autorizar la lectura, Cloudflare recibe una imagen de cada página seleccionada con los datos visibles del extracto. Cada página usa uno de los 5 análisis diarios por perfil.</p>
           <div class="import-options">
             <label for="ai-document-vision-first">Empezar en la página
               <input id="ai-document-vision-first" type="number" min="1" max="20" value="1" inputmode="numeric" required>
@@ -61,7 +43,8 @@ export const IMPORTS_HTML = `
               <input id="ai-document-vision-count" type="number" min="1" max="5" value="1" inputmode="numeric" required>
             </label>
           </div>
-          <button id="ai-document-vision-start" type="button" class="solid-button" disabled>Leer con Qwen</button>
+          <button id="ai-document-vision-start" type="button" class="solid-button" disabled>Autorizar y leer con Qwen</button>
+          <button id="ai-document-vision-cancel" type="button" class="soft-button" hidden>Cancelar lectura</button>
           <p id="ai-document-vision-status" class="import-file-status" role="status" aria-live="polite"></p>
           <section id="ai-document-vision-results" aria-labelledby="ai-document-vision-title" hidden>
             <h3 id="ai-document-vision-title">Movimientos propuestos por Qwen</h3>
@@ -91,6 +74,24 @@ export const IMPORTS_HTML = `
           </section>
         </div>
       </details>
+      <div id="ai-document-analysis-controls" data-analysis-available="false" hidden>
+        <div class="import-options">
+          <label for="ai-document-bank">Banco del extracto
+            <input id="ai-document-bank" type="text" maxlength="80" placeholder="Ej. Davivienda" autocomplete="off">
+          </label>
+          <label for="ai-document-method">Medio de pago
+            <select id="ai-document-method">
+              <option value="bank_transfer">Cuenta bancaria</option>
+              <option value="debit_card">Tarjeta débito vinculada</option>
+            </select>
+          </label>
+        </div>
+        <label class="ai-document-consent" for="ai-document-consent">
+          <input id="ai-document-consent" type="checkbox">
+          <span>Autorizo a Cloudflare a procesar este archivo con Qwen para preparar la vista previa.</span>
+        </label>
+        <button type="button" class="solid-button" id="ai-document-inspect" disabled>Analizar extracto</button>
+      </div>
       <p id="ai-document-feedback" class="import-file-status" role="status" aria-live="polite"></p>
       <section id="ai-document-results" class="ai-document-results" aria-labelledby="ai-document-results-title" hidden>
         <h3 id="ai-document-results-title">Vista previa</h3>
