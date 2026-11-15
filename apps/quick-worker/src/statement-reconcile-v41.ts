@@ -1,3 +1,4 @@
+import { reviewDigestV41 } from "./statement-review-digest-v41.js";
 // FinanzasOSS v41.1 - read-only statement reconciliation explorer.
 // Does NOT create/mutate any movements or attempt bank synchronization.
 import { previewMappedImport, type ImportColumnMapping, type RawImportRow } from "../../../packages/import-engine/src/mapping-preview.js";
@@ -123,7 +124,8 @@ export async function previewReconciliationV41(db:QuickD1,owner:string,raw:unkno
       existing:candidates,repeatOfIndex:repeated?previous:null,
       requiresReview:true,autoImport:false});
   }
-  return response({version:"v41.1-preview",stored:false,persistenceAllowed:false,
+  const reviewDigest=await reviewDigestV41(input.bankLabel,input.paymentMethod,review);
+  return response({version:"v41.1-preview",reviewDigest,stored:false,persistenceAllowed:false,
     canCommit:false,requiresConfirmation:true,connectionStatus:"not_connected",
     bankLabel:input.bankLabel,currency:"COP",count:review.length,counts,rows:review,
     notice:"Revisión informativa: abonos no son ingresos confirmados, transferencias no son gastos confirmados. No se guardó ni cambió ningún movimiento."});
