@@ -20,6 +20,7 @@ import { changeMovement, MovementInputError } from "./movement-edit.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
 import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
+import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
 import { categoryReview, setCategory, qwenSuggestions, CategoryInputError } from "./categorization.js";
 import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation, runScheduledCategoryBackfill, answerCategoryQuestion } from "./category-automation.js";
 import { excelExport } from "./excel-export.js";
@@ -406,9 +407,10 @@ export async function handleQuickRequest(
   }
   try {
     if (request.method === "POST") {
-      if (env.ALLOW_WRITES !== "true") return respond({ error: "Staging writes disabled" }, 503);
+      if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview")
+        return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
-      const data = await parseJson(request, pathname.startsWith("/api/quick/import/")?85000:4096);
+      const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname==="/api/quick/v41/reconcile/preview")?85000:4096);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") return await categorizedResponse(
         await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
@@ -423,6 +425,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
       if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
+      if (pathname === "/api/quick/v41/reconcile/preview") return await previewReconciliationV41(env.DB,owner,data);
       if (pathname === "/api/quick/import/commit") return await categorizedResponse(
         await commitStatement(env.DB, owner, data),env.DB,owner,env,null);
       if (pathname === "/api/quick/categories/set") return await setCategory(env.DB, owner, data);
@@ -477,7 +480,7 @@ export async function handleQuickRequest(
     }
     return respond({ error: "Not found" }, 404);
   } catch (error) {
-    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
+    if (error instanceof InputError || error instanceof ShortcutInputError || error instanceof ResetInputError || error instanceof PushInputError || error instanceof BudgetInputError || error instanceof BalanceInputError || error instanceof MovementInputError || error instanceof StatementInputError || error instanceof ReconcileInputError || error instanceof CategoryInputError) return respond({ error: error.message }, error.status);
     // prepareQuickEntry rejects untrusted fields: never leak DB internals
     // or the submitted financial body to logs.
     if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
