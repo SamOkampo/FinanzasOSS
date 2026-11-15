@@ -71,34 +71,37 @@ function element(){
     dataset:{},label:{},value:"",files:[],checked:false,hidden:false,options:[],
     addEventListener(event,listener){listeners.set(event,listener);},
     fire(event){return listeners.get(event)?.({preventDefault(){}});},
-    querySelector(){return element();},closest(){return this.label;},setAttribute(){},
-    replaceChildren(){this.options=[];},append(child){this.options.push(child);},
+    querySelector(){return element();},closest(){return this.label;},setAttribute(){},removeAttribute(){},
+    replaceChildren(){this.options=[];this.value="";},append(child){this.options.push(child);if(child.value&&!this.value)this.value=child.value;},
     toggleAttribute(){},focus(){},reportValidity(){return true;},
     get valueAsNumber(){return Number(this.value);},
+    get selectedOptions(){return this.options.filter(option=>option.value===this.value);},
   };
 }
 const get=id=>{
   if(!fields.has(id))fields.set(id,element());
   return fields.get(id);
 };
+const events=[];
 const document={
-  getElementById:get,dispatchEvent(){},
+  getElementById:get,dispatchEvent(event){events.push(event);},
   createElement(tag){return tag==="canvas"?{toBlob(resolve){resolve(new Blob([jpeg],{type:"image/jpeg"}));}}:element();},
 };
 const browserFile=get("ai-document-file");
 const automatic=get("ai-document-vision-auto");
 const options=get("ai-document-vision-options");
 options.dataset.visionAvailable="true";
-const uploads=[];
+const uploads=[],previews=[];
 let activeWorker;
+let quotaPage=null,pageCount=2;
 const renderer={
   GlobalWorkerOptions:{},AnnotationMode:{DISABLE:0},
-  getDocument(){return {promise:Promise.resolve({numPages:2,async getPage(){
+  getDocument(){return {promise:Promise.resolve({numPages:pageCount,async getPage(){
     return {getViewport(){return {width:100,height:200};},render(){return {promise:Promise.resolve()};},cleanup(){}};
   }}),async destroy(){}};},
 };
 runInNewContext(DOCUMENT_INSPECT_JS.replace(/import\("\/statement-pdf-renderer\.mjs[^"]*"\)/,"loadRenderer()"),{
-  document,File,FormData,Event,AbortController,clearTimeout,setTimeout,
+  document,File,FormData,Event,CustomEvent,AbortController,clearTimeout,setTimeout,
   loadRenderer:async()=>renderer,
   Worker:class {
     constructor(){activeWorker=this;}
@@ -107,11 +110,16 @@ runInNewContext(DOCUMENT_INSPECT_JS.replace(/import\("\/statement-pdf-renderer\.
     reply(data){this.onmessage({data});}
   },
   async fetch(url,options){
+    if(url==="/api/quick/v41/reconcile/preview"){
+      previews.push(JSON.parse(options.body));
+      return {ok:true,async json(){return {count:1,rows:[{index:0,status:"needs_type"}]};}};
+    }
     assert.equal(url,STATEMENT_VISION_PATH);
     assert.equal(options.body.get("consent"),"true");
     const page=Number(options.body.get("page"));
     uploads.push(page);
-    return {ok:true,async json(){return {page,rows:[],partial:false};}};
+    if(page===quotaPage)return {status:429,ok:false,async json(){return {error:"Alcanzaste el límite diario de Qwen."};}};
+    return {ok:true,async json(){return {page,rows:[{date:"2026-10-02",description:"Escaneo de prueba",currency:"COP",direction:"debit",amount:"100,00",amountCOP:"100.00"}],partial:false};}};
   },
 });
 function choosePdf(){
@@ -130,10 +138,17 @@ automatic.checked=true;
 choosePdf();
 assert.equal(automatic.checked,false,"The authorization is for the selected PDF only");
 activeWorker.reply({status:"plain",statement:{title:"Extracto",groups:[{title:"Movimientos",rows:[
-  {description:"Compra local",date:"2026-10-02",direction:"debit",amount:"COP 1200",page:1},
+  {description:"Compra local",date:"2026-10-02",direction:"debit",amount:"COP 1200",currency:"COP",amountCOP:"1200",page:1},
 ]}]}});
 await waitForRender();
 assert.deepEqual(uploads,[1],"A successful local read does not send an image");
+const bank=get("ai-document-vision-bank");
+bank.value="Banco ficticio";
+bank.fire("input");
+await get("ai-document-vision-reconcile").fire("click");
+assert.equal(previews[0].rows[0].Importe,"1200");
+assert.equal(previews[0].rows[0].Moneda,"COP");
+assert.ok(events.some(event=>event.type==="finanzasoss:v41-preview"));
 
 choosePdf();
 activeWorker.reply({status:"plain"});
@@ -149,5 +164,17 @@ get("ai-document-password").value="clave ficticia";
 get("ai-document-password-form").fire("submit");
 activeWorker.reply({status:"unlocked",bytes:new Uint8Array([1,2,3]),issue:"no_text"});
 await waitForRender();
-assert.deepEqual(uploads,[1,1],"Prior consent starts the fallback on page 1 only");
-console.log("Qwen vision UI: local first, single-click consent, automatic fallback and encrypted PDF PASSED");
+assert.deepEqual(uploads,[1,1,2],"Prior consent reads multiple pages only after unlocking");
+pageCount=7;
+quotaPage=3;
+automatic.checked=true;
+choosePdf();
+activeWorker.reply({stage:"reading"});
+assert.match(get("ai-document-file-status").textContent,/Leyendo texto/);
+activeWorker.reply({status:"plain",issue:"no_text"});
+await waitForRender();
+assert.deepEqual(uploads.slice(-3),[1,2,3],"Quota stops the current batch");
+assert.equal(get("ai-document-vision-first").value,"3");
+assert.equal(get("ai-document-vision-results").hidden,false,"Completed pages remain available");
+assert.match(get("ai-document-vision-status").textContent,/límite diario/);
+console.log("Qwen vision UI: local preview, explicit consent, multi-page fallback and recoverable quota PASSED");

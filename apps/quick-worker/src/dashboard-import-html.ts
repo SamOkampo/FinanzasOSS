@@ -11,7 +11,7 @@ export const IMPORTS_HTML = `
       </div>
       <label class="ai-document-consent" for="ai-document-vision-auto" hidden>
         <input id="ai-document-vision-auto" type="checkbox">
-        <span>Si el próximo PDF no da movimientos con la lectura local, autorizo enviar su primera página a Cloudflare para leerla con Qwen.</span>
+        <span>Si la lectura local del próximo PDF no encuentra movimientos, autorizo enviar hasta las primeras 5 páginas como imágenes a Cloudflare para que Qwen las lea.</span>
       </label>
       <div class="import-file-picker">
         <button id="ai-document-pick" type="button" class="solid-button" aria-describedby="ai-document-filename" disabled>Elegir archivo</button>
@@ -30,6 +30,8 @@ export const IMPORTS_HTML = `
         <h3 id="ai-document-local-title">Movimientos del extracto</h3>
         <p id="ai-document-local-status" class="import-file-status" role="status" aria-live="polite"></p>
         <div id="ai-document-local-groups"></div>
+        <button type="button" id="ai-document-review-local" class="soft-button" hidden>Conciliar lectura local</button>
+        <div id="ai-document-local-review-slot"></div>
       </section>
       <details id="ai-document-vision-options" class="import-disclosure import-secondary" data-vision-available="false" hidden>
         <summary>Leer páginas con Qwen</summary>
@@ -46,10 +48,21 @@ export const IMPORTS_HTML = `
           <button id="ai-document-vision-start" type="button" class="solid-button" disabled>Autorizar y leer con Qwen</button>
           <button id="ai-document-vision-cancel" type="button" class="soft-button" hidden>Cancelar lectura</button>
           <p id="ai-document-vision-status" class="import-file-status" role="status" aria-live="polite"></p>
+          <div id="ai-document-vision-progress-box" class="import-page-progress" hidden>
+            <progress id="ai-document-vision-progress" aria-label="Páginas procesadas"></progress>
+            <span id="ai-document-vision-eta"></span>
+          </div>
           <section id="ai-document-vision-results" aria-labelledby="ai-document-vision-title" hidden>
             <h3 id="ai-document-vision-title">Movimientos propuestos por Qwen</h3>
             <p id="ai-document-vision-issues" class="import-file-status"></p>
             <div id="ai-document-vision-groups"></div>
+            <button type="button" id="ai-document-review-vision" class="soft-button" hidden>Conciliar lectura con Qwen</button>
+            <div id="ai-document-vision-review-slot"></div>
+          </section>
+        </div>
+      </details>
+      <section id="ai-document-pdf-review" class="ai-document-reconcile" aria-labelledby="ai-document-pdf-review-title" hidden>
+            <h3 id="ai-document-pdf-review-title">Comparar con mis movimientos</h3>
             <div class="import-options">
               <label for="ai-document-vision-bank">Banco del extracto
                 <input id="ai-document-vision-bank" type="text" maxlength="80" autocomplete="off" placeholder="Ej. Davivienda">
@@ -58,22 +71,21 @@ export const IMPORTS_HTML = `
                 <select id="ai-document-vision-method">
                   <option value="bank_transfer">Cuenta bancaria</option>
                   <option value="debit_card">Tarjeta débito vinculada</option>
+                  <option value="credit_card">Tarjeta de crédito</option>
                 </select>
               </label>
-              <label for="ai-document-vision-scope">Páginas para conciliar
+              <label for="ai-document-vision-scope">Filas para conciliar
                 <select id="ai-document-vision-scope"></select>
               </label>
             </div>
-            <p>Coteja las filas con el PDF. Puedes conciliar extractos de cuentas bancarias en COP, hasta 50 movimientos a la vez.</p>
+            <p>Coteja las filas con el PDF. Puedes conciliar movimientos en COP, hasta 50 filas a la vez.</p>
             <label class="ai-document-consent" for="ai-document-vision-cop" hidden>
               <input id="ai-document-vision-cop" type="checkbox">
               <span>Confirmo que las filas sin moneda visible están en pesos colombianos (COP).</span>
             </label>
             <button id="ai-document-vision-reconcile" type="button" class="solid-button" disabled>Conciliar movimientos en COP</button>
             <p id="ai-document-vision-reconcile-status" class="import-file-status" role="status" aria-live="polite"></p>
-          </section>
-        </div>
-      </details>
+      </section>
       <div id="ai-document-analysis-controls" data-analysis-available="false" hidden>
         <div class="import-options">
           <label for="ai-document-bank">Banco del extracto

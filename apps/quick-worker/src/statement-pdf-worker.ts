@@ -1,6 +1,7 @@
 import createQpdf, { type QpdfInstance } from "@neslinesli93/qpdf-wasm";
 import {readHapiActivityPdf,readHapiPdf} from "./hapi-statement-reader.js";
 import {readStatementPdf} from "./statement-pdf-layout.js";
+import {normalizeCOP} from "./statement-document-bridge-v41.js";
 
 type PdfReply =
   | { status: "plain" | "password_required" | "incorrect_password" | "unreadable" | "too_large" }
@@ -79,13 +80,20 @@ if (typeof self !== "undefined") {
       result.status==="plain" ? new Uint8Array(await file.arrayBuffer()) : null;
     let layout = {preview:null} as Awaited<ReturnType<typeof readStatementPdf>>;
     if(bytes){
+      self.postMessage({stage:"reading"});
       try { layout = await readStatementPdf(bytes); } catch { /* Use the existing inspection flow. */ }
     }
+    const statement=layout.preview&&{...layout.preview,groups:layout.preview.groups.map(group=>({
+      ...group,rows:group.rows.map(row=>{
+        const currency=/\b(COP|USD|EUR)\b/i.exec(row.amount)?.[1]?.toUpperCase()??(row.amount.includes("€")?"EUR":null);
+        return {...row,currency,amountCOP:currency===null||currency==="COP"?normalizeCOP(row.amount):null};
+      }),
+    }))};
     if(layout.preview&&!layout.preview.issues&&!layout.preview.totalsDiffer&&
       !(enableVision&&result.status==="unlocked")){
-      self.postMessage({status:result.status,statement:layout.preview});
+      self.postMessage({status:result.status,statement});
     }else{
-      self.postMessage({...result,statement:layout.preview,issue:layout.issue},
+      self.postMessage({...result,statement,issue:layout.issue},
         {transfer:result.status==="unlocked"?[result.bytes.buffer]:[]});
     }
   };

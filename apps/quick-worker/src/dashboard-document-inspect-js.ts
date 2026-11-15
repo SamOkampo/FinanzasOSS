@@ -41,23 +41,53 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     !visionGroups||!visionCount||!visionBank||!visionMethod||!visionScope||!visionCOP||!visionReview||!visionReviewStatus)return;
   const visionAvailable=visionOptions.dataset.visionAvailable==="true";
   let visionFile=null,visionTask=null,visionReviewTask=null,visionReviewActive=false,allowAutomaticVision=false;
+  const reviewPanel=byId("ai-document-pdf-review"),localReviewSlot=byId("ai-document-local-review-slot"),
+    visionReviewSlot=byId("ai-document-vision-review-slot");
+  const chooseLocal=byId("ai-document-review-local"),chooseVision=byId("ai-document-review-vision");
+  const progressBox=byId("ai-document-vision-progress-box"),progress=byId("ai-document-vision-progress"),
+    eta=byId("ai-document-vision-eta");
+  let localStatement=null,reviewSource="vision";
   visionAuto.checked=false;
   visionAuto.closest("label").hidden=!visionAvailable;
   const visionPages=new Map();
   function selectedVisionRows(){
     const scope=visionScope.value;
-    if(scope==="all")return [...visionPages.values()].sort((a,b)=>a.page-b.page).flatMap(group=>group.rows);
-    const [page,start]=scope.split(":").map(Number);
-    return visionPages.get(page)?.rows.slice(start,start+50)||[];
+    const groups=reviewGroups();
+    if(scope==="all")return groups.flatMap(group=>group.rows);
+    const [key,start]=scope.split(":").map(Number);
+    const group=reviewSource==="vision"?visionPages.get(key):groups[key];
+    return group?.rows.slice(start,start+50)||[];
   }
+  function reviewGroups(){
+    return reviewSource==="local"?localStatement?.groups||[]:[...visionPages.values()].sort((a,b)=>a.page-b.page);
+  }
+  function showPdfReview(source){
+    if(reviewSource!==source)resetVisionReview();
+    reviewSource=source;
+    visionCOP.checked=false;
+    visionScope.replaceChildren();
+    const groups=reviewGroups();
+    const slot=source==="local"?localReviewSlot:visionReviewSlot;
+    slot.append(reviewPanel);
+    updateVisionScope(groups);
+    reviewPanel.hidden=!groups.some(group=>group.rows.length);
+    chooseLocal.hidden=source==="local"||!localStatement;
+    chooseVision.hidden=source==="vision"||![...visionPages.values()].some(group=>group.rows.length);
+    updateVision();
+  }
+  chooseLocal.addEventListener("click",()=>showPdfReview("local"));
+  chooseVision.addEventListener("click",()=>showPdfReview("vision"));
   function updateVision(){
     visionOptions.hidden=!visionAvailable||!visionFile;
     visionStart.disabled=visionOptions.hidden||Boolean(visionTask);
     visionCancel.hidden=!visionTask;
     visionFirst.disabled=Boolean(visionTask);
     visionCount.disabled=Boolean(visionTask);
-    visionCOP.closest("label").hidden=!selectedVisionRows().some(row=>!row.currency);
-    visionReview.disabled=Boolean(visionTask||visionReviewTask)||!visionScope.value||!visionBank.value.trim();
+    const rows=selectedVisionRows();
+    const missingCurrency=rows.some(row=>!row.currency);
+    visionCOP.closest("label").hidden=!missingCurrency;
+    visionReview.disabled=Boolean(visionTask||visionReviewTask)||!rows.length||!visionBank.value.trim()||
+      (missingCurrency&&!visionCOP.checked);
   }
   function resetVisionReview(){
     visionReviewTask?.abort();
@@ -84,6 +114,12 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     visionGroups.replaceChildren();
     visionScope.replaceChildren();
     visionResults.hidden=true;
+    reviewPanel.hidden=true;
+    chooseLocal.hidden=true;
+    chooseVision.hidden=true;
+    localStatement=null;
+    reviewSource="vision";
+    progressBox.hidden=true;
     announce(visionStatus,"");
     resetVisionReview();
   }
@@ -151,29 +187,37 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       visionScope.append(item);
     };
     const total=groups.reduce((sum,group)=>sum+group.rows.length,0);
-    if(total>0&&total<=50)option("all","Todas las páginas leídas ("+total+" filas)");
-    for(const group of groups){
+    if(total>0&&total<=50&&(reviewSource==="vision"||groups.filter(group=>group.rows.length).length===1))
+      option("all","Todas las filas ("+total+")");
+    for(const [index,group] of groups.entries()){
       for(let start=0;start<group.rows.length;start+=50){
         const end=Math.min(start+50,group.rows.length);
-        option(group.page+":"+start,"Página "+group.page+(group.rows.length>50?" · filas "+(start+1)+" a "+end:""));
+        option((reviewSource==="vision"?group.page:index)+":"+start,group.title+(group.rows.length>50?" · filas "+(start+1)+" a "+end:""));
       }
     }
     if([...visionScope.options].some(item=>item.value===prior))visionScope.value=prior;
   }
-  async function runVision(){
+  async function runVision({automatic=false}={}){
     if(visionTask||!visionFile||!visionAvailable)return;
     if(!visionFirst.reportValidity()||!visionCount.reportValidity())return;
     const first=visionFirst.valueAsNumber;
-    const pages=visionCount.valueAsNumber;
+    const pages=automatic?5:visionCount.valueAsNumber;
     visionCOP.checked=false;
     resetVisionReview();
     const fileToRender=visionFile;
     const task=new AbortController();
+    const timer=setTimeout(()=>{
+      announce(visionStatus,"La lectura visual tardó demasiado. Puedes continuar a partir de la página pendiente.",true);
+      task.abort("timeout");
+    },150000);
     visionTask=task;
     updateVision();
-    announce(visionStatus,"Preparando las páginas…");
+    announce(visionStatus,"Preparando las páginas para Qwen…");
+    progressBox.hidden=false;
+    progress.removeAttribute("value");
+    eta.textContent="";
     const groups=[];
-    let loading=null,failed=0,incomplete=0,total=0,last=0;
+    let loading=null,failed=0,incomplete=0,total=0,last=0,nextPage=first;
     try{
       const engine=await import("/statement-pdf-renderer.mjs?v=41.10");
       if(task.signal.aborted)return;
@@ -192,9 +236,13 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         return;
       }
       last=Math.min(total,first+pages-1,20);
+      progress.max=last-first+1;
+      progress.value=0;
+      const started=Date.now();
       for(let page=first;page<=last;page++){
         if(task.signal.aborted)return;
-        announce(visionStatus,"Leyendo página "+page+" de "+total+"…");
+        nextPage=page;
+        announce(visionStatus,"Preparando página "+page+" de "+total+"…");
         const source=await pdf.getPage(page);
         const original=source.getViewport({scale:1});
         const viewport=source.getViewport({scale:1700/Math.max(original.width,original.height)});
@@ -212,44 +260,57 @@ export const DOCUMENT_INSPECT_JS = String.raw`
           source.cleanup();
         }
         if(task.signal.aborted)return;
-        if(!image){failed++;continue;}
+        if(!image||image.size>1500000){failed++;progress.value=page-first+1;nextPage=page+1;continue;}
         const body=new FormData();
         body.append("image",image,"pagina.jpg");
         body.append("page",String(page));
         body.append("consent","true");
+        announce(visionStatus,"Qwen está leyendo la página "+page+" de "+total+"…");
         const response=await fetch("/api/quick/v41/ai/document/vision",{
           method:"POST",credentials:"same-origin",cache:"no-store",body,signal:task.signal,
         });
         const result=await response.json().catch(()=>({}));
-        if(!response.ok){
-          if(response.status===429)throw Error(result.error||"Alcanzaste el límite diario de Qwen.");
-          failed++;
-          continue;
+        if(task.signal.aborted)return;
+        if(response.status===429)throw Error(result.error||"Alcanzaste el límite diario de Qwen.");
+        if(!response.ok||result.page!==page||!Array.isArray(result.rows))failed++;
+        else{
+          if(result.partial)incomplete++;
+          groups.push({page,title:"Página "+page,rows:result.rows.map(row=>({...row,page}))});
         }
-        if(result.page!==page||!Array.isArray(result.rows)){failed++;continue;}
-        if(result.partial)incomplete++;
-        groups.push({page,title:"Página "+page,rows:result.rows.map(row=>({...row,page}))});
+        progress.value=page-first+1;
+        nextPage=page+1;
+        if(groups.length>=2&&last>page){
+          const seconds=Math.max(1,Math.round((Date.now()-started)/1000/progress.value*(last-page)));
+          eta.textContent=seconds<60?"Quedan unos "+seconds+" s":"Quedan unos "+Math.ceil(seconds/60)+" min";
+        }
       }
       const count=groups.reduce((sum,group)=>sum+group.rows.length,0);
       const pending=last-first+1-groups.length;
       const status=count?
-        "Qwen propuso "+count+" movimientos. Coteja cada fila con el PDF.":
+        "Listo para revisar. Qwen propuso "+count+" movimientos. Coteja cada fila con el PDF.":
         "Qwen no encontró movimientos legibles en las páginas procesadas.";
       announce(visionStatus,status+(pending?" Quedaron "+pending+" páginas sin lectura.":"")+
         (incomplete?" "+incomplete+" páginas tienen lectura parcial.":"")+
         (last<Math.min(total,20)?" Puedes continuar desde la página "+(last+1)+".":"")+
         (total>20?" La lectura visual admite las primeras 20 páginas.":""),!count||Boolean(failed||pending||incomplete));
     }catch(error){
-      if(task.signal.aborted&&visionTask===task)announce(visionStatus,"Lectura visual cancelada.");
+      if(task.signal.aborted&&visionTask===task)announce(visionStatus,
+        task.signal.reason==="timeout"?"La lectura visual tardó demasiado. Puedes continuar a partir de la página pendiente.":"Lectura visual cancelada.",true);
       else if(!task.signal.aborted)announce(visionStatus,error?.message?.startsWith("Alcanzaste")?
-        error.message:"No se pudo completar la lectura visual. Revisa las páginas procesadas o vuelve a intentar.",true);
+        error.message+" Conservamos las páginas que ya se leyeron. Puedes continuar desde la página "+nextPage+" después de que se renueve la cuota.":
+        "No se pudo completar la lectura visual. Revisa las páginas procesadas o vuelve a intentar.",true);
     }finally{
+      clearTimeout(timer);
       if(loading&&!task.signal.aborted)await loading.destroy().catch(()=>{});
       if(visionTask===task){
         visionTask=null;
+        progressBox.hidden=true;
+        const firstUnread=Array.from({length:Math.max(0,last-first+1)},(_,i)=>first+i)
+          .find(page=>!groups.some(group=>group.page===page)&&!visionPages.has(page));
+        const resume=firstUnread??nextPage;
+        if(resume<=Math.min(total,20))visionFirst.value=String(resume);
         for(const group of groups)visionPages.set(group.page,group);
         const accumulated=[...visionPages.values()].sort((a,b)=>a.page-b.page);
-        updateVisionScope(accumulated);
         visionGroups.replaceChildren();
         visionResults.hidden=!accumulated.some(group=>group.rows.length);
         if(!visionResults.hidden){
@@ -257,12 +318,13 @@ export const DOCUMENT_INSPECT_JS = String.raw`
             issues:accumulated.flatMap(group=>group.rows).filter(row=>!row.date||!row.description||
               !row.amount||!row.direction||!row.currency||(row.currency==="COP"&&!row.amountCOP)).length},
             visionGroups,visionIssues,visionResults);
+          showPdfReview("vision");
         }
         updateVision();
       }
     }
   }
-  visionStart.addEventListener("click",runVision);
+  visionStart.addEventListener("click",()=>runVision());
   visionCancel.addEventListener("click",()=>{
     visionTask?.abort();
     announce(visionStatus,"Lectura visual cancelada.");
@@ -293,7 +355,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     localResults.hidden=true;
     localGroups.replaceChildren();
     reset();
-    announce(fileStatus,pass?"Desbloqueando PDF…":"Comprobando el PDF…");
+    announce(fileStatus,pass?"Desbloqueando PDF…":"Abriendo PDF…");
     const done=(result)=>{
       if(current!==selection)return;
       stopPdfTask();
@@ -304,25 +366,32 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         case "unlocked": {
           const unlocked=result.status==="unlocked";
           const opened=unlocked&&result.bytes?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):unlocked?null:item;
-          const hasMovements=result.statement?.groups.some(group=>group.rows.length>0);
-          const useVisualFallback=visionAvailable&&opened&&!hasMovements;
+          const hasMovements=Boolean(result.statement?.groups.some(group=>group.rows.length>0));
+          const usable=result.statement?.groups.some(group=>group.rows.some(row=>row.date&&row.description&&row.direction&&
+            (row.amountCOP||row.currency&&row.currency!=="COP"&&row.amount)));
+          const useVisualFallback=visionAvailable&&opened&&!usable&&result.issue!=="page_limit";
           readyFile=hasMovements?null:opened;
           visionFile=opened;
           updateVision();
           openPassword.hidden=unlocked;
           setPasswordOpen(false);
-          announce(fileStatus,unlocked?"PDF desbloqueado.":pass?"Este PDF se abre sin contraseña.":"PDF listo.");
+          announce(fileStatus,hasMovements?"Lectura local lista para revisar.":unlocked?"PDF desbloqueado.":"PDF abierto.");
           reset();
-          if(hasMovements)showLocalPreview(result.statement);
+          if(hasMovements){
+            localStatement=result.statement;
+            showLocalPreview(localStatement);
+            showPdfReview("local");
+          }
           if(useVisualFallback){
             visionOptions.open=true;
-            announce(visionStatus,result.issue==="page_limit"?
-              "El PDF supera las 20 páginas de la lectura local. Puedes usar Qwen para leer páginas concretas.":
-              "La lectura local no encontró movimientos. Puedes leer las páginas con Qwen.");
-            if(allowAutomaticVision)runVision();
+            announce(visionStatus,"La lectura local no encontró movimientos completos. Puedes leer las páginas con Qwen.");
+            if(allowAutomaticVision)runVision({automatic:true});
+          }else if(visionAvailable&&visionFile&&result.issue==="page_limit"){
+            visionOptions.open=true;
+            announce(visionStatus,"El PDF supera las 20 páginas de la lectura local. Elige qué páginas leer con Qwen.");
           }else if(visionAvailable&&visionFile&&(result.statement?.issues||result.statement?.totalsDiffer)){
             visionOptions.open=true;
-          }else if(result.issue==="no_text"){
+          }else if(!visionAvailable&&!hasMovements&&result.issue!=="page_limit"){
             announce(feedback,"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
           }else if(result.issue==="page_limit"){
             announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
@@ -356,10 +425,16 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.10");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.22");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
-      worker.onmessage=event=>done(event.data);
+      worker.onmessage=event=>{
+        if(event.data.stage==="reading"){
+          if(current===selection)announce(fileStatus,"Leyendo texto del PDF en tu dispositivo…");
+          return;
+        }
+        done(event.data);
+      };
       worker.onerror=()=>done({status:"unreadable"});
       worker.postMessage({file:item,password:pass,enableVision:visionAvailable});
     }catch{done({status:"unreadable"});}
@@ -476,7 +551,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       if(!response.ok||!Array.isArray(preview.rows))
         throw Error(preview.error||"No se pudo preparar la conciliación.");
       visionReviewActive=true;
-      showReconciliation(preview,input,"lectura visual · "+source);
+      showReconciliation(preview,input,(reviewSource==="local"?"lectura local · ":"lectura visual · ")+source);
       announce(visionReviewStatus,"Conciliación lista. Revisa los movimientos antes de confirmar.");
     }catch(error){
       if(!task.signal.aborted)announce(visionReviewStatus,error.message||"No se pudo preparar la conciliación.",true);

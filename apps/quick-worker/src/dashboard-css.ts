@@ -44,4 +44,13 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .import-local-rows{list-style:none;padding:0;margin:0}
 .import-local-rows li{display:grid;gap:4px;padding:9px 0;border-bottom:1px solid var(--rule);overflow-wrap:anywhere;font-size:.88rem}
 .import-local-rows li span{color:var(--ink-muted);font-variant-numeric:tabular-nums}
+.dashboard-loading{margin-bottom:12px;padding:10px 14px;display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:12px;color:var(--ink)}
+.dashboard-loading-spinner{flex:none;width:16px;height:16px;border-radius:50%;border:2px solid var(--rule);
+  border-top-color:currentColor;animation:dashboard-loading-spin .8s linear infinite}
+@keyframes dashboard-loading-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.dashboard-loading-spinner{animation:none}}
+.studio.no-motion .dashboard-loading-spinner{animation:none}
+.import-page-progress{margin:10px 0;display:grid;gap:6px;font-size:.85rem}
+.import-page-progress progress{width:100%;accent-color:var(--copper)}
 `;

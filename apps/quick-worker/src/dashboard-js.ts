@@ -477,24 +477,33 @@ export const DASH_JS = `(() => {
     $("error").hidden = false;
     $("error").textContent = error instanceof Error ? error.message : "No fue posible cargar los movimientos.";
   }
+  const loadState = $("dashboard-loading"), content = $("contenido");
+  const loadingText = $("dashboard-loading-text");
+  function showLoadState(message) {
+    if(loadState) loadState.hidden = !message;
+    if(loadingText) loadingText.textContent = message;
+    content?.setAttribute("aria-busy", String(Boolean(message)));
+  }
   async function loadHistory(reset = false) {
     if (state.loadingHistory) return;
     state.loadingHistory = true;
     const button = $("load-more");
     button.disabled = true;
-    if (reset) { state.page = 0; state.history = []; state.hasMore = false; }
+    const page = reset ? 0 : state.page;
     try {
-      const data = await fetchJson("/api/quick/dashboard/movements?page=" + state.page);
-      state.history.push(...data.entries);
+      const data = await fetchJson("/api/quick/dashboard/movements?page=" + page);
+      state.history = reset ? data.entries : [...state.history,...data.entries];
       state.hasMore = Boolean(data.hasMore);
-      state.page += 1;
+      state.page = page + 1;
       showHistory();
     } catch (error) { fail(error); }
     finally { state.loadingHistory = false; button.disabled = false; }
   }
   async function refresh() {
+    if($("reload").disabled)return;
     $("error").hidden = true;
     $("reload").disabled = true;
+    showLoadState("Cargando tu resumen…");
     try {
       const overview = await fetchJson("/api/quick/dashboard/overview");
       if (overview.truncated) throw new Error("El historial supera el máximo de agregaciones permitido. Contacta soporte para una consulta completa.");
@@ -508,9 +517,10 @@ export const DASH_JS = `(() => {
         $("testing").textContent = "ENTORNO STAGING · " + overview.excludedUsd +
           " movimiento(s) en USD excluidos de totales COP; disponibles en el historial.";
       }
+      showLoadState("Cargando tus movimientos…");
       await loadHistory(true);
     } catch (error) { fail(error); }
-    finally { $("reload").disabled = false; }
+    finally { showLoadState(""); $("reload").disabled = false; }
   }
   document.querySelectorAll(".period-btn").forEach((button) => {
     button.addEventListener("click", () => {
