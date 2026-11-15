@@ -32,7 +32,7 @@ import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation,
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
-import { answerAssistant, assistantInbox, confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
+import { ASSISTANT_DAILY_CRON, answerAssistant, assistantInbox, confirmAssistant, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { HAPI_JS } from "./dashboard-hapi.js";
 import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit, listHapiPortfolio, saveHapiPortfolio } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -454,7 +454,10 @@ export async function handleQuickRequest(
     if (pathname === "/device-qa.js") return respondAsset(DEVICE_QA_JS, "application/javascript");
     if (pathname === "/dashboard.webmanifest") return respondAsset(DASH_MANIFEST, "application/manifest+json");
     if (pathname === "/dashboard-icon.svg") return respondAsset(DASH_ICON_SVG, "image/svg+xml");
-    if (pathname === "/dashboard-sw.js") return respondAsset(DASH_SW, "application/javascript");
+    if (pathname === "/dashboard-sw.js") {
+      const script=env.ALLOW_V41_ASSISTANT==="true"?DASH_SW.replace('/dashboard#plan','/dashboard#qwen'):DASH_SW;
+      return respondAsset(script,"application/javascript");
+    }
     // An iOS home-screen icon requires PNG, not only a manifest SVG.
     return new Response(Uint8Array.from(atob(DASH_ICON_180_PNG_BASE64), (c) => c.charCodeAt(0)), {
       headers: { "Content-Type": "image/png", "Cache-Control": "no-store, private",
@@ -575,13 +578,13 @@ export default {
     return handleQuickRequest(request, env, ctx);
   },
   async scheduled(controller:{cron:string;scheduledTime:number}, env:QuickWorkerEnv) {
+    if(controller.cron===ASSISTANT_DAILY_CRON){
+      if(env.ALLOW_V41_ASSISTANT==="true")await sendAssistantDigest(env,controller.scheduledTime);
+      return;
+    }
     if(controller.cron!=="30 1 * * *") return;
     try{await runScheduledCategoryBackfill(env);}
     catch{ /* Existing financial reminders must still execute after any AI failure. */ }
-    if(env.ALLOW_V41_ASSISTANT==="true"){
-      try{await sendAssistantDigest(env,controller.scheduledTime);}
-      catch{ /* A digest failure does not interrupt other reminders. */ }
-    }
     // Daily expense reminders are separate from Qwen's opt-in category questions.
     if(env.ALLOW_DAILY_REMINDERS==="true")
       await sendDailyReminders(env,controller.scheduledTime);

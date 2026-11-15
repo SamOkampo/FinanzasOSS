@@ -112,7 +112,8 @@ export const ASSISTANT_JS = String.raw`
       notices.checked=data.notifications;
       ai.closest("label").hidden=!data.aiAvailable;
       byId("notice-hint").textContent=data.pushConfigured?
-        "Los avisos llegan a dispositivos con notificaciones activas.":"Los avisos de este entorno todavía no están habilitados.";
+        "Revisamos tus pendientes a las "+data.noticeSchedule+" (Bogotá). Los avisos llegan a dispositivos con notificaciones activas.":
+        "Los avisos de este entorno todavía no están habilitados.";
       notices.disabled=false;
       for(const item of data.items){
         const button=document.createElement("button");

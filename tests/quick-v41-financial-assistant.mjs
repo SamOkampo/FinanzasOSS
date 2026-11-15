@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import {readFileSync,readdirSync} from "node:fs";
 import {DatabaseSync} from "node:sqlite";
-import {handleQuickRequest} from "../dist/apps/quick-worker/src/index.js";
-import {sendAssistantDigest} from "../dist/apps/quick-worker/src/financial-assistant.js";
+import worker,{handleQuickRequest} from "../dist/apps/quick-worker/src/index.js";
+import {ASSISTANT_DAILY_CRON,sendAssistantDigest} from "../dist/apps/quick-worker/src/financial-assistant.js";
 import {ASSISTANT_JS} from "../dist/apps/quick-worker/src/dashboard-assistant.js";
 
 const sql=new DatabaseSync(":memory:");
@@ -34,7 +34,8 @@ seed(A,ids[0],"Wompi SAS");seed(B,ids[1],"Perfil B");seed(A,ids[2],"Cafetería D
 const original=sql.prepare("SELECT * FROM quick_shortcut_expenses ORDER BY id").all();
 let calls=0;
 const env={DB,ACCESS_AUD:"agent-qa",ALLOW_WRITES:"true",ALLOW_V41_ASSISTANT:"true",ALLOW_V41_ASSISTANT_AI:"true",
-  ALLOW_PUSH_SEND:"true",ALLOW_CATEGORY_PUSH_SEND:"true",
+  ALLOW_PUSH_SEND:"false",ALLOW_CATEGORY_PUSH_SEND:"true",ALLOW_PUSH_SUBSCRIPTIONS:"true",
+  VAPID_PUBLIC_KEY:"a".repeat(87),VAPID_PRIVATE_JWK:"test-signing-key",VAPID_SUBJECT:"mailto:qa@example.com",
   AI:{async run(model,input){calls++;assert.doesNotMatch(JSON.stringify(input),/123456789|secret@example\.com/);
     return {response:{category:"Alimentación",subcategory:"Onces"}};}},
 };
@@ -47,6 +48,8 @@ async function request(path,data,owner=A,origin="https://qa.example"){
 const answer=(id,data,owner=A)=>request("answer",{source:"accountless",id,...data},owner);
 const confirm=(id,data)=>request("confirm",{source:"accountless",id,confirmed:true,rememberMerchant:false,...data});
 assert.equal((await request("inbox",null,null)).status,401);
+assert.equal((await request("inbox")).body.pushConfigured,true);
+assert.equal((await request("inbox")).body.noticeSchedule,"20:00");
 assert.equal((await request("answer",{answer:"food"},A,"https://wrong.example")).status,403);
 assert.deepEqual((await request("inbox")).body.items.map(x=>x.id).sort(),[ids[0],ids[2],ids[3]].sort());
 assert.equal((await answer(ids[0],{answer:"food"},B)).status,404);
@@ -86,5 +89,16 @@ await sendAssistantDigest(env,Date.parse("2026-11-10T01:30:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-10T01:30:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-11T01:30:00Z"),dispatch);
 assert.deepEqual(delivered,[A],"No repeat on the same day or with the same unresolved set");
+await sendAssistantDigest({...env,ALLOW_CATEGORY_PUSH_SEND:"false"},Date.parse("2026-11-12T01:00:00Z"),dispatch);
+assert.deepEqual(delivered,[A]);
+assert.equal(sql.prepare("SELECT last_day FROM quick_agent_notice_settings WHERE owner_id=?").get(A).last_day,"2026-11-10");
+await worker.scheduled({cron:ASSISTANT_DAILY_CRON,scheduledTime:Date.parse("2026-11-12T01:00:00Z")},env);
+assert.equal(sql.prepare("SELECT last_day FROM quick_agent_notice_settings WHERE owner_id=?").get(A).last_day,"2026-11-11");
+const session={access:{aud:env.ACCESS_AUD,async getIdentity(){return {user_uuid:A};}}};
+const serviceWorker=new Request("https://qa.example/dashboard-sw.js");
+const script=await (await handleQuickRequest(serviceWorker,env,session)).text();
+assert.match(script,/data:\{url:"\/dashboard#qwen"\}/);
+const fallback=await (await handleQuickRequest(serviceWorker,{...env,ALLOW_V41_ASSISTANT:"false"},session)).text();
+assert.match(fallback,/data:\{url:"\/dashboard#plan"\}/);
 new Function(ASSISTANT_JS);
 console.log("v41 financial assistant: persisted drafts, explicit confirmation, tenant isolation, exact merchant learning and daily digest PASSED");

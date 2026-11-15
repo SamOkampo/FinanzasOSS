@@ -44,6 +44,9 @@ function enabled(env:QuickWorkerEnv):boolean{
     /^[a-zA-Z0-9_-]{86,88}$/.test(env.VAPID_PUBLIC_KEY??"")&&
     Boolean(env.VAPID_PRIVATE_JWK)&&Boolean(env.VAPID_SUBJECT?.startsWith("mailto:"));
 }
+export function categoryPushConfigured(env:QuickWorkerEnv):boolean{
+  return enabled(env)&&env.ALLOW_CATEGORY_PUSH_SEND==="true";
+}
 export function pushConfig(env:QuickWorkerEnv):Response{
   return reply({enabled:enabled(env),publicKey:enabled(env)?env.VAPID_PUBLIC_KEY:null,
     dailyTime:"20:30",timezone:"America/Bogota",deliveryEnabled:env.ALLOW_PUSH_SEND==="true"});
@@ -169,7 +172,7 @@ export async function sendOwnerTestPush(
 export async function sendOwnerCategoryQuestion(
  db:QuickD1,owner:string,env:QuickWorkerEnv,now=Date.now(),send:typeof fetch=fetch,
 ):Promise<{accepted:number;configured:boolean}>{
- if(!enabled(env)||env.ALLOW_CATEGORY_PUSH_SEND!=="true")return {accepted:0,configured:false};
+ if(!categoryPushConfigured(env))return {accepted:0,configured:false};
  const devices=await db.prepare(
   "SELECT endpoint_hash,endpoint FROM quick_push_subscriptions WHERE owner_id=? ORDER BY created_at DESC LIMIT 5"
  ).bind(owner).all<{endpoint_hash:string;endpoint:string}>();

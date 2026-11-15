@@ -2,7 +2,11 @@ import type { QuickD1, QuickWorkerEnv } from "./index.js";
 import { PRECISE_TAXONOMY, CategoryInputError } from "./categorization.js";
 import { QWEN_MODEL, QWEN_OPTIONS, qwenJson } from "./ai-model.js";
 import { merchantKey, protectCategoryText } from "./category-automation.js";
-import { sendOwnerCategoryQuestion } from "./push.js";
+import { categoryPushConfigured, sendOwnerCategoryQuestion } from "./push.js";
+
+// Cron Trigger times are UTC. Bogotá is UTC−05:00 year-round.
+export const ASSISTANT_DAILY_CRON = "0 1 * * *";
+const ASSISTANT_LOCAL_TIME = "20:00";
 
 type Source = "manual" | "accountless";
 type Purchase = {source:Source; id:string; merchant:string|null; kind:string; version:string;
@@ -70,7 +74,8 @@ export async function assistantInbox(db:QuickD1,owner:string,env:QuickWorkerEnv)
         draft:draft?{category:draft.category,subcategory:draft.subcategory,token:draft.token}:null};
     }),
     taxonomy:PRECISE_TAXONOMY, notifications:pref?.enabled===1,
-    pushConfigured:env.ALLOW_CATEGORY_PUSH_SEND==="true"&&env.ALLOW_PUSH_SEND==="true"&&Boolean(env.VAPID_PRIVATE_JWK),
+    pushConfigured:categoryPushConfigured(env),
+    noticeSchedule:ASSISTANT_LOCAL_TIME,
     aiAvailable:env.ALLOW_V41_ASSISTANT_AI==="true"&&Boolean(env.AI),
   });
 }
@@ -170,7 +175,7 @@ export async function setAssistantNotices(db:QuickD1,owner:string,raw:unknown):P
   return reply({enabled:data.enabled});
 }
 export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sendOwnerCategoryQuestion):Promise<void> {
-  if(env.ALLOW_CATEGORY_PUSH_SEND!=="true"||env.ALLOW_PUSH_SEND!=="true"||env.ALLOW_WRITES!=="true")return;
+  if(!categoryPushConfigured(env))return;
   const ownerRows=await env.DB.prepare("SELECT owner_id,last_fingerprint FROM quick_agent_notice_settings s WHERE enabled=1 "+
     "AND EXISTS(SELECT 1 FROM quick_push_subscriptions p WHERE p.owner_id=s.owner_id) "+
     "ORDER BY COALESCE(last_day,''),owner_id LIMIT 10").all<{owner_id:string;last_fingerprint:string|null}>();
