@@ -59,5 +59,26 @@ assert.equal((await req("deposits",null,B)).data.items.length,0);
 assert.deepEqual(sql.prepare("SELECT * FROM quick_statement_review_decisions").all(),original);
 for(const table of ["quick_manual_entries","quick_shortcut_expenses","quick_statement_credits","quick_income_entries"])
   assert.equal(sql.prepare("SELECT count(*) AS n FROM "+table).get().n,0);
+const positions=[
+  {symbol:"vt",quantity:"0.123456789012",marketValueUsd:"93.11"},
+  {symbol:"QQQM",quantity:"1.500000",marketValueUsd:"200.50"},
+];
+const snapshot={asOf:"2026-10-13",cashUsd:"-1.70",positions,confirmed:true};
+assert.equal((await req("portfolio",{...snapshot,confirmed:false})).status,422);
+assert.equal((await req("portfolio",{...snapshot,positions:[positions[0],{...positions[0],symbol:"VT"}]})).status,422);
+assert.equal((await req("portfolio",{...snapshot,positions:[{...positions[0],quantity:"0.0000000000001"}]})).status,422);
+const cut=await req("portfolio",snapshot);
+assert.equal(cut.status,201);
+assert.equal(cut.data.cashMinor,"-170");
+assert.equal(cut.data.marketValueMinor,"29361");
+assert.equal(cut.data.totalMinor,"29191");
+assert.equal(cut.data.positions[0].quantity,"1.5");
+assert.equal(cut.data.positions[1].quantity,"0.123456789012");
+assert.equal((await req("portfolio",{...snapshot,positions:[...positions].reverse()})).data.id,cut.data.id);
+assert.equal((await req("portfolio",{...snapshot,cashUsd:"1.70"})).status,409);
+await req("portfolio",{...snapshot,asOf:"2026-10-12",cashUsd:"0",positions:[]});
+assert.equal((await req("portfolio")).data.latest.id,cut.data.id);
+assert.deepEqual((await req("portfolio")).data.history.map(x=>x.asOf),["2026-10-13","2026-10-12"]);
+assert.equal((await req("portfolio",null,B)).data.latest,null);
 new Function(HAPI_JS);
 console.log("v41 Hapi: isolated manual COP/USD transfers, explicit confirmations, exact FX, unique source and receipt, no ledger writes PASSED");

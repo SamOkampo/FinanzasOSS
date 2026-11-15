@@ -110,3 +110,53 @@ export async function confirmHapiCredit(db:QuickD1,owner:string,raw:unknown):Pro
     return response(dto(latest));
   return response({error:"El aporte ya fue confirmado o esta referencia de Hapi pertenece a otro aporte."},409);
 }
+
+type Position = {symbol:string;quantity:string;marketValueMinor:string};
+type Snapshot = {id:string;as_of:string;cash_minor:number;positions_json:string};
+const SNAPSHOT_FIELDS="id,as_of,cash_minor,positions_json";
+async function portfolioHistory(db:QuickD1,owner:string) {
+  return (await db.prepare("SELECT "+SNAPSHOT_FIELDS+" FROM quick_hapi_portfolio_snapshots "+
+    "WHERE owner_id=? ORDER BY as_of DESC LIMIT 12").bind(owner).all<Snapshot>()).results;
+}
+function snapshotDto(snapshot:Snapshot) {
+  const positions=JSON.parse(snapshot.positions_json) as Position[];
+  const marketValue=positions.reduce((total,position)=>total+Number(position.marketValueMinor),0);
+  return {id:snapshot.id,asOf:snapshot.as_of,cashMinor:String(snapshot.cash_minor),positions,
+    marketValueMinor:String(marketValue),totalMinor:String(snapshot.cash_minor+marketValue)};
+}
+export async function listHapiPortfolio(db:QuickD1,owner:string):Promise<Response>{
+  const history=(await portfolioHistory(db,owner)).map(snapshotDto);
+  return response({provider:"hapi",currency:"USD",connection:"manual",latest:history[0]??null,
+    history:history.map(({asOf,cashMinor,marketValueMinor,totalMinor})=>({asOf,cashMinor,marketValueMinor,totalMinor}))});
+}
+export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
+  const data=input(raw,["asOf","cashUsd","positions","confirmed"]);
+  const asOf=date(data.asOf);
+  const cashText=text(data.cashUsd,"el efectivo neto en USD",20);
+  const cashMinor=cashText.startsWith("-")?-minor(cashText.slice(1),100000000000,true):minor(cashText,100000000000,true);
+  if(!Array.isArray(data.positions)||data.positions.length>60)return bad("Registra hasta 60 posiciones.");
+  const symbols=new Set<string>();
+  const positions=data.positions.map(raw=>{
+    if(!raw||typeof raw!=="object"||Array.isArray(raw)||Object.keys(raw).some(key=>!["symbol","quantity","marketValueUsd"].includes(key)))
+      return bad("Formato de posición inválido.");
+    const symbol=text(raw.symbol,"el símbolo del activo",16).toUpperCase();
+    const quantity=text(raw.quantity,"la cantidad del activo",28);
+    if(!/^[A-Z0-9][A-Z0-9./-]{0,15}$/.test(symbol)||symbols.has(symbol))
+      return bad("Verifica los símbolos. Cada activo debe aparecer una vez.");
+    if(!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,12})?$/.test(quantity)||!/[1-9]/.test(quantity))
+      return bad("Indica una cantidad positiva, con hasta 12 decimales.");
+    symbols.add(symbol);
+    return {symbol,quantity:quantity.includes(".")?quantity.replace(/0+$/,"").replace(/\.$/,""):quantity,
+      marketValueMinor:String(minor(raw.marketValueUsd,100000000000,true))};
+  });
+  positions.sort((a,b)=>a.symbol.localeCompare(b.symbol,"en"));
+  const encoded=JSON.stringify(positions);
+  const saved=await db.prepare("INSERT INTO quick_hapi_portfolio_snapshots(id,owner_id,as_of,cash_minor,positions_json) "+
+    "VALUES(?,?,?,?,?) ON CONFLICT(owner_id,as_of) DO NOTHING RETURNING "+SNAPSHOT_FIELDS)
+    .bind(crypto.randomUUID(),owner,asOf,cashMinor,encoded).first<Snapshot>();
+  if(saved)return response(snapshotDto(saved),201);
+  const prior=await db.prepare("SELECT "+SNAPSHOT_FIELDS+" FROM quick_hapi_portfolio_snapshots WHERE owner_id=? AND as_of=?")
+    .bind(owner,asOf).first<Snapshot>();
+  if(prior&&prior.cash_minor===cashMinor&&prior.positions_json===encoded)return response(snapshotDto(prior));
+  return response({error:"Ya registraste un corte distinto para esta fecha."},409);
+}
