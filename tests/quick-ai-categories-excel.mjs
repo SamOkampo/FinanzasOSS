@@ -28,7 +28,7 @@ for(const [id,owner,concept,minor,day] of [
 let calls=0,externalContent="";
 const env={DB:db,ACCESS_AUD:"test-two-users",ALLOW_WRITES:"true",
  ALLOW_AI_SUGGESTIONS:"true",AI:{async run(model,data){
-  assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");calls++;
+  assert.equal(model,"@cf/qwen/qwen3.8-27b");calls++;
   externalContent=JSON.stringify(data);return {response:'{"suggestions":[{"index":0,"category":"Pagos y transferencias","subcategory":"Pagos a terceros"}]}'};}
  }};
 const base="https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
