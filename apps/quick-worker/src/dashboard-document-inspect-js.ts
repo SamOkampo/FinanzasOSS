@@ -30,6 +30,32 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   const statuses={possible_match:"Posible coincidencia",needs_purpose:"Abono sin finalidad confirmada",
     needs_type:"Cargo por clasificar",possible_transfer:"Posible transferencia propia",
     repeated_in_file:"Se parece a otra fila del documento",needs_correction:"Fila para corregir"};
+  const visionOptions=byId("ai-document-vision-options"),visionStart=byId("ai-document-vision-start"),
+    visionConsent=byId("ai-document-vision-consent"),visionStatus=byId("ai-document-vision-status"),
+    visionFirst=byId("ai-document-vision-first"),visionResults=byId("ai-document-vision-results"),
+    visionIssues=byId("ai-document-vision-issues"),visionGroups=byId("ai-document-vision-groups");
+  if(!visionOptions||!visionStart||!visionConsent||!visionStatus||!visionFirst||!visionResults||!visionIssues||!visionGroups)return;
+  const visionAvailable=visionOptions?.dataset.visionAvailable==="true";
+  let visionFile=null,visionTask=null;
+  const visionPages=new Map();
+  function updateVision(){
+    visionOptions.hidden=!visionAvailable||!visionFile;
+    visionStart.disabled=visionOptions.hidden||!visionConsent.checked||Boolean(visionTask);
+    visionFirst.disabled=Boolean(visionTask);
+  }
+  function resetVision(){
+    visionTask?.abort();
+    visionTask=null;
+    visionFile=null;
+    visionConsent.checked=false;
+    visionOptions.open=false;
+    visionFirst.value="1";
+    visionPages.clear();
+    visionGroups.replaceChildren();
+    visionResults.hidden=true;
+    announce(visionStatus,"");
+    updateVision();
+  }
   const maxBytes=4000000;
   const analysisAvailable=controls.dataset.analysisAvailable==="true";
   let readyFile=null,pdfTask=null,analysisTask=null,selection=0;
@@ -58,8 +84,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if(txt!==undefined)el.textContent=txt;
     return el;
   };
-  function showLocalPreview(statement){
-    localTitle.textContent=statement.title;
+  function showLocalPreview(statement,target=localGroups,status=localStatus,section=localResults){
+    if(section===localResults)localTitle.textContent=statement.title;
     let count=0;
     for(const {title,rows} of statement.groups){
       if(!rows.length)continue;
@@ -70,21 +96,134 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       const list=elt("ul","import-local-rows");
       for(const row of rows){
         const item=elt("li");
-        item.append(elt("strong","",row.description));
+        item.append(elt("strong","",row.description||"Descripción por verificar"));
         const direction=row.direction==="credit"?"Abono":row.direction==="debit"?"Cargo":"Tipo por revisar";
-        item.append(elt("span","",row.date.split("-").reverse().join("/")+" · "+
-          direction+" · "+row.amount+" · Pág. "+row.page));
+        item.append(elt("span","",(row.date?row.date.split("-").reverse().join("/"):"Fecha por verificar")+" · "+
+          direction+" · "+(row.amount||"Importe por verificar")+" · Pág. "+row.page));
         list.append(item);
       }
       group.append(list);
-      localGroups.append(group);
+      target.append(group);
     }
     const period=statement.period?" · "+statement.period:"";
     const note=statement.totalsDiffer?" Los totales leídos difieren del resumen del banco.":"";
     const issues=statement.issues?" Hay "+statement.issues+" fila(s) que requieren revisión en el PDF.":"";
-    announce(localStatus,count+" movimientos leídos"+period+"."+note+issues,Boolean(note||issues));
-    localResults.hidden=false;
+    announce(status,section===localResults?count+" movimientos leídos"+period+"."+note+issues:issues.trim(),Boolean(note||issues));
+    section.hidden=false;
   }
+  async function runVision(){
+    if(visionTask||!visionFile||!visionConsent.checked)return;
+    if(!visionFirst.reportValidity())return;
+    const first=visionFirst.valueAsNumber;
+    if(!Number.isInteger(first)||first<1||first>20){
+      announce(visionStatus,"Elige una página entre 1 y 20.",true);
+      return;
+    }
+    const fileToRender=visionFile;
+    const task=new AbortController();
+    visionTask=task;
+    updateVision();
+    announce(visionStatus,"Preparando las páginas…");
+    const groups=[];
+    let loading=null,failed=0,incomplete=0,total=0,last=0;
+    try{
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.7");
+      if(task.signal.aborted)return;
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.7";
+      const bytes=new Uint8Array(await fileToRender.arrayBuffer());
+      if(task.signal.aborted)return;
+      loading=engine.getDocument({data:bytes,
+        useWasm:false,useWorkerFetch:false,disableFontFace:true,useSystemFonts:true,enableXfa:false,
+        isEvalSupported:false,maxImageSize:20000000,canvasMaxAreaInBytes:24000000,verbosity:0});
+      task.signal.addEventListener("abort",()=>{loading.destroy().catch(()=>{});},{once:true});
+      const pdf=await loading.promise;
+      if(task.signal.aborted)return;
+      total=pdf.numPages;
+      if(first>total){
+        announce(visionStatus,"El PDF tiene "+total+" páginas. Elige una página que exista.",true);
+        return;
+      }
+      last=Math.min(total,first+4,20);
+      for(let page=first;page<=last;page++){
+        if(task.signal.aborted)return;
+        announce(visionStatus,"Leyendo página "+page+" de "+total+"…");
+        const source=await pdf.getPage(page);
+        const original=source.getViewport({scale:1});
+        const viewport=source.getViewport({scale:1700/Math.max(original.width,original.height)});
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.ceil(viewport.width);
+        canvas.height=Math.ceil(viewport.height);
+        let image;
+        try{
+          await source.render({canvas,viewport,background:"white",
+            annotationMode:engine.AnnotationMode.DISABLE}).promise;
+          image=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.86));
+        }finally{
+          canvas.width=0;
+          canvas.height=0;
+          source.cleanup();
+        }
+        if(task.signal.aborted||!visionConsent.checked)return;
+        if(!image){failed++;continue;}
+        const body=new FormData();
+        body.append("image",image,"pagina.jpg");
+        body.append("page",String(page));
+        body.append("consent","true");
+        const response=await fetch("/api/quick/v41/ai/document/vision",{
+          method:"POST",credentials:"same-origin",cache:"no-store",body,signal:task.signal,
+        });
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok){
+          if(response.status===429)throw Error(result.error||"Alcanzaste el límite diario de Qwen.");
+          failed++;
+          continue;
+        }
+        if(result.partial)incomplete++;
+        const rows=result.rows.map(row=>({...row,page:result.page,
+          amount:row.amount?[row.amount,row.currency].filter(Boolean).join(" "):null}));
+        groups.push({page,title:"Página "+page,rows});
+      }
+      const count=groups.reduce((sum,group)=>sum+group.rows.length,0);
+      const pending=last-first+1-groups.length;
+      const status=count?
+        "Qwen propuso "+count+" movimientos. Coteja cada fila con el PDF.":
+        "Qwen no encontró movimientos legibles en las páginas procesadas.";
+      announce(visionStatus,status+(pending?" Quedaron "+pending+" páginas sin lectura.":"")+
+        (incomplete?" "+incomplete+" páginas tienen lectura parcial.":"")+
+        (last<Math.min(total,20)?" Puedes continuar desde la página "+(last+1)+".":"")+
+        (total>20?" La lectura visual admite las primeras 20 páginas.":""),!count||Boolean(failed||pending||incomplete));
+    }catch(error){
+      if(!task.signal.aborted)announce(visionStatus,error?.message?.startsWith("Alcanzaste")?
+        error.message:"No se pudo completar la lectura visual. Revisa las páginas procesadas o vuelve a intentar.",true);
+    }finally{
+      if(loading&&!task.signal.aborted)await loading.destroy().catch(()=>{});
+      if(visionTask===task){
+        visionTask=null;
+        for(const group of groups)visionPages.set(group.page,group);
+        const accumulated=[...visionPages.values()].sort((a,b)=>a.page-b.page);
+        visionGroups.replaceChildren();
+        visionResults.hidden=!accumulated.some(group=>group.rows.length);
+        if(!visionResults.hidden){
+          showLocalPreview({groups:accumulated,
+            issues:accumulated.flatMap(group=>group.rows).filter(row=>!row.date||!row.description||!row.amount||!row.direction).length},
+            visionGroups,visionIssues,visionResults);
+        }
+        updateVision();
+      }
+    }
+  }
+  visionStart.addEventListener("click",runVision);
+  visionConsent.addEventListener("change",()=>{
+    if(!visionConsent.checked){
+      visionTask?.abort();
+      visionTask=null;
+      announce(visionStatus,"");
+      visionPages.clear();
+      visionGroups.replaceChildren();
+      visionResults.hidden=true;
+    }
+    updateVision();
+  });
   function reset(){
     document.dispatchEvent(new Event("finanzasoss:v41-invalidated"));
     results.hidden=true;tables.replaceChildren();summary.textContent="";
@@ -107,6 +246,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     unlockButton.disabled=true;
     openPassword.disabled=true;
     readyFile=null;
+    resetVision();
     reset();
     announce(fileStatus,pass?"Desbloqueando PDF…":"Comprobando el PDF…");
     const done=(result)=>{
@@ -118,8 +258,10 @@ export const DOCUMENT_INSPECT_JS = String.raw`
         case "plain":
         case "unlocked": {
           const unlocked=result.status==="unlocked";
-          readyFile=result.statement?null:
-            unlocked?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):item;
+          const opened=unlocked&&result.bytes?new File([result.bytes],"extracto.pdf",{type:"application/pdf"}):unlocked?null:item;
+          readyFile=result.statement?null:opened;
+          visionFile=opened;
+          updateVision();
           openPassword.hidden=unlocked;
           setPasswordOpen(false);
           announce(fileStatus,unlocked?"PDF desbloqueado.":pass?"Este PDF se abre sin contraseña.":"PDF listo.");
@@ -129,7 +271,8 @@ export const DOCUMENT_INSPECT_JS = String.raw`
           }
           reset();
           if(result.statement)showLocalPreview(result.statement);
-          if(result.issue==="no_text")announce(feedback,"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
+          if(result.issue==="no_text")announce(feedback,visionAvailable?
+            "Este PDF parece un escaneo. Abre «Leer páginas con Qwen».":"Este PDF parece un escaneo. Prueba el PDF digital del banco o su archivo Excel/CSV.",true);
           if(result.issue==="page_limit")announce(feedback,"La lectura local admite hasta 20 páginas. Puedes analizar el archivo o elegir un período más corto.");
           return;
         }
@@ -154,7 +297,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
       }
     };
     try{
-      const worker=new Worker("/statement-pdf-worker.js?v=41.6");
+      const worker=new Worker("/statement-pdf-worker.js?v=41.7");
       const timer=setTimeout(()=>done({status:"unreadable"}),20000);
       pdfTask={worker,timer};
       worker.onmessage=event=>done(event.data);
@@ -165,6 +308,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
   file.addEventListener("change",()=>{
     selection++;
     stopPdfTask();
+    resetVision();
     readyFile=null;
     consent.checked=false;
     password.value="";

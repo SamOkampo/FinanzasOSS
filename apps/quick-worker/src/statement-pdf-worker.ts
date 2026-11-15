@@ -72,7 +72,11 @@ if (typeof self !== "undefined") {
     if(bytes){
       try { layout = await readStatementPdf(bytes); } catch { /* Use the existing inspection flow. */ }
     }
-    if(layout.preview)self.postMessage({status:result.status,statement:layout.preview});
-    else self.postMessage({...result,issue:layout.issue}, {transfer:result.status==="unlocked"?[result.bytes.buffer]:[]});
+    if(layout.preview&&!layout.preview.issues&&!layout.preview.totalsDiffer){
+      self.postMessage({status:result.status,statement:layout.preview});
+    }else{
+      self.postMessage({...result,statement:layout.preview,issue:layout.issue},
+        {transfer:result.status==="unlocked"?[result.bytes.buffer]:[]});
+    }
   };
 }

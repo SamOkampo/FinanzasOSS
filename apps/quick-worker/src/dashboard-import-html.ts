@@ -45,6 +45,26 @@ export const IMPORTS_HTML = `
         </label>
         <button type="button" class="solid-button" id="ai-document-inspect" disabled>Analizar extracto</button>
       </div>
+      <details id="ai-document-vision-options" class="import-disclosure import-secondary" data-vision-available="false" hidden>
+        <summary>Leer páginas con Qwen</summary>
+        <div class="import-secondary-body">
+          <p>Úsalo para escaneos o cuando falten movimientos. Qwen recibe una imagen de cada página procesada, con los datos visibles del extracto. Se leen hasta 5 páginas por vez y cada página cuenta como un análisis.</p>
+          <label class="ai-document-consent" for="ai-document-vision-consent">
+            <input id="ai-document-vision-consent" type="checkbox">
+            <span>Autorizo el envío de las imágenes a Cloudflare para leerlas con Qwen.</span>
+          </label>
+          <label for="ai-document-vision-first">Empezar en la página
+            <input id="ai-document-vision-first" type="number" min="1" max="20" value="1" inputmode="numeric">
+          </label>
+          <button id="ai-document-vision-start" type="button" class="solid-button" disabled>Leer con Qwen</button>
+          <p id="ai-document-vision-status" class="import-file-status" role="status" aria-live="polite"></p>
+          <section id="ai-document-vision-results" aria-labelledby="ai-document-vision-title" hidden>
+            <h3 id="ai-document-vision-title">Movimientos propuestos por Qwen</h3>
+            <p id="ai-document-vision-issues" class="import-file-status"></p>
+            <div id="ai-document-vision-groups"></div>
+          </section>
+        </div>
+      </details>
       <p id="ai-document-feedback" class="import-file-status" role="status" aria-live="polite"></p>
       <section id="ai-document-results" class="ai-document-results" aria-labelledby="ai-document-results-title" hidden>
         <h3 id="ai-document-results-title">Vista previa</h3>

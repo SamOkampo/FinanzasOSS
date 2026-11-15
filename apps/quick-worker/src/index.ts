@@ -1,3 +1,4 @@
+import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js";
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
@@ -13,7 +14,7 @@ import { BUDGET_JS } from "./dashboard-budgets-js.js";
 import { MOVEMENT_EDITOR_JS } from "./dashboard-movement-editor-js.js";
 import { IMPORT_JS } from "./dashboard-import-js.js";
 import { DOCUMENT_INSPECT_JS } from "./dashboard-document-inspect-js.js";
-import { STATEMENT_PDF_WORKER_JS, STATEMENT_PDF_WASM_BASE64 } from "../.generated/statement-pdf-worker-asset.js";
+import { STATEMENT_PDF_WORKER_JS, STATEMENT_PDF_WASM_BASE64, PDFJS_RENDERER_JS, PDFJS_WORKER_JS } from "../.generated/statement-pdf-worker-asset.js";
 import { REVIEW_CONFIRM_JS } from "./dashboard-review-confirm-v41-js.js";
 import { DASH_MANIFEST, DASH_ICON_SVG, DASH_ICON_180_PNG_BASE64, DASH_SW } from "./dashboard-assets.js";
 import { dashboardOverview, dashboardMovements } from "./dashboard-data.js";
@@ -61,8 +62,11 @@ export interface QuickWorkerEnv {
   readonly VAPID_SUBJECT?: string;
   readonly ALLOW_AI_SUGGESTIONS?: string;
   readonly ALLOW_DOCUMENT_ANALYSIS?: string;
+  readonly ALLOW_STATEMENT_VISION?: string;
   readonly AI?: {
-    run(model:string,input:{messages:{role:string;content:string}[];
+    run(model:string,input:{messages:{role:string;content:string|Array<
+      {type:"text";text:string}|{type:"image_url";image_url:{url:string}}
+    >}[];
       max_tokens?:number;max_completion_tokens?:number;
       reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean}):Promise<unknown>;
     toMarkdown?(document:{name:string;blob:Blob}):Promise<unknown>;
@@ -343,7 +347,7 @@ export async function handleQuickRequest(
   const isUiPath = new Set([
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
-    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
+    "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/statement-pdf-renderer.mjs", "/statement-pdf-render-worker.mjs", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -396,9 +400,11 @@ export async function handleQuickRequest(
     if (pathname === "/quick.css") return respondAsset(QUICK_CSS, "text/css");
     if (pathname === "/quick.js") return respondAsset(QUICK_JS, "application/javascript");
     if (pathname === "/dashboard") {
-      return respondAsset(documentAnalysisAvailable(env)
-        ? DASH_HTML.replace('data-analysis-available="false"', 'data-analysis-available="true"')
-        : DASH_HTML, "text/html");
+      const html=DASH_HTML.replace('data-analysis-available="false"',
+        'data-analysis-available="'+String(documentAnalysisAvailable(env))+'"')
+        .replace('data-vision-available="false"',
+          'data-vision-available="'+String(env.ALLOW_STATEMENT_VISION==="true"&&Boolean(env.AI))+'"');
+      return respondAsset(html,"text/html");
     }
     if (pathname === "/dashboard.css") return respondAsset(DASH_CSS, "text/css");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
@@ -419,6 +425,10 @@ export async function handleQuickRequest(
         "default-src 'none'; script-src 'wasm-unsafe-eval'; connect-src " + engineUrl.href);
       return worker;
     }
+    if(pathname==="/statement-pdf-renderer.mjs")
+      return respondAsset(PDFJS_RENDERER_JS,"application/javascript");
+    if(pathname==="/statement-pdf-render-worker.mjs")
+      return respondAsset(PDFJS_WORKER_JS,"application/javascript");
     if (pathname === "/statement-pdf-engine.wasm") {
       return new Response(Uint8Array.from(atob(STATEMENT_PDF_WASM_BASE64), c=>c.charCodeAt(0)), {
         headers: {"Content-Type":"application/wasm","Cache-Control":"no-store, private",
@@ -439,9 +449,10 @@ export async function handleQuickRequest(
   try {
     if (request.method === "POST") {
       if (env.ALLOW_WRITES !== "true" && pathname !== "/api/quick/v41/reconcile/preview" &&
-          pathname !== "/api/quick/v41/ai/document/inspect")
+          pathname !== "/api/quick/v41/ai/document/inspect" && pathname !== STATEMENT_VISION_PATH)
         return respond({ error: "Staging writes disabled" }, 503);
       requireSameOrigin(request);
+      if(pathname===STATEMENT_VISION_PATH)return await inspectStatementPage(request,env.DB,owner,env);
       if(pathname==="/api/quick/v41/ai/document/inspect")
         return await inspectFinancialDocument(request,env.DB,owner,env);
       const data = await parseJson(request, (pathname.startsWith("/api/quick/import/")||pathname.startsWith("/api/quick/v41/reconcile/"))?85000:4096);
