@@ -3,7 +3,7 @@ import { PRECISE_TAXONOMY, CategoryInputError } from "./categorization.js";
 import { QWEN_MODEL, QWEN_OPTIONS, qwenJson } from "./ai-model.js";
 import { merchantKey, protectCategoryText } from "./category-automation.js";
 import { categoryPushConfigured, sendOwnerCategoryQuestion } from "./push.js";
-import { ALERT_RULES, creditSchedule, defaultAlertRules, localDay, markAlertsNotified, openOperationalAlerts, readAlertRules,
+import { acknowledgeOperationalAlert, ALERT_RULES, creditSchedule, defaultAlertRules, localDay, markAlertsNotified, openOperationalAlerts, readAlertRules,
   reconciliationNotificationRules, saveCreditDue, snoozeOperationalAlert } from "./assistant-alerts.js";
 
 // Cron Trigger times are UTC. Bogotá is UTC−05:00 year-round.
@@ -34,7 +34,9 @@ const autoJoin = "LEFT JOIN quick_auto_categories a ON a.owner_id=e.owner_id AND
 const fields = "e.id,e.merchant,e.kind,e.occurred_at,c.category,a.question,"+version+" AS version ";
 const queueSql = (source:Source) => "SELECT '"+source+"' AS source,"+fields+"FROM "+tableFor(source)+" e "+
   manualJoin+autoJoin+"WHERE e.owner_id=? AND e.deleted_at IS NULL AND e.kind='purchase' AND c.movement_id IS NULL "+
-  "AND (a.movement_id IS NULL OR a.needs_review=1)";
+  "AND (a.movement_id IS NULL OR a.needs_review=1) AND NOT EXISTS (SELECT 1 FROM quick_agent_alert_state dismissed "+
+  "WHERE dismissed.owner_id=e.owner_id AND dismissed.alert_key='category:"+source+":'||e.id "+
+  "AND dismissed.fingerprint=CAST(e.revision AS TEXT) AND dismissed.acknowledged_at IS NOT NULL)";
 function queue(db:QuickD1,owner:string) {
   return db.prepare(queueSql("manual")+" UNION ALL "+queueSql("accountless")+" ORDER BY occurred_at DESC,id DESC LIMIT 30")
     .bind("manual","manual",owner,"accountless","accountless",owner).all<Purchase>();
@@ -237,6 +239,27 @@ export async function assistantSnooze(db:QuickD1,owner:string,raw:unknown):Promi
   return (await snoozeOperationalAlert(db,owner,data.key,Date.now()))?
     reply({snoozed:true}):reply({error:"El aviso ya no está pendiente."},404);
 }
+export async function assistantAcknowledge(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
+  const data=bodyOf(raw,["key","fingerprint"]);
+  if(typeof data.key!=="string"||!/^[a-z0-9:-]{1,100}$/i.test(data.key)||
+     typeof data.fingerprint!=="string"||!data.fingerprint||data.fingerprint.length>200)
+    return reply({error:"Aviso inválido."},422);
+  return (await acknowledgeOperationalAlert(db,owner,data.key,data.fingerprint,Date.now()))?
+    reply({acknowledged:true}):reply({error:"El aviso cambió. Actualiza los pendientes."},409);
+}
+export async function assistantDismissCategory(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
+  const data=bodyOf(raw,["source","id","confirmed"]);
+  const {source,id}=movementOf(data);
+  if(data.confirmed!==true)return reply({error:"Confirma que quieres omitir la pregunta."},422);
+  const movement=await purchase(db,owner,source,id);
+  if(!movement||movement.kind!=="purchase"||movement.category)
+    return reply({error:"La pregunta ya no está disponible."},404);
+  await db.prepare("INSERT INTO quick_agent_alert_state(owner_id,alert_key,fingerprint,acknowledged_at) VALUES(?,?,?,?) "+
+    "ON CONFLICT(owner_id,alert_key,fingerprint) DO UPDATE SET acknowledged_at="+
+    "COALESCE(quick_agent_alert_state.acknowledged_at,excluded.acknowledged_at) RETURNING alert_key")
+    .bind(owner,"category:"+source+":"+id,movement.version,new Date().toISOString()).first();
+  return reply({dismissed:true});
+}
 export async function assistantCreditDue(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
   const data=bodyOf(raw,["account","dueOn","paid","confirmed"]);
   if(typeof data.account!=="string"||!UUID.test(data.account)||typeof data.dueOn!=="string"||
@@ -266,13 +289,20 @@ export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sen
     const signature=items.map(({source,id})=>source+":"+id).sort().join("|");
     const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(signature));
     const fingerprint=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");
+    const categoryStates=items.map(({source,id,version})=>({key:"category:"+source+":"+id,fingerprint:version}));
+    const old=categoryStates.length?(await env.DB.prepare("SELECT alert_key,fingerprint FROM quick_agent_alert_state "+
+      "WHERE owner_id=? AND notified_at IS NOT NULL AND alert_key IN (SELECT value FROM json_each(?))")
+      .bind(owner,JSON.stringify(categoryStates.map(item=>item.key))).all<{alert_key:string;fingerprint:string}>()).results:[];
+    const notified=new Set(old.map(item=>JSON.stringify([item.alert_key,item.fingerprint])));
+    const newCategories=categoryStates.filter(item=>!notified.has(JSON.stringify([item.key,item.fingerprint])));
     const claimed=await env.DB.prepare("UPDATE quick_agent_notice_settings SET last_day=? "+
       "WHERE owner_id=? AND enabled=1 AND COALESCE(last_day,'')<? AND "+
       "COALESCE((SELECT delivery_hour FROM quick_agent_notice_hours WHERE owner_id=?),?)=? RETURNING owner_id")
       .bind(day,owner,day,owner,defaultNoticeHour,hour).first();
-    if(!claimed||(!alerts.length&&previous===fingerprint))continue;
-    if((alerts.length||(items.length&&previous!==fingerprint))&&!(await send(env.DB,owner,env,now)).accepted)continue;
-    await markAlertsNotified(env.DB,owner,alerts,new Date(now).toISOString());
+    if(!claimed)continue;
+    const shouldSend=alerts.length>0||newCategories.length>0&&(previous!==fingerprint||old.length>0);
+    if(shouldSend&&!(await send(env.DB,owner,env,now)).accepted)continue;
+    await markAlertsNotified(env.DB,owner,[...alerts,...newCategories],new Date(now).toISOString());
     await env.DB.prepare("UPDATE quick_agent_notice_settings SET last_fingerprint=? "+
       "WHERE owner_id=? AND last_day=? AND enabled=1 RETURNING owner_id").bind(fingerprint,owner,day).first();
   }

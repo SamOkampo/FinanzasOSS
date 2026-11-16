@@ -118,18 +118,68 @@ export async function hapiActivityCommit(db:QuickD1,owner:string,raw:unknown):Pr
  return respond({created,alreadySaved:selected.length-created});
 }
 export async function listHapiActivity(db:QuickD1,owner:string):Promise<Response>{
- const [rows,deposits]=await Promise.all([
-   db.prepare("SELECT "+columns+",CASE WHEN kind='deposit' AND EXISTS("+
+ const [rows,deposits,bankCredits]=await Promise.all([
+   db.prepare("SELECT "+columns.split(",").map(name=>"a."+name).join(",")+
+     ",dets.cost_minor,dets.dividend_id,dets.bank_credit_id,CASE WHEN kind='deposit' AND EXISTS("+
      "SELECT 1 FROM quick_hapi_deposits d WHERE d.owner_id=a.owner_id "+
      "AND upper(d.broker_ref)=COALESCE(a.broker_ref,'ACTIVITY:'||upper(a.id)) "+
      "AND d.credited_on=a.occurred_on AND d.usd_minor=a.amount_minor) THEN 1 ELSE 0 END AS linked "+
-     "FROM quick_hapi_activity a WHERE owner_id=? ORDER BY occurred_on DESC,id LIMIT 100")
-     .bind(owner).all<Stored&{linked:number}>(),
+     "FROM quick_hapi_activity a LEFT JOIN quick_hapi_activity_details dets ON dets.owner_id=a.owner_id AND dets.activity_id=a.id "+
+     "WHERE a.owner_id=? ORDER BY a.occurred_on DESC,a.id LIMIT 100")
+     .bind(owner).all<Stored&{linked:number;cost_minor:number|null;dividend_id:string|null;bank_credit_id:string|null}>(),
    db.prepare("SELECT id,bank_label,debited_on,cop_minor FROM quick_hapi_deposits WHERE owner_id=? "+
      "AND usd_minor IS NULL ORDER BY debited_on DESC,id LIMIT 100").bind(owner)
      .all<{id:string;bank_label:string;debited_on:string;cop_minor:number}>(),
+   db.prepare("SELECT id,bank_label,occurred_on,amount_minor FROM quick_statement_review_decisions r "+
+     "WHERE owner_id=? AND action='own_transfer' AND direction='credit' "+
+     "AND lower(trim(counterparty_label)) IN ('hapi','hapi (bróker)','hapi (broker)') "+
+     "AND NOT EXISTS(SELECT 1 FROM quick_hapi_activity_details d WHERE d.owner_id=r.owner_id AND d.bank_credit_id=r.id) "+
+     "ORDER BY occurred_on DESC,id LIMIT 100").bind(owner)
+     .all<{id:string;bank_label:string;occurred_on:string;amount_minor:number}>(),
  ]);
- return respond({items:rows.results.map(row=>({id:row.id,...storedRow(row),linkedDeposit:row.linked===1})),pending:deposits.results});
+ return respond({items:rows.results.map(row=>({id:row.id,...storedRow(row),linkedDeposit:row.linked===1,
+   ...(row.cost_minor===null?{}:{costMinor:String(row.cost_minor),realizedMinor:String(row.amount_minor-row.cost_minor)}),
+   dividendId:row.dividend_id,bankCreditId:row.bank_credit_id})),pending:deposits.results,bankCredits:bankCredits.results});
+}
+
+export async function saveHapiActivityDetails(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
+ const data=raw as {activityId?:unknown;costUsd?:unknown;dividendId?:unknown;bankCreditId?:unknown;confirmed?:unknown}|null;
+ if(!data||data.confirmed!==true||typeof data.activityId!=="string"||!hashPattern.test(data.activityId)||
+   Object.keys(data).some(key=>!["activityId","costUsd","dividendId","bankCreditId","confirmed"].includes(key))||
+   [data.costUsd,data.dividendId,data.bankCreditId].filter(x=>x!==undefined).length!==1)
+  return respond({error:"Confirma el detalle que quieres registrar."},422);
+ const row=await readStored(db,owner,data.activityId);
+ if(!row)return respond({error:"Actividad no disponible."},404);
+ let cost:number|null=null, dividend:string|null=null, credit:string|null=null;
+ if(data.costUsd!==undefined){
+   if(row.kind!=="sell"||typeof data.costUsd!=="string"||!/^(?:0|[1-9]\d{0,9})\.\d{2}$/.test(data.costUsd)||
+      Number(data.costUsd)>1000000000)return respond({error:"Indica el costo documentado de esta venta en USD con dos decimales."},422);
+   cost=amount(data.costUsd);
+ }else if(data.dividendId!==undefined){
+   if(row.kind!=="reinvestment"||typeof data.dividendId!=="string"||!hashPattern.test(data.dividendId))
+     return respond({error:"Selecciona el dividendo de esta reinversión."},422);
+   const candidate=await readStored(db,owner,data.dividendId);
+   if(!candidate||candidate.kind!=="dividend"||!row.symbol||candidate.symbol!==row.symbol||
+      candidate.occurred_on>row.occurred_on||candidate.amount_minor<row.amount_minor)
+     return respond({error:"El dividendo no coincide con esta reinversión."},409);
+   dividend=candidate.id;
+ }else{
+   if(row.kind!=="withdrawal"||!validText(data.bankCreditId,100))return respond({error:"Selecciona el abono de este retiro."},422);
+   const candidate=await db.prepare("SELECT id FROM quick_statement_review_decisions WHERE owner_id=? AND id=? "+
+     "AND action='own_transfer' AND direction='credit' AND occurred_on>=? "+
+     "AND lower(trim(counterparty_label)) IN ('hapi','hapi (bróker)','hapi (broker)')")
+     .bind(owner,data.bankCreditId,row.occurred_on).first<{id:string}>();
+   if(!candidate)return respond({error:"El abono no corresponde a una transferencia propia desde Hapi."},409);
+   credit=candidate.id;
+ }
+ const saved=await db.prepare("INSERT OR IGNORE INTO quick_hapi_activity_details(owner_id,activity_id,cost_minor,dividend_id,bank_credit_id,updated_at) "+
+   "VALUES(?,?,?,?,?,?) RETURNING activity_id").bind(owner,row.id,cost,dividend,credit,new Date().toISOString()).first();
+ if(saved)return respond({saved:true});
+ const prior=await db.prepare("SELECT cost_minor,dividend_id,bank_credit_id FROM quick_hapi_activity_details WHERE owner_id=? AND activity_id=?")
+   .bind(owner,row.id).first<{cost_minor:number|null;dividend_id:string|null;bank_credit_id:string|null}>();
+ if(prior&&prior.cost_minor===cost&&prior.dividend_id===dividend&&prior.bank_credit_id===credit)
+   return respond({saved:true,replayed:true});
+ return respond({error:"Ya hay un detalle registrado o el movimiento seleccionado está vinculado."},409);
 }
 
 export async function hapiPurchasesByAsset(db:QuickD1,owner:string,start:string,end:string){

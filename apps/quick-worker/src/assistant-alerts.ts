@@ -99,15 +99,26 @@ export async function operationalAlerts(db:QuickD1,owner:string,now:number,rules
 export async function openOperationalAlerts(db:QuickD1,owner:string,now:number,rules:Record<Rule,boolean>) {
   const alerts=await operationalAlerts(db,owner,now,rules);
   if(!alerts.length)return [];
-  const state=await db.prepare("SELECT alert_key,fingerprint,snoozed_until,notified_at FROM quick_agent_alert_state "+
-    "WHERE owner_id=? AND (snoozed_until>? OR notified_at IS NOT NULL)").bind(owner,new Date(now).toISOString())
-    .all<{alert_key:string;fingerprint:string;snoozed_until:string|null;notified_at:string|null}>();
-  const lookup=new Map(state.results.map(row=>[row.alert_key+"|"+row.fingerprint,row]));
+  const state=await db.prepare("SELECT alert_key,fingerprint,snoozed_until,notified_at,acknowledged_at FROM quick_agent_alert_state "+
+    "WHERE owner_id=? AND alert_key IN (SELECT value FROM json_each(?)) "+
+    "AND (snoozed_until>? OR notified_at IS NOT NULL OR acknowledged_at IS NOT NULL)")
+    .bind(owner,JSON.stringify(alerts.map(alert=>alert.key)),new Date(now).toISOString())
+    .all<{alert_key:string;fingerprint:string;snoozed_until:string|null;notified_at:string|null;acknowledged_at:string|null}>();
+  const lookup=new Map(state.results.map(row=>[JSON.stringify([row.alert_key,row.fingerprint]),row]));
   return alerts.flatMap(alert=>{
-    const existing=lookup.get(alert.key+"|"+alert.fingerprint);
-    if(existing?.snoozed_until&&existing.snoozed_until>new Date(now).toISOString())return [];
-    return [{...alert,notified:Boolean(existing?.notified_at)}];
+    const existing=lookup.get(JSON.stringify([alert.key,alert.fingerprint]));
+    if(existing?.acknowledged_at||existing?.snoozed_until&&existing.snoozed_until>new Date(now).toISOString())return [];
+    return [{...alert,notified:Boolean(existing?.notified_at),status:existing?.notified_at?"notified":"new"}];
   });
+}
+export async function acknowledgeOperationalAlert(db:QuickD1,owner:string,key:string,fingerprint:string,now:number):Promise<boolean>{
+  const match=(await operationalAlerts(db,owner,now,defaultAlertRules()))
+    .find(alert=>alert.key===key&&alert.fingerprint===fingerprint);
+  if(!match)return false;
+  await db.prepare("INSERT INTO quick_agent_alert_state(owner_id,alert_key,fingerprint,acknowledged_at) VALUES(?,?,?,?) "+
+    "ON CONFLICT(owner_id,alert_key,fingerprint) DO UPDATE SET acknowledged_at=COALESCE(quick_agent_alert_state.acknowledged_at,excluded.acknowledged_at) RETURNING alert_key")
+    .bind(owner,match.key,match.fingerprint,new Date(now).toISOString()).first();
+  return true;
 }
 export async function snoozeOperationalAlert(db:QuickD1,owner:string,key:string,now:number):Promise<boolean> {
   const alerts=await operationalAlerts(db,owner,now,defaultAlertRules());
@@ -138,7 +149,7 @@ export async function creditSchedule(db:QuickD1,owner:string) {
   ]);
   return {accounts:accounts.results,dues:dues.results};
 }
-export async function markAlertsNotified(db:QuickD1,owner:string,alerts:Alert[],timestamp:string) {
+export async function markAlertsNotified(db:QuickD1,owner:string,alerts:Pick<Alert,"key"|"fingerprint">[],timestamp:string) {
   const statements=alerts.map(alert=>db.prepare(
     "INSERT INTO quick_agent_alert_state(owner_id,alert_key,fingerprint,notified_at) VALUES(?,?,?,?) "+
     "ON CONFLICT(owner_id,alert_key,fingerprint) DO UPDATE SET notified_at=excluded.notified_at",

@@ -101,5 +101,21 @@ const imported={asOf:snapshotPreview.asOf,cashUsd:snapshotPreview.cashUsd,positi
 assert.equal((await req("portfolio",imported)).status,201);
 assert.equal((await req("portfolio",imported)).status,200);
 assert.equal((await req("portfolio",null,B)).data.latest,null);
+const fx={copPerUsd:"4100.010000",source:"Reporte ficticio",observedAt:"2026-11-01T04:59:00Z"};
+const typed={asOf:"2026-10-31",cashUsd:"-1.50",positions:[
+  {...positions[0],assetType:"security",costBasisUsd:"80.00"},
+  {symbol:"BTC",quantity:"0.001",marketValueUsd:"15.00",assetType:"crypto",costBasisUsd:"20.00"},
+],fx,confirmed:true};
+assert.equal((await req("portfolio",{...typed,fx:{...fx,observedAt:"2026-11-01T05:00:00Z"}})).status,422);
+assert.equal((await req("portfolio",{...typed,fx:{...fx,copPerUsd:"0"}})).status,422);
+assert.equal((await req("portfolio",{...typed,fx:{...fx,source:"   "}})).status,422);
+assert.equal((await req("portfolio",{...typed,asOf:"2026-11-01",fx:{...fx,observedAt:"2026-11-01T24:00:00Z"}})).status,422);
+const enriched=await req("portfolio",{...typed,asOf:"2026-10-30",fx:{...fx,observedAt:"2026-10-31T04:59:00Z"}});
+assert.equal(enriched.status,201);
+assert.equal(enriched.data.fx.copPerUsd,"4100.01");
+assert.equal(enriched.data.fx.totalCopMinor,"43710207");
+assert.deepEqual(enriched.data.allocation,{security:"9311",crypto:"1500",unclassified:"0"});
+assert.deepEqual(enriched.data.positions.map(p=>p.unrealizedMinor),["-500","1311"]);
+assert.equal((await req("portfolio")).data.latest.fx,null,"Older snapshots do not acquire an unverified rate");
 new Function(HAPI_JS);
 console.log("v41 Hapi: isolated manual COP/USD transfers, explicit confirmations, exact FX, unique source and receipt, no ledger writes PASSED");

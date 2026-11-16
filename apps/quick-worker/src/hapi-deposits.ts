@@ -111,18 +111,37 @@ export async function confirmHapiCredit(db:QuickD1,owner:string,raw:unknown):Pro
   return response({error:"El aporte ya fue confirmado o esta referencia de Hapi pertenece a otro aporte."},409);
 }
 
-type Position = {symbol:string;quantity:string;marketValueMinor:string};
-type Snapshot = {id:string;as_of:string;cash_minor:number;positions_json:string};
-const SNAPSHOT_FIELDS="id,as_of,cash_minor,positions_json";
+type Position = {symbol:string;quantity:string;marketValueMinor:string;assetType?:"security"|"crypto";costBasisMinor?:string};
+type Snapshot = {id:string;as_of:string;cash_minor:number;positions_json:string;
+  fx_cop_per_usd:string|null;fx_source:string|null;fx_observed_at:string|null};
+const SNAPSHOT_FIELDS="id,as_of,cash_minor,positions_json,fx_cop_per_usd,fx_source,fx_observed_at";
 async function portfolioHistory(db:QuickD1,owner:string) {
   return (await db.prepare("SELECT "+SNAPSHOT_FIELDS+" FROM quick_hapi_portfolio_snapshots "+
     "WHERE owner_id=? ORDER BY as_of DESC LIMIT 12").bind(owner).all<Snapshot>()).results;
 }
 function snapshotDto(snapshot:Snapshot) {
   const positions=JSON.parse(snapshot.positions_json) as Position[];
-  const marketValue=positions.reduce((total,position)=>total+Number(position.marketValueMinor),0);
-  return {id:snapshot.id,asOf:snapshot.as_of,cashMinor:String(snapshot.cash_minor),positions,
-    marketValueMinor:String(marketValue),totalMinor:String(snapshot.cash_minor+marketValue)};
+  const byAsset={security:0n,crypto:0n,unclassified:0n};
+  const positionsWithReturns=positions.map(position=>{
+    const market=BigInt(position.marketValueMinor);
+    byAsset[position.assetType??"unclassified"]+=market;
+    return {...position,...(position.costBasisMinor===undefined?{}:{
+      unrealizedMinor:String(market-BigInt(position.costBasisMinor)),
+    })};
+  });
+  const marketValue=byAsset.security+byAsset.crypto+byAsset.unclassified;
+  const total=BigInt(snapshot.cash_minor)+marketValue;
+  let fx=null;
+  if(snapshot.fx_cop_per_usd&&snapshot.fx_source&&snapshot.fx_observed_at){
+    const [whole,decimals=""]=snapshot.fx_cop_per_usd.split(".");
+    const rate=BigInt(whole!+decimals.padEnd(6,"0"));
+    const rounded=((total<0n?-total:total)*rate+500000n)/1000000n;
+    fx={copPerUsd:snapshot.fx_cop_per_usd,source:snapshot.fx_source,observedAt:snapshot.fx_observed_at,
+      totalCopMinor:String(total<0n?-rounded:rounded)};
+  }
+  return {id:snapshot.id,asOf:snapshot.as_of,cashMinor:String(snapshot.cash_minor),positions:positionsWithReturns,
+    marketValueMinor:String(marketValue),totalMinor:String(total),
+    allocation:{security:String(byAsset.security),crypto:String(byAsset.crypto),unclassified:String(byAsset.unclassified)},fx};
 }
 export async function listHapiPortfolio(db:QuickD1,owner:string):Promise<Response>{
   const history=(await portfolioHistory(db,owner)).map(snapshotDto);
@@ -135,14 +154,32 @@ export async function listHapiPortfolio(db:QuickD1,owner:string):Promise<Respons
     history:history.map(({asOf,cashMinor,marketValueMinor,totalMinor})=>({asOf,cashMinor,marketValueMinor,totalMinor}))});
 }
 export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
-  const data=input(raw,["asOf","cashUsd","positions","confirmed"]);
+  const data=input(raw,["asOf","cashUsd","positions","fx","confirmed"]);
   const asOf=date(data.asOf);
   const cashText=text(data.cashUsd,"el efectivo neto en USD",20);
   const cashMinor=cashText.startsWith("-")?-minor(cashText.slice(1),100000000000,true):minor(cashText,100000000000,true);
+  let rate:string|null=null,source:string|null=null,observedAt:string|null=null;
+  if(data.fx!==undefined){
+    if(!data.fx||typeof data.fx!=="object"||Array.isArray(data.fx)||Object.keys(data.fx).some(k=>!["copPerUsd","source","observedAt"].includes(k)))
+      return bad("Verifica la cotización COP del corte.");
+    const fx=data.fx as Record<string,unknown>;
+    const rawRate=text(fx.copPerUsd,"la tasa COP por USD",16);
+    if(!/^(?:0|[1-9]\d{0,6})(?:\.\d{1,6})?$/.test(rawRate)||!/[1-9]/.test(rawRate))
+      return bad("Escribe una tasa positiva con máximo seis decimales.");
+    rate=rawRate.includes(".")?rawRate.replace(/0+$/,"").replace(/\.$/,""):rawRate;
+    source=text(fx.source,"la fuente de la tasa",80);
+    const observed=text(fx.observedAt,"la fecha y hora de la tasa",29);
+    const instant=new Date(observed);
+    if(!/^20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(observed)||!Number.isFinite(+instant)||
+       instant.toISOString().slice(0,19)!==observed.slice(0,19)||instant.getTime()>Date.now()||
+       new Date(instant.getTime()-18000000).toISOString().slice(0,10)!==asOf)
+      return bad("La hora de la tasa debe pertenecer al día del corte en Bogotá.");
+    observedAt=instant.toISOString();
+  }
   if(!Array.isArray(data.positions)||data.positions.length>60)return bad("Registra hasta 60 posiciones.");
   const symbols=new Set<string>();
   const positions=data.positions.map(raw=>{
-    if(!raw||typeof raw!=="object"||Array.isArray(raw)||Object.keys(raw).some(key=>!["symbol","quantity","marketValueUsd"].includes(key)))
+    if(!raw||typeof raw!=="object"||Array.isArray(raw)||Object.keys(raw).some(key=>!["symbol","quantity","marketValueUsd","assetType","costBasisUsd"].includes(key)))
       return bad("Formato de posición inválido.");
     const symbol=text(raw.symbol,"el símbolo del activo",16).toUpperCase();
     const quantity=text(raw.quantity,"la cantidad del activo",28);
@@ -151,17 +188,22 @@ export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Pro
     if(!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,12})?$/.test(quantity)||!/[1-9]/.test(quantity))
       return bad("Indica una cantidad positiva, con hasta 12 decimales.");
     symbols.add(symbol);
+    if(raw.assetType!==undefined&&raw.assetType!=="security"&&raw.assetType!=="crypto")
+      return bad("Selecciona un tipo de activo válido.");
     return {symbol,quantity:quantity.includes(".")?quantity.replace(/0+$/,"").replace(/\.$/,""):quantity,
-      marketValueMinor:String(minor(raw.marketValueUsd,100000000000,true))};
+      marketValueMinor:String(minor(raw.marketValueUsd,100000000000,true)),
+      ...(raw.assetType===undefined?{}:{assetType:raw.assetType}),
+      ...(raw.costBasisUsd===undefined?{}:{costBasisMinor:String(minor(raw.costBasisUsd,100000000000,true))})};
   });
   positions.sort((a,b)=>a.symbol.localeCompare(b.symbol,"en"));
   const encoded=JSON.stringify(positions);
-  const saved=await db.prepare("INSERT INTO quick_hapi_portfolio_snapshots(id,owner_id,as_of,cash_minor,positions_json) "+
-    "VALUES(?,?,?,?,?) ON CONFLICT(owner_id,as_of) DO NOTHING RETURNING "+SNAPSHOT_FIELDS)
-    .bind(crypto.randomUUID(),owner,asOf,cashMinor,encoded).first<Snapshot>();
+  const saved=await db.prepare("INSERT INTO quick_hapi_portfolio_snapshots(id,owner_id,as_of,cash_minor,positions_json,fx_cop_per_usd,fx_source,fx_observed_at) "+
+    "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(owner_id,as_of) DO NOTHING RETURNING "+SNAPSHOT_FIELDS)
+    .bind(crypto.randomUUID(),owner,asOf,cashMinor,encoded,rate,source,observedAt).first<Snapshot>();
   if(saved)return response(snapshotDto(saved),201);
   const prior=await db.prepare("SELECT "+SNAPSHOT_FIELDS+" FROM quick_hapi_portfolio_snapshots WHERE owner_id=? AND as_of=?")
     .bind(owner,asOf).first<Snapshot>();
-  if(prior&&prior.cash_minor===cashMinor&&prior.positions_json===encoded)return response(snapshotDto(prior));
+  if(prior&&prior.cash_minor===cashMinor&&prior.positions_json===encoded&&prior.fx_cop_per_usd===rate&&
+     prior.fx_source===source&&prior.fx_observed_at===observedAt)return response(snapshotDto(prior));
   return response({error:"Ya registraste un corte distinto para esta fecha."},409);
 }
