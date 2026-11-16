@@ -83,6 +83,31 @@ assert.equal(activity.pending.length,0);
 const second=await call("deposits",{requestKey:"source-activity-02",bank:"Banco ficticio",debitedOn:"2026-10-02",copAmount:"420000",confirmed:true});
 assert.equal((await call("activity/link",{...link,depositId:second.data.id})).status,409);
 assert.equal((await call("deposits")).data.items.find(row=>row.id===source.data.id).effectiveCopPerUsd,"4200.0000");
+await call("activity/commit",{...input,selected:[1,3]});
+const sale={activityId:preview.data.items[1].id,costUsd:"120.13",confirmed:true};
+assert.equal((await call("activity/details",sale,B)).status,404);
+assert.equal((await call("activity/details",{...sale,costUsd:"-1.00"})).status,422);
+assert.equal((await call("activity/details",sale)).data.saved,true);
+assert.equal((await call("activity/details",sale)).data.replayed,true);
+assert.equal((await call("activity/details",{...sale,costUsd:"119.13"})).status,409);
+const reinvestment={activityId:preview.data.items[5].id,dividendId:preview.data.items[4].id,confirmed:true};
+assert.equal((await call("activity/details",reinvestment)).status,200);
+const bankCredit="22222222-2222-4222-8222-222222222222";
+const bankAbono=sql.prepare("INSERT INTO quick_statement_review_decisions(id,owner_id,row_key,row_hash,review_digest,bank_label,payment_method,direction,"+
+ "occurred_on,amount_minor,description,action,counterparty_label) VALUES(?,?,'withdrawal','synthetic',?,'Banco ficticio','bank_transfer','credit',"+
+ "'2026-10-06',12000000,'Retiro ficticio','own_transfer','Hapi')");
+bankAbono.run(bankCredit,B,"0".repeat(64));
+const withdrawal={activityId:preview.data.items[3].id,bankCreditId:bankCredit,confirmed:true};
+assert.equal((await call("activity/details",withdrawal)).status,409);
+bankAbono.run("33333333-3333-4333-8333-333333333333",A,"0".repeat(64));
+const available=(await call("activity")).data.bankCredits;
+assert.equal(available.length,1);
+assert.equal((await call("activity/details",{...withdrawal,bankCreditId:available[0].id})).status,200);
+activity=(await call("activity")).data;
+assert.equal(activity.items.find(row=>row.id===sale.activityId).realizedMinor,"-1000");
+assert.equal(activity.items.find(row=>row.id===reinvestment.activityId).dividendId,reinvestment.dividendId);
+assert.equal(activity.items.find(row=>row.id===withdrawal.activityId).bankCreditId,available[0].id);
+assert.equal(activity.bankCredits.length,0);
 for(const table of ["quick_manual_entries","quick_shortcut_expenses","quick_statement_credits","quick_income_entries","quick_hapi_portfolio_snapshots"])
  assert.equal(sql.prepare("SELECT count(*) n FROM "+table).get().n,0);
 new Function(HAPI_JS);

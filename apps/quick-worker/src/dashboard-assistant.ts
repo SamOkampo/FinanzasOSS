@@ -103,6 +103,7 @@ export const ASSISTANT_HTML = `
   </div>
   <section id="assistant-movement" hidden>
     <button id="assistant-back" type="button" class="soft-button">Volver a pendientes</button>
+    <button id="assistant-dismiss-category" type="button" class="soft-button">No volver a preguntar por esta compra</button>
     <p id="assistant-movement-status" role="status"></p>
     <h3 id="assistant-concept"></h3>
     <p id="assistant-question"></p>
@@ -301,7 +302,14 @@ export const ASSISTANT_JS = String.raw`
         try{await request("snooze",{key:item.key});await inbox();}
         catch(error){button.disabled=false;message(error.message);}
       });
-      card.append(title,el("p",item.detail),link,button);
+      const acknowledge=el("button","Marcar aviso como visto","soft-button");
+      acknowledge.type="button";
+      acknowledge.addEventListener("click",async()=>{
+        acknowledge.disabled=true;
+        try{await request("acknowledge",{key:item.key,fingerprint:item.fingerprint});await inbox();}
+        catch(error){acknowledge.disabled=false;message(error.message);}
+      });
+      card.append(title,el("p",item.detail),link,button,acknowledge);
       box.append(card);
     }
   }
@@ -557,6 +565,16 @@ export const ASSISTANT_JS = String.raw`
     if(location.hash==="#qwen"||location.hash==="#qwen-pending")history.replaceState(null,"",location.pathname+location.search+"#plan");
   });
   byId("back").addEventListener("click",()=>{if(!busy)inbox();});
+  byId("dismiss-category").addEventListener("click",async()=>{
+    if(busy||!current||!window.confirm("¿Quitar esta pregunta de Pendientes? Puedes clasificar la compra desde Movimientos."))return;
+    const button=byId("dismiss-category");
+    busy=true;button.disabled=true;
+    try{
+      await request("category/dismiss",{source:current.source,id:current.id,confirmed:true});
+      await inbox();message("Pregunta quitada de Pendientes.");
+    }catch(error){message(error.message);}
+    finally{busy=false;button.disabled=false;}
+  });
   byId("credit-form").addEventListener("submit",async event=>{
     event.preventDefault();
     const button=event.currentTarget.querySelector("button");

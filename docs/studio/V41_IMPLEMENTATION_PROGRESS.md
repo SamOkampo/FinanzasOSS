@@ -7,8 +7,8 @@
 | Extractos | PDF digital o protegido con lectura en el dispositivo. Si faltan movimientos completos, OCR con autorización por archivo. Excel y CSV admitidos. El OCR procesa hasta cinco páginas según la cuota diaria compartida con otros análisis de documentos y categorías. |
 | Conciliación | Vista previa de importes COP, detección de coincidencias, borradores, confirmación por fila, auditoría y enlaces entre transferencias propias. Los extractos pueden mostrar otras monedas para revisión. |
 | Qwen | Chat privado, historial, consultas sobre gastos, Hapi y compras por activo. La respuesta `food` abre la selección de subcategoría. Recordar un comercio requiere confirmación y la regla se puede revocar. |
-| Avisos | Resumen voluntario por perfil, selección de tipos, hora de Bogotá y horario de silencio. Deducción desde los registros de la app y acceso a Pendientes desde la notificación. |
-| Hapi | Registro manual con reportes digitales, efectivo y posiciones USD, compras y demás actividad del bróker, enlace confirmado de aportes COP a USD y comparación de aportes acreditados con el último corte. |
+| Avisos | Resumen voluntario por perfil, selección de tipos, hora de Bogotá y horario de silencio. Acceso a Pendientes desde la notificación. Cada perfil puede posponer avisos, marcarlos como vistos u omitir una pregunta de categoría. |
+| Hapi | Reportes digitales, cortes con efectivo y posiciones USD, clasificación opcional entre valores y criptoactivos y comparación de aportes con el último corte. Admite conversión informativa a COP con fuente y hora, costos documentados, vínculo de reinversiones a dividendos y conciliación de retiros con abonos bancarios. |
 | PWA | Estados de carga al abrir la app, progreso por página de OCR y estimación tras dos lecturas. Chat diseñado para conservar el campo de envío visible cuando se reduce el área de pantalla. |
 
 ## Verificación
@@ -19,6 +19,6 @@
 
 ## Diferencias frente al diseño original
 
-- La conciliación bancaria de esta entrega se hace en COP. Hapi se lleva en USD con conversión efectiva por aporte confirmado. El historial de actividad y los cortes se basan en los documentos guardados. No hay cotización en vivo, cálculo de rentabilidad por lotes, conversión consolidada automática a COP ni desglose automático de custodia.
-- Los gráficos usan controles HTML con etiquetas de moneda. Las alertas se derivan de los registros actuales y admiten posponer 24 horas. El aviso deja de aparecer cuando se resuelve su causa.
+- La conciliación bancaria de esta entrega se hace en COP. Los movimientos del bróker se registran en USD. La equivalencia informativa de un corte se calcula con la tasa documentada. Los resultados de posiciones y ventas se calculan con los costos verificados que carga el usuario. Quedan fuera las cotizaciones en vivo, la reconstrucción de lotes y la clasificación automática de custodia.
+- Los gráficos usan controles HTML con etiquetas de moneda. Las alertas se derivan de los registros actuales. Posponer dura 24 horas y marcar como visto afecta la versión actual del aviso. El aviso reaparece si cambia la evidencia y deja de aparecer cuando se resuelve su causa.
 - Una eventual conexión directa requiere que Hapi habilite a FinanzasOSS como integración autorizada. Los ciclos usan la información cargada y confirmada por el usuario.

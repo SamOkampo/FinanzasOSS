@@ -2,7 +2,12 @@ export const HAPI_HTML = `
 <article class="module" id="hapi-deposits" data-hapi-enabled="false" hidden>
   <h3>Hapi · Portafolio en USD</h3>
   <p id="hapi-valuation"></p>
+  <p id="hapi-cop-value" hidden></p>
   <ul id="hapi-positions"></ul>
+  <details id="hapi-allocation" hidden>
+    <summary>Distribución por tipo de activo</summary>
+    <div id="hapi-allocation-bars" class="assistant-chat-chart"></div>
+  </details>
   <details id="hapi-comparison" hidden>
     <summary>Aportes y valor del portafolio</summary>
     <p>El valor del corte incluye efectivo y posiciones. Los aportes incluyen solo los abonos que registraste hasta esa fecha. La diferencia por sí sola no mide rentabilidad.</p>
@@ -22,6 +27,15 @@ export const HAPI_HTML = `
       <label>Efectivo neto en USD <input id="hapi-cash" inputmode="decimal" required></label>
       <div id="hapi-position-fields" class="assistant-fields"></div>
       <button id="hapi-add-position" class="soft-button" type="button">Añadir posición</button>
+      <details>
+        <summary>Mostrar también el equivalente en COP</summary>
+        <p>Opcional. Usa una cotización de la fecha del corte.</p>
+        <div class="assistant-fields">
+          <label>COP por USD <input id="hapi-fx-rate" inputmode="decimal" maxlength="16"></label>
+          <label>Fuente <input id="hapi-fx-source" maxlength="80"></label>
+          <label>Hora de la cotización en Bogotá <input id="hapi-fx-time" type="time"></label>
+        </div>
+      </details>
       <label class="ai-document-consent"><input id="hapi-snapshot-confirm" type="checkbox" required> Verifiqué el efectivo y el valor de las posiciones en el reporte de Hapi.</label>
       <button class="solid-button" type="submit">Guardar corte</button>
     </form>
@@ -109,20 +123,37 @@ export const HAPI_JS = String.raw`
     const heading=document.createElement("legend");
     heading.textContent="Posición";
     field.append(heading);
-    for(const [name,label,mode,limit] of [
-      ["symbol","Símbolo","text",16],
-      ["quantity","Cantidad","decimal",28],
-      ["marketValueUsd","Valor de mercado en USD","decimal",18],
+    for(const [name,label,mode,limit,required] of [
+      ["symbol","Símbolo","text",16,true],
+      ["quantity","Cantidad","decimal",28,true],
+      ["marketValueUsd","Valor de mercado en USD","decimal",18,true],
+      ["costBasisUsd","Costo de adquisición total en USD (opcional)","decimal",18,false],
     ]){
       const group=document.createElement("label"),input=document.createElement("input");
-      input.name=name;input.inputMode=mode;input.maxLength=limit;input.required=true;input.value=position?.[name]||"";
+      input.name=name;input.inputMode=mode;input.maxLength=limit;input.required=Boolean(required);input.value=position?.[name]||"";
       group.append(label,input);field.append(group);
     }
+    const typeLabel=document.createElement("label"),type=document.createElement("select");
+    typeLabel.textContent="Tipo de activo";type.name="assetType";
+    type.append(new Option("Sin especificar",""),new Option("Acción, ETF u otro valor","security"),new Option("Criptoactivo","crypto"));
+    type.value=position?.assetType||"";
+    typeLabel.append(type);field.append(typeLabel);
     const remove=document.createElement("button");
     remove.className="soft-button";remove.type="button";remove.textContent="Quitar posición";
     remove.addEventListener("click",()=>field.remove());
     field.append(remove);positionFields.append(field);
     if(!position)field.querySelector("input").focus();
+  }
+  function renderBars(box,values){
+    box.replaceChildren();
+    const max=Math.max(...values.map(([,minor])=>Math.abs(Number(minor))),1);
+    for(const [name,minor] of values){
+      const text=document.createElement("p"),meter=document.createElement("meter");
+      text.textContent=name+" · "+money(minor,"USD");
+      meter.min=0;meter.max=max;meter.value=Math.abs(Number(minor));
+      meter.setAttribute("aria-label",text.textContent);
+      box.append(text,meter);
+    }
   }
   function renderPortfolio(portfolio){
     const snapshot=portfolio.latest;
@@ -143,22 +174,24 @@ export const HAPI_JS = String.raw`
     for(const position of snapshot?.positions||[]){
       const item=document.createElement("li");
       item.textContent=position.symbol+" · "+position.quantity+" unidades · "+money(position.marketValueMinor,"USD");
+      if(position.costBasisMinor!==undefined)item.textContent+=" · Costo "+money(position.costBasisMinor,"USD")+
+        " · Resultado no realizado "+money(position.unrealizedMinor,"USD");
       items.append(item);
     }
-    const bars=node("comparison-bars");
-    bars.replaceChildren();
+    const allocation=snapshot?.allocation;
+    const mix=allocation?[["Valores",allocation.security],["Criptoactivos",allocation.crypto],
+      ["Posiciones sin tipo",allocation.unclassified]].filter(([,minor])=>Number(minor)>0):[];
+    node("allocation").hidden=!mix.length;
+    renderBars(node("allocation-bars"),mix);
+    const fx=snapshot?.fx;
+    const cop=node("cop-value");
+    cop.hidden=!fx;
+    const formatTime=new Intl.DateTimeFormat("es-CO",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Bogota"});
+    cop.textContent=fx?money(fx.totalCopMinor,"COP")+" equivalentes · "+fx.copPerUsd+
+      " COP por USD · "+fx.source+" · "+formatTime.format(new Date(fx.observedAt))+" (Bogotá)":"";
     const credited=portfolio.creditedAtLatestCutMinor;
     node("comparison").hidden=!snapshot||credited==null;
-    if(!snapshot||credited==null)return;
-    const comparison=[["Aportes acreditados",credited],["Valor del corte",snapshot.totalMinor]];
-    const max=Math.max(...comparison.map(([,minor])=>Math.abs(Number(minor))),1);
-    for(const [name,minor] of comparison){
-      const text=document.createElement("p"),meter=document.createElement("meter");
-      text.textContent=name+" · "+money(minor,"USD");
-      meter.min=0;meter.max=max;meter.value=Math.abs(Number(minor));
-      meter.setAttribute("aria-label",text.textContent);
-      bars.append(text,meter);
-    }
+    renderBars(node("comparison-bars"),snapshot&&credited!=null?[["Aportes acreditados",credited],["Valor del corte",snapshot.totalMinor]]:[]);
   }
   function render(data){
     origin.replaceChildren(new Option("Registrar débito manual",""),...data.origins.map(item=>
@@ -264,6 +297,26 @@ export const HAPI_JS = String.raw`
       return [row.description,row.symbol,row.quantity?row.quantity+" unidades":"",row.reference?"Ref. "+row.reference:""]
         .filter(Boolean).join(" · ");
     }
+    function addActivityDetail(card,row,fieldText,input,key){
+      const form=document.createElement("form"),field=label("label",fieldText);
+      form.className="assistant-fields";input.required=true;field.append(input);
+      const button=label("button","Guardar detalle confirmado");button.className="soft-button";
+      form.append(field,button);card.append(form);
+      form.addEventListener("submit",async event=>{
+        event.preventDefault();
+        if(working||!input.value||!window.confirm("¿Verificaste este dato en tus comprobantes?"))return;
+        working=true;button.disabled=true;
+        try{
+          const value=key==="costUsd"?amount(input.value):input.value;
+          const decimal=key==="costUsd"&&/^\d+(?:\.\d{1,2})?$/.test(value)?(value+".").split(".").slice(0,2):null;
+          await request("activity/details",{activityId:row.id,
+            [key]:decimal?decimal[0]+"."+decimal[1].padEnd(2,"0"):value,confirmed:true});
+          await loadActivity();
+          notice.textContent="Detalle registrado.";
+        }catch(error){notice.textContent=error.message;}
+        finally{working=false;button.disabled=false;}
+      });
+    }
     async function loadActivity(){
       const data=await request("activity"),history=node("activity-history");
       history.replaceChildren();
@@ -294,6 +347,38 @@ export const HAPI_JS = String.raw`
               }catch(error){notice.textContent=error.message;}
               finally{working=false;button.disabled=false;}
             });
+          }
+        }
+        if(row.kind==="sell"){
+          if(row.costMinor!==undefined)card.append(label("p","Costo confirmado "+money(row.costMinor,"USD")+
+            " · Resultado realizado "+money(row.realizedMinor,"USD")));
+          else{
+            const cost=document.createElement("input");cost.inputMode="decimal";cost.maxLength=18;
+            addActivityDetail(card,row,"Costo de adquisición de lo vendido, según tu reporte (USD)",cost,"costUsd");
+          }
+        }
+        if(row.kind==="reinvestment"){
+          if(row.dividendId)card.append(label("p","Vinculada al dividendo que la financió."));
+          else if(row.symbol){
+            const candidates=data.items.filter(x=>x.kind==="dividend"&&x.symbol===row.symbol&&x.date<=row.date&&
+              Number(x.amountUsd)>=Number(row.amountUsd)&&!data.items.some(y=>y.dividendId===x.id));
+            if(candidates.length){
+              const select=document.createElement("select");
+              select.append(new Option("Selecciona el dividendo",""),...candidates.map(x=>new Option(title(x),x.id)));
+              addActivityDetail(card,row,"Dividendo reinvertido",select,"dividendId");
+            }
+          }
+        }
+        if(row.kind==="withdrawal"){
+          if(row.bankCreditId)card.append(label("p","Vinculado al abono de tu banco en COP."));
+          else {
+            const candidates=(data.bankCredits||[]).filter(x=>x.occurred_on>=row.date);
+            if(candidates.length){
+              const select=document.createElement("select");
+              select.append(new Option("Selecciona el abono",""),...candidates.map(x=>
+                new Option(x.occurred_on+" · "+x.bank_label+" · "+money(x.amount_minor,"COP"),x.id)));
+              addActivityDetail(card,row,"Abono en tu banco",select,"bankCreditId");
+            }
           }
         }
         history.append(card);
@@ -378,9 +463,12 @@ export const HAPI_JS = String.raw`
     const form=event.currentTarget,button=form.querySelector("button[type=submit]");
     button.disabled=true;
     try{
-      const positions=[...positionFields.children].map(field=>Object.fromEntries([...field.querySelectorAll("input")]
-        .map(input=>[input.name,input.name==="symbol"?input.value:amount(input.value)])));
-      const data=await request("portfolio",{asOf:node("asof").value,cashUsd:amount(node("cash").value),positions,confirmed:true});
+      const positions=[...positionFields.children].map(field=>Object.fromEntries([...field.querySelectorAll("input,select")]
+        .filter(input=>input.value.trim()).map(input=>[input.name,["symbol","assetType"].includes(input.name)?input.value:amount(input.value)])));
+      const asOf=node("asof").value,rate=amount(node("fx-rate").value),source=node("fx-source").value.trim(),time=node("fx-time").value;
+      if((rate||source||time)&&!(rate&&source&&time))throw Error("Completa la tasa, la fuente y la hora para mostrar el equivalente en COP.");
+      const fx=rate?{copPerUsd:rate,source,observedAt:new Date(asOf+"T"+time+":00-05:00").toISOString()}:undefined;
+      const data=await request("portfolio",{asOf,cashUsd:amount(node("cash").value),positions,fx,confirmed:true});
       form.reset();positionFields.replaceChildren();
       renderPortfolio(await request("portfolio"));
       status.textContent="Corte del "+data.asOf+" guardado.";

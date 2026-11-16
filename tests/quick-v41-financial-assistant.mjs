@@ -150,7 +150,7 @@ assert.equal((await request("inbox")).body.rules.hapi_deposit_pending,false);
 await sendAssistantDigest(env,Date.parse("2026-11-20T01:00:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-21T01:00:00Z"),dispatch);
 assert.deepEqual(delivered,[A,A],"The new balance alert is sent once and disabled Hapi alerts do not push");
-assert.equal(sql.prepare("SELECT count(*) AS n FROM quick_agent_alert_state WHERE notified_at IS NOT NULL").get().n,1);
+assert.equal(sql.prepare("SELECT count(*) AS n FROM quick_agent_alert_state WHERE notified_at IS NOT NULL AND alert_key NOT LIKE 'category:%'").get().n,1);
 const draftInput={bankLabel:"Banco Ficticio",paymentMethod:"debit_card",
   mapping:{postedAt:"Fecha",description:"Concepto",amount:"Importe",direction:"Tipo"},
   rows:[{Fecha:"2026-10-02",Concepto:"Wompi SAS",Importe:"1500",Tipo:"debit"}]};
@@ -195,5 +195,24 @@ assert.equal((await request("preferences",{...schedule,enabled:false,hours:{dige
 assert.equal((await request("inbox")).body.noticeSchedule,"08:00");
 await sendAssistantDigest(env,Date.parse("2026-11-24T13:00:00Z"),dispatch);
 assert.deepEqual(delivered,[A,A,A],"Opt-out stops scheduled push");
+const observed=(await request("inbox")).body.alerts.find(x=>x.rule==="unreconciled_balance");
+const ack={key:observed.key,fingerprint:observed.fingerprint};
+assert.equal((await request("acknowledge",ack,B)).status,409);
+assert.equal((await request("acknowledge",{...ack,fingerprint:"outdated"})).status,409);
+assert.equal((await request("acknowledge",ack)).body.acknowledged,true);
+assert.equal((await request("acknowledge",ack)).body.acknowledged,true);
+assert.ok(!(await request("inbox")).body.alerts.some(x=>x.key===observed.key));
+sql.prepare("UPDATE quick_balance_snapshots SET amount_minor=amount_minor+100 WHERE id=?").run("snapshot-test-2");
+assert.ok((await request("inbox")).body.alerts.some(x=>x.key===observed.key&&x.fingerprint!==observed.fingerprint));
+const question={source:"accountless",id:ids[3],confirmed:true};
+assert.equal((await request("category/dismiss",question,B)).status,404);
+assert.equal((await request("category/dismiss",{...question,confirmed:false})).status,422);
+assert.ok((await request("inbox")).body.items.some(x=>x.id===question.id));
+assert.equal((await request("category/dismiss",question)).body.dismissed,true);
+assert.equal((await request("category/dismiss",question)).body.dismissed,true);
+assert.ok(!(await request("inbox")).body.items.some(x=>x.id===question.id));
+assert.equal(sql.prepare("SELECT count(*) n FROM quick_movement_categories WHERE movement_id=?").get(question.id).n,0);
+sql.prepare("UPDATE quick_shortcut_expenses SET revision=revision+1 WHERE id=?").run(question.id);
+assert.ok((await request("inbox")).body.items.some(x=>x.id===question.id));
 new Function(ASSISTANT_JS);
 console.log("v41 financial assistant: owner-only merchant revocation, exact learning, digest hours, silence, opt-out and isolation PASSED");

@@ -35,10 +35,10 @@ import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
 import { askAssistant, deleteAssistantConversation, listAssistantConversations } from "./assistant-conversations.js";
-import { ASSISTANT_DAILY_CRON, ASSISTANT_HOURLY_CRON, answerAssistant, assistantCreditDue, assistantInbox, assistantSnooze,
+import { ASSISTANT_DAILY_CRON, ASSISTANT_HOURLY_CRON, answerAssistant, assistantAcknowledge, assistantCreditDue, assistantDismissCategory, assistantInbox, assistantSnooze,
   confirmAssistant, forgetRememberedMerchant, listRememberedMerchants, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
-import { hapiActivityCommit, hapiActivityPreview, linkHapiActivityDeposit, listHapiActivity } from "./hapi-activity.js";
+import { hapiActivityCommit, hapiActivityPreview, linkHapiActivityDeposit, listHapiActivity, saveHapiActivityDetails } from "./hapi-activity.js";
 import { HAPI_JS } from "./dashboard-hapi.js";
 import { listHapiDeposits, saveHapiDeposit, confirmHapiCredit, listHapiPortfolio, saveHapiPortfolio } from "./hapi-deposits.js";
 import { DEVICE_QA_JS } from "./dashboard-device-qa-js.js";
@@ -508,11 +508,14 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/agent/preferences") return await setAssistantNotices(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/merchants/forget") return await forgetRememberedMerchant(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/snooze") return await assistantSnooze(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/acknowledge") return await assistantAcknowledge(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/agent/category/dismiss") return await assistantDismissCategory(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/credit-due") return await assistantCreditDue(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/deposits") return await saveHapiDeposit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/activity/preview") return await hapiActivityPreview(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/activity/commit") return await hapiActivityCommit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/activity/link") return await linkHapiActivityDeposit(env.DB,owner,data);
+      if (pathname === "/api/quick/v41/hapi/activity/details") return await saveHapiActivityDetails(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await saveHapiPortfolio(env.DB,owner,data);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
