@@ -1,5 +1,13 @@
 export const ASSISTANT_HTML = `
-<button id="assistant-open" data-assistant-enabled="false" hidden type="button" class="solid-button assistant-launch" aria-haspopup="dialog">Qwen</button>
+<button id="assistant-open" data-assistant-enabled="false" hidden type="button" class="assistant-launch"
+  aria-haspopup="dialog" aria-controls="assistant-dialog" aria-label="Abrir asistente financiero con IA">
+  <span class="assistant-launch-icon" aria-hidden="true">
+    <span class="assistant-launch-chart"><i></i><i></i><i></i></span>
+  </span>
+  <span class="assistant-launch-label">Asistente financiero</span>
+  <span class="assistant-launch-ai" aria-hidden="true">IA</span>
+  <span id="assistant-launch-count" class="assistant-launch-count" aria-hidden="true" hidden></span>
+</button>
 <dialog id="assistant-dialog" class="assistant-dialog" aria-labelledby="assistant-title">
   <div class="assistant-heading">
     <div class="assistant-identity">
@@ -139,7 +147,33 @@ export const ASSISTANT_CSS = `
   width:min(420px,calc(100% - 40px));height:min(660px,calc(100dvh - 44px));max-width:none;max-height:none;
   padding:0;border:1px solid var(--rule);border-radius:22px;overflow:hidden;
   background:var(--surface);color:var(--ink);box-shadow:0 20px 68px rgba(0,0,0,.22)}
-.assistant-launch{position:fixed;z-index:7;right:20px;bottom:22px;min-height:44px}
+.assistant-launch{position:fixed;z-index:7;right:20px;bottom:22px;
+  display:inline-flex;align-items:center;gap:8px;min-height:48px;max-width:calc(100% - 24px);
+  padding:6px 10px 6px 6px;border:1px solid #538177;border-radius:16px;
+  background:#173c35;color:#f4faf5;box-shadow:0 6px 18px #0a292548;
+  font-size:13px;font-weight:750;line-height:1.2;text-align:start}
+.assistant-launch:hover{background:#234b43}
+.assistant-launch-label{min-width:0}
+.assistant-launch-icon{--icon-surface:#c8ead9;flex:none;display:grid;place-items:center;
+  width:34px;height:34px;border-radius:10px;background:var(--icon-surface);color:#173c35}
+.assistant-launch-chart{position:relative;display:flex;align-items:flex-end;justify-content:center;
+  gap:2px;width:22px;height:17px;padding:2px;border:1.5px solid currentColor;border-radius:5px}
+.assistant-launch-chart::after{content:"";position:absolute;bottom:-3px;left:3px;width:5px;height:5px;
+  background:var(--icon-surface);border:solid currentColor;border-width:0 0 1.5px 1.5px;
+  transform:skewY(-35deg)}
+.assistant-launch-chart i{width:2px;height:4px;border-radius:1px;background:currentColor}
+.assistant-launch-chart i:nth-child(2){height:7px}
+.assistant-launch-chart i:nth-child(3){height:10px}
+.assistant-launch-ai{flex:none;padding:3px 5px;border:1px solid #6f9e90;border-radius:6px;
+  color:#daf2e7;font-size:10px;font-weight:800}
+.assistant-launch-count{position:absolute;right:2px;top:-7px;min-width:19px;padding:2px 4px;
+  border:1px solid #173c35;border-radius:12px;background:#f3c39b;color:#24332b;
+  font-size:10px;font-weight:800;text-align:center}
+.assistant-launch-count[hidden]{display:none}
+@media(max-width:980px){
+  .assistant-launch{right:max(12px,env(safe-area-inset-right));bottom:calc(var(--app-bottom-navigation) + 8px)}
+  body:has(.assistant-launch:not([hidden])) .stage>.main{padding-bottom:calc(var(--app-bottom-navigation) + 68px)}
+}
 .assistant-dialog::backdrop{background:rgba(10,26,25,.42)}
 .assistant-heading{flex:none;display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:12px 14px;background:#172e2c;color:#f7faf6}
@@ -189,7 +223,6 @@ export const ASSISTANT_CSS = `
 #hapi-position-fields fieldset{min-width:0;display:grid;gap:10px;border:1px solid var(--rule);border-radius:12px}
 .assistant-fields input:not([type=checkbox]),.assistant-fields select{font-size:16px;width:100%;min-height:42px}
 @media(max-width:800px){
-  .assistant-launch{bottom:calc(74px + env(safe-area-inset-bottom));right:12px}
   .assistant-dialog[open]{inset:auto 8px max(8px,env(safe-area-inset-bottom)) 8px;width:calc(100% - 16px);
     height:min(660px,calc(100dvh - max(8px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom))))}
   .fos-keyboard-visible .assistant-dialog[open]{top:calc(var(--fos-visible-top,0px) + 4px);bottom:auto;
@@ -445,7 +478,11 @@ export const ASSISTANT_JS = String.raw`
       const badge=byId("count");
       badge.textContent=String(count);
       badge.hidden=!count;
-      launcher.setAttribute("aria-label",count?"Qwen, "+count+" pendientes":"Abrir chat de Qwen");
+      const launcherBadge=byId("launch-count");
+      launcherBadge.textContent=count>99?"99+":String(count);
+      launcherBadge.hidden=!count;
+      const pending=count===1?"1 pendiente":count+" pendientes";
+      launcher.setAttribute("aria-label","Abrir asistente financiero con IA"+(count?", "+pending:""));
       status.textContent=count?count+" pendientes para revisar.":"No tienes pendientes para revisar.";
     }catch(error){message(error.message);}
   }
