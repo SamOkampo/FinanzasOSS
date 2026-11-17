@@ -377,7 +377,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   </details>
   <details id="hapi-reports" hidden><summary>Cortes anteriores</summary><ul id="hapi-reports-list"></ul></details>
   <details>
-    <summary>Registrar corte del portafolio</summary>
+    <summary id="hapi-report-label">A\xF1adir reporte de Hapi</summary>
     <form id="hapi-pdf" class="assistant-fields" autocomplete="off">
       <label>Reporte mensual en PDF <input id="hapi-pdf-file" type="file" accept="application/pdf,.pdf" required></label>
       <p>El PDF se lee en este dispositivo. Revisa el corte antes de guardarlo.</p>
@@ -402,42 +402,45 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
       <button class="solid-button" type="submit">Guardar corte</button>
     </form>
   </details>
-  <details id="hapi-activity" data-hapi-activity="false" hidden>
-    <summary>Actividad de Hapi en USD</summary>
-    <form id="hapi-activity-read" class="assistant-fields">
-      <label>Reporte digital en PDF <input id="hapi-activity-pdf" type="file" accept="application/pdf,.pdf" required></label>
-      <button class="soft-button" type="submit">Preparar actividad</button>
-    </form>
-    <p>El PDF se lee en este dispositivo. Guarda solo las filas que puedas verificar en tu reporte.</p>
-    <p id="hapi-activity-status" role="status" aria-live="polite"></p>
-    <form id="hapi-activity-review" class="assistant-fields" hidden>
-      <label>Bloque de revisi\xF3n <select id="hapi-activity-page"></select></label>
-      <div id="hapi-activity-rows" class="assistant-fields"></div>
-      <label class="ai-document-consent"><input id="hapi-activity-ack" type="checkbox" required>
-        <span>Compar\xE9 las filas seleccionadas con mi reporte de Hapi.</span></label>
-      <button id="hapi-activity-save" class="solid-button" type="submit">Guardar filas seleccionadas</button>
-    </form>
-    <details>
-      <summary>Historial de actividad</summary>
-      <div id="hapi-activity-history" class="assistant-fields"></div>
-    </details>
-  </details>
-  <h4>Aportes</h4>
-  <p>Registro manual. Usa el movimiento de tu banco y el comprobante de acreditaci\xF3n de Hapi.</p>
-  <button type="button" class="soft-button" id="hapi-refresh">Actualizar aportes</button>
   <p id="hapi-status" role="status" aria-live="polite"></p>
   <details>
-    <summary>Registrar salida hacia Hapi</summary>
-    <form id="hapi-out" class="assistant-fields" autocomplete="off">
-      <label>Movimiento de origen <select id="hapi-origin"></select></label>
-      <div id="hapi-manual" class="assistant-fields">
-        <label>Banco de origen <input id="hapi-bank" maxlength="80" required></label>
-        <label>Fecha de salida <input id="hapi-debited" type="date" required></label>
-        <label>Importe total debitado en COP <input id="hapi-cop" inputmode="decimal" required></label>
-      </div>
-      <label class="ai-document-consent"><input type="checkbox" id="hapi-out-confirm" required> Confirmo que el d\xE9bito sali\xF3 hacia mi cuenta de Hapi.</label>
-      <button class="solid-button" type="submit">Registrar aporte pendiente</button>
-    </form>
+    <summary>M\xE1s opciones de Hapi</summary>
+    <details id="hapi-activity" data-hapi-activity="false" hidden>
+      <summary>Actividad de Hapi en USD</summary>
+      <form id="hapi-activity-read" class="assistant-fields">
+        <label>Reporte digital en PDF <input id="hapi-activity-pdf" type="file" accept="application/pdf,.pdf" required></label>
+        <button class="soft-button" type="submit">Preparar actividad</button>
+      </form>
+      <p>El PDF se lee en este dispositivo. Guarda solo las filas que puedas verificar en tu reporte.</p>
+      <p id="hapi-activity-status" role="status" aria-live="polite"></p>
+      <form id="hapi-activity-review" class="assistant-fields" hidden>
+        <label>Bloque de revisi\xF3n <select id="hapi-activity-page"></select></label>
+        <div id="hapi-activity-rows" class="assistant-fields"></div>
+        <label class="ai-document-consent"><input id="hapi-activity-ack" type="checkbox" required>
+          <span>Compar\xE9 las filas seleccionadas con mi reporte de Hapi.</span></label>
+        <button id="hapi-activity-save" class="solid-button" type="submit">Guardar filas seleccionadas</button>
+      </form>
+      <details>
+        <summary>Historial de actividad</summary>
+        <div id="hapi-activity-history" class="assistant-fields"></div>
+      </details>
+    </details>
+    <h4>Aportes</h4>
+    <p>Registro manual. Usa el movimiento de tu banco y el comprobante de acreditaci\xF3n de Hapi.</p>
+    <button type="button" class="soft-button" id="hapi-refresh">Actualizar aportes</button>
+    <details>
+      <summary>Registrar salida hacia Hapi</summary>
+      <form id="hapi-out" class="assistant-fields" autocomplete="off">
+        <label>Movimiento de origen <select id="hapi-origin"></select></label>
+        <div id="hapi-manual" class="assistant-fields">
+          <label>Banco de origen <input id="hapi-bank" maxlength="80" required></label>
+          <label>Fecha de salida <input id="hapi-debited" type="date" required></label>
+          <label>Importe total debitado en COP <input id="hapi-cop" inputmode="decimal" required></label>
+        </div>
+        <label class="ai-document-consent"><input type="checkbox" id="hapi-out-confirm" required> Confirmo que el d\xE9bito sali\xF3 hacia mi cuenta de Hapi.</label>
+        <button class="solid-button" type="submit">Registrar aporte pendiente</button>
+      </form>
+    </details>
   </details>
   <div id="hapi-history"></div>
   <form id="hapi-credit" class="assistant-fields" autocomplete="off" hidden>
@@ -517,6 +520,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   }
   function renderPortfolio(portfolio){
     const snapshot=portfolio.latest;
+    node("report-label").textContent=snapshot?"Añadir otro reporte":"Añadir mi primer reporte";
     const reports=node("reports-list");
     reports.replaceChildren();
     node("reports").hidden=portfolio.history.length<2;
@@ -595,7 +599,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
       const [data,portfolio]=await Promise.all([request("deposits"),request("portfolio")]);
       render(data);
       renderPortfolio(portfolio);
-      status.textContent=data.items.length?"":"Todavía no hay aportes registrados.";
+      status.textContent="";
     }catch(error){status.textContent=error.message;}
     finally{loading=false;}
   }
@@ -929,10 +933,10 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     <div class="assistant-fields" id="assistant-merchants-list"></div>
     <button type="button" class="soft-button" id="assistant-merchants-more" hidden>Ver m\xE1s comercios</button>
   </details>
-  <details id="assistant-credit">
+  <details id="assistant-credit" hidden>
     <summary>Vencimientos de tarjetas</summary>
     <p id="assistant-credit-empty" hidden>Primero registra la tarjeta en Saldos.</p>
-    <form id="assistant-credit-form" class="assistant-fields">
+    <form id="assistant-credit-form" class="assistant-fields" hidden>
       <label>Tarjeta <select id="assistant-credit-account" required></select></label>
       <label>Fecha de vencimiento <input id="assistant-credit-date" type="date" required></label>
       <button type="submit" class="soft-button">Guardar vencimiento verificado</button>
@@ -1044,10 +1048,12 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   const launcher=byId("open");
   if(!dialog||launcher.dataset.assistantEnabled!=="true")return;
   launcher.hidden=false;
+  const noticeSettings=document.getElementById("qwen-notice-settings");
+  if(noticeSettings)noticeSettings.hidden=false;
   const chatSection=byId("chat"),pendingView=byId("pending"),settingsView=byId("settings");
   const chatEnabled=chatSection.dataset.assistantChat==="true",nav=[...dialog.querySelectorAll("[data-assistant-view]")];
   const startingView=chatEnabled?"chat":"pending";
-  let view=startingView;
+  let view=startingView,creditAccount=null;
   nav[0].hidden=!chatEnabled;
   const category=byId("category"),subcategory=byId("subcategory"),answer=byId("answer");
   const ai=byId("ai"),notices=byId("notices"),remember=byId("remember"),save=byId("save");
@@ -1150,10 +1156,20 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     }
   }
   function renderCredit(credit){
-    const select=byId("credit-account"),list=byId("credit-list");
+    const select=byId("credit-account"),list=byId("credit-list"),section=byId("credit");
+    const requestedAccount=creditAccount;
+    const selected=credit.accounts.find(item=>item.id===(requestedAccount||select.value));
+    creditAccount=null;
     select.replaceChildren(new Option("Elige una tarjeta",""),...credit.accounts.map(item=>new Option(item.bank_label,item.id)));
+    select.value=selected?.id||"";
+    section.hidden=!requestedAccount&&!credit.accounts.length;
     byId("credit-form").hidden=!credit.accounts.length;
     byId("credit-empty").hidden=Boolean(credit.accounts.length);
+    if(requestedAccount&&dialog.open&&view==="settings"){
+      section.open=true;
+      if(selected)byId("credit-date").focus();
+      else section.querySelector("summary").focus();
+    }
     list.replaceChildren();
     for(const item of credit.dues){
       const row=el("article","","ai-document-table");
@@ -1391,14 +1407,25 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     showView(next);dialog.showModal();inbox();
   }
   launcher.addEventListener("click",()=>open(startingView));
-  if(location.hash==="#qwen")open(startingView);
-  if(location.hash==="#qwen-pending")open("pending");
-  window.addEventListener("hashchange",()=>{
+  document.addEventListener("finanzas:credit-due",event=>{
+    creditAccount=event.detail;
+    open("settings");
+  });
+  function openFromHash(){
     if(location.hash==="#qwen")open(startingView);
     if(location.hash==="#qwen-pending")open("pending");
-  });
+    if(location.hash==="#qwen-settings"){
+      byId("notice-form").closest("details").open=true;
+      open("settings");
+    }
+  }
+  openFromHash();
+  window.addEventListener("hashchange",openFromHash);
   dialog.addEventListener("close",()=>{
-    if(location.hash==="#qwen"||location.hash==="#qwen-pending")history.replaceState(null,"",location.pathname+location.search+"#plan");
+    creditAccount=null;
+    const section=location.hash==="#qwen-settings"?"#settings":
+      ["#qwen","#qwen-pending"].includes(location.hash)?"#plan":null;
+    if(section)history.replaceState(null,"",location.pathname+location.search+section);
   });
   byId("back").addEventListener("click",()=>{if(!busy)inbox();});
   byId("dismiss-category").addEventListener("click",async()=>{
@@ -1697,7 +1724,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     <div class="rail-group-label">HERRAMIENTAS</div>
     <nav class="rail-navigation secondary-nav" aria-label="Herramientas">
       <button class="rail-item" type="button" data-view="imports"><span class="rail-glyph" aria-hidden="true">\u21A5</span><span>Importar</span></button>
-      <button class="rail-item" type="button" data-view="connections"><span class="rail-glyph" aria-hidden="true">\u2301</span><span>Conexiones</span></button>
+      <button class="rail-item" type="button" data-view="connections"><span class="rail-glyph" aria-hidden="true">\u2301</span><span>Saldos</span></button>
       <button class="rail-item" type="button" data-view="settings"><span class="rail-glyph" aria-hidden="true">\u2699</span><span>Ajustes</span></button>
     </nav>
     <div class="rail-bottom"><p class="rail-quote">No se trata de ver m\xE1s n\xFAmeros.<br><em>Se trata de entenderlos.</em></p><div class="rail-foot"><span>FINANZASOSS</span><span>2026 \xB7 CO</span></div></div>
@@ -1870,8 +1897,10 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
         <div class="guidance"><span class="guidance-mark" aria-hidden="true">\u203B</span><div><h3>Un mapa sin duplicar movimientos.</h3><p>Los movimientos de bancos y portafolios solo podr\xE1n agregarse con reconciliaci\xF3n verificada para no sumar dos veces una misma operaci\xF3n.</p></div></div>
       </section>
       `+ft+`<section class="space" id="space-connections" data-space="connections" aria-labelledby="heading-connections" hidden>
-        <div class="intro-line"><span class="intro-index">07 \u2014 CONEXIONES</span><span class="intro-right">SOLO INTEGRACIONES AUTORIZADAS</span></div>
-        <div class="page-intro"><p class="eyebrow">FUENTES DE CONFIANZA</p><h1 id="heading-connections">Todo conectado. <em>Cuando sea seguro.</em></h1><p>Los movimientos pueden compararse con saldos que t\xFA hayas verificado. Ninguna sincronizaci\xF3n bancaria real est\xE1 activada; nunca se calcular\xE1 un saldo actual ficticio.</p></div>
+        <div class="intro-line"><span class="intro-index">07 \u2014 SALDOS</span><span class="intro-right">REGISTROS VERIFICADOS</span></div>
+        <div class="page-intro"><h1 id="heading-connections">Saldos</h1><p>Consulta los saldos que registraste y comp\xE1ralos con tus movimientos.</p>
+          <a class="soft-button" href="#imports">Importar extracto</a>
+        </div>
         <section class="verified-balances" aria-labelledby="verified-balances-heading">
  <div class="panel-heading">
   <div><span class="micro-label">SALDOS VERIFICADOS \xB7 CONCILIACI\xD3N</span>
@@ -1904,13 +1933,6 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
    <p class="balance-help">Por seguridad, este formulario nunca pide claves bancarias. Las diferencias no se corrigen editando o borrando movimientos autom\xE1ticamente.</p>
  </form>
 </section>
-        <div class="connections-grid" id="connections-grid">
-          <article class="connection"><span class="connection-icon">B.</span><div><h3>Bancolombia</h3><p>Acceso oficial pendiente</p></div><span class="state-pill">No conectado</span></article>
-          <article class="connection"><span class="connection-icon">N.</span><div><h3>Nequi</h3><p>Acceso oficial pendiente</p></div><span class="state-pill">No conectado</span></article>
-          <article class="connection"><span class="connection-icon">D.</span><div><h3>Davivienda</h3><p>Acceso oficial pendiente</p></div><span class="state-pill">No conectado</span></article>
-          <article class="connection"><span class="connection-icon">L.</span><div><h3>Lulo Bank</h3><p>Acceso oficial pendiente</p></div><span class="state-pill">No conectado</span></article>
-        </div>
-        <p class="footnote">Aqu\xED nunca pediremos contrase\xF1as de banca en l\xEDnea, claves de retiro ni frases semilla.</p>
       </section>
       <section class="space" id="space-settings" data-space="settings" aria-labelledby="heading-settings" hidden>
         <div class="intro-line"><span class="intro-index">08 \u2014 AJUSTES</span><span class="intro-right">CONTROL PERSONAL</span></div>
@@ -1921,7 +1943,18 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   <a class="soft-button profile-logout" href="/cdn-cgi/access/logout" aria-label="Cerrar sesi\xF3n de FinanzasOSS y cambiar de cuenta">Cerrar sesi\xF3n / Cambiar perfil</a>
 </div><div class="setting-row"><div><h3>Modo privacidad</h3><p>Oculta visualmente los montos cuando alguien mire tu pantalla.</p></div><button id="privacy-setting" type="button" class="toggle-button" role="switch" aria-checked="false">Desactivado</button></div><div class="setting-row"><div><h3>Movimiento reducido</h3><p>Desactiva las transiciones decorativas. Respeta la preferencia de accesibilidad del sistema.</p></div><button id="motion-setting" type="button" class="toggle-button" role="switch" aria-checked="false">Seg\xFAn sistema</button></div><div class="setting-row"><div><h3>Apariencia</h3><p>Un estilo editorial luminoso o una variante nocturna.</p></div><button id="theme-setting" type="button" class="toggle-button">Modo oscuro</button></div><div class="setting-row"><div><h3>Datos y almacenamiento</h3><p>La PWA funciona en l\xEDnea. No almacena tu historial, credenciales ni saldos sin conexi\xF3n.</p></div><span class="state-pill">Datos privados</span></div>
 <div class="setting-row app-setting"><div><h3>Instalar FinanzasOSS</h3><p>\xDAsala desde el icono de inicio como una aplicaci\xF3n. Los movimientos financieros nunca se guardan sin conexi\xF3n.</p><p id="install-feedback" class="app-setting-status" role="status" aria-live="polite">Lista para instalar en tu celular.</p></div><button id="install-pwa" type="button" class="soft-button">Instalar aplicaci\xF3n</button></div>
-<div class="setting-row app-setting"><div><h3>Recordatorio de gastos</h3><p>Aviso diario opcional a las 8:30 p. m. (Bogot\xE1). No incluye montos, bancos ni conceptos.</p><p id="push-feedback" class="app-setting-status" role="status" aria-live="polite">Comprobando disponibilidad\u2026</p></div><div class="push-actions"><button id="push-toggle" type="button" class="soft-button" disabled>Comprobar</button><button id="push-test" type="button" class="soft-button" disabled>Enviar prueba al iPhone</button></div></div>
+<div id="qwen-notice-settings" class="setting-row app-setting" hidden>
+  <div><h3>Avisos de Qwen</h3><p>Elige cu\xE1ndo recibir avisos por aclaraciones y alertas de tus finanzas.</p></div>
+  <a class="soft-button" href="#qwen-settings" aria-haspopup="dialog">Configurar avisos de Qwen</a>
+</div>
+<div class="setting-row app-setting">
+  <div><h3>Notificaciones en este dispositivo</h3><p id="push-feedback" class="app-setting-status" role="status" aria-live="polite">Comprobando disponibilidad\u2026</p></div>
+  <button id="push-toggle" type="button" class="soft-button" disabled>Comprobar</button>
+</div>
+<details class="settings-advanced">
+  <summary>Avanzado</summary>
+  <div class="setting-row app-setting"><div><h3>Prueba de notificaciones</h3><p id="push-test-feedback" class="app-setting-status" role="status" aria-live="polite">Activa las notificaciones en este dispositivo para enviar una prueba.</p></div>
+  <button id="push-test" type="button" class="soft-button" disabled>Enviar aviso de prueba</button></div>
 <div class="setting-row app-setting qa-setting">
   <div class="qa-setting-body">
     <h3>Diagn\xF3stico de la app en tu iPhone</h3>
@@ -1939,6 +1972,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     <p class="app-setting-status">Despu\xE9s, recorre Movimientos, Plan y Registrar gasto con el teclado abierto. Si ves algo cortado, env\xEDame una captura <strong>ocultando nombres, saldos y destinatarios</strong>, junto con el reporte t\xE9cnico.</p>
   </div>
 </div>
+</details>
 <div class="setting-row danger-row">
   <div><h3>Restablecer movimientos y saldos</h3>
   <p>Borra gastos y movimientos de este mes o de todos los meses. Los acumulados del panel se recalculan. No modifica bancos externos, cuentas manuales ni el Atajo del iPhone.</p></div>
@@ -1965,7 +1999,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
 <button type="button" data-view="plan"><span>04</span>Plan <b><span class="native-arrow" aria-hidden="true"></span></b></button>
 <button type="button" data-view="map"><span>05</span>Mapa financiero <b><span class="native-arrow" aria-hidden="true"></span></b></button>
 <button type="button" data-view="imports"><span>06</span>Importar <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="connections"><span>07</span>Conexiones <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="connections"><span>07</span>Saldos <b><span class="native-arrow" aria-hidden="true"></span></b></button>
 <button type="button" data-view="settings"><span>08</span>Ajustes <b><span class="native-arrow" aria-hidden="true"></span></b></button>
 </div>
 <p class="more-foot">Un mismo espacio, todos tus movimientos.</p>
@@ -3325,6 +3359,12 @@ dialog[open]{touch-action:pan-y}
 .studio.no-motion .dashboard-loading-spinner{animation:none}
 .import-page-progress{margin:10px 0;display:grid;gap:6px;font-size:.85rem}
 .import-page-progress progress{width:100%;accent-color:var(--copper)}
+
+.settings-advanced{border-top:1px solid var(--rule)}
+.settings-advanced>summary{padding:14px 0;cursor:pointer;font-weight:700}
+.settings-advanced[open]>summary{border-bottom:1px solid var(--rule)}
+#balance-list .balance-account>.soft-button+.soft-button{margin-top:6px}
+#hapi-report-label{font-weight:750}
 `;var mt=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -4070,7 +4110,15 @@ dialog[open]{touch-action:pan-y}
       form.scrollIntoView({behavior:"smooth",block:"center"});
       reset();
     });
-    card.append(action);list.append(card);
+    card.append(action);
+    if(a.type==="credit"&&$("assistant-open")?.dataset.assistantEnabled==="true"){
+      const due=el("button","soft-button","Gestionar vencimiento");
+      due.type="button";
+      due.addEventListener("click",()=>document.dispatchEvent(
+        new CustomEvent("finanzas:credit-due",{detail:a.id})));
+      card.append(due);
+    }
+    list.append(card);
   }
   if(!accounts.length)list.append(el("p","balance-empty",
     "Todav\xEDa no registraste un saldo real. Empieza con uno que puedas verificar en la aplicaci\xF3n de tu banco."));
@@ -4273,7 +4321,7 @@ document.addEventListener("finanzasoss:movement-saved",()=>void renderBankReport
   const spaces = ["today", "movement", "portfolio", "plan", "map", "imports", "connections", "settings"];
   const names = {
     today: "HOY", movement: "MOVIMIENTOS", portfolio: "PORTAFOLIOS", plan: "PLAN",
-    map: "MAPA FINANCIERO", imports: "IMPORTAR", connections: "CONEXIONES", settings: "AJUSTES",
+    map: "MAPA FINANCIERO", imports: "IMPORTAR", connections: "SALDOS", settings: "AJUSTES",
   };
   const bankRequired = new Set(["debit_card", "credit_card", "bank_transfer"]);
   const methods = {cash:"Efectivo",debit_card:"Tarjeta d\xE9bito",credit_card:"Tarjeta cr\xE9dito",
@@ -4358,11 +4406,13 @@ document.addEventListener("finanzasoss:movement-saved",()=>void renderBankReport
 
   function syncFromHistory(){
     const target=decodeURIComponent(location.hash.slice(1));
-    switchTo(spaces.includes(target)?target:"today",{fromHash:true});
+    const section=target==="qwen-settings"?"settings":
+      target==="qwen"||target==="qwen-pending"?"plan":target;
+    switchTo(spaces.includes(section)?section:"today",{fromHash:true});
   }
   window.addEventListener("hashchange",syncFromHistory);
   window.addEventListener("popstate",syncFromHistory);
-  if(spaces.includes(location.hash.slice(1)))syncFromHistory();
+  if(location.hash)syncFromHistory();
 
   // iOS standalone PWA: when the software keyboard occupies the visual
   // viewport, shrink bottom sheets and keep the fixed tab bar out of the way.
@@ -4832,8 +4882,10 @@ document.addEventListener("finanzasoss:movement-saved",()=>void renderBankReport
       }else pushOn=false;
       pushButton.disabled=false;pushButton.textContent=pushOn?"Desactivar avisos":"Activar avisos";
       pushTest.disabled=!pushOn;
-      pushStatus.textContent=pushOn?(pushOptions.deliveryEnabled?"Activo \xB7 recordatorio diario a las 8:30 p. m.":"Permiso registrado. El env\xEDo de avisos a\xFAn no est\xE1 habilitado."):
-        "Desactivado. Solo recibir\xE1s avisos si aceptas.";
+      byId("push-test-feedback").textContent=pushOn?"Puedes probar la entrega en este dispositivo.":
+        "Activa las notificaciones en este dispositivo para enviar una prueba.";
+      pushStatus.textContent=pushOn?"Permiso activo en este dispositivo.":
+        "Desactivadas en este dispositivo.";
     }catch{
       pushButton.disabled=true;pushButton.textContent="No disponible";
       pushStatus.textContent="No pudimos consultar las notificaciones. Reintenta en l\xEDnea.";
@@ -4894,8 +4946,8 @@ document.addEventListener("finanzasoss:movement-saved",()=>void renderBankReport
       });
       const value=await res.json().catch(()=>({}));
       if(!res.ok)throw new Error(value.error||"El proveedor no acept\xF3 el aviso.");
-      pushStatus.textContent="Prueba aceptada por el proveedor. Revisa las notificaciones de iOS.";
-    }catch(e){pushStatus.textContent=e.message||"No se pudo probar.";}
+      byId("push-test-feedback").textContent="Prueba aceptada. Revisa las notificaciones de este dispositivo.";
+    }catch(e){byId("push-test-feedback").textContent=e.message||"No se pudo probar.";}
     finally{pushBusy=false;pushTest.disabled=!pushOn;}
   });
   void updatePush();
