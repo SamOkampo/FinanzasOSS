@@ -79,7 +79,7 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
   --canvas-mint: #8ec8b66e;
   --canvas-warm: #e4b48557;
   --canvas-toolbar: #f3f7f2;
-  --ink-muted: #52665d;
+  --ink-muted: #485c53;
   background-color: var(--paper);
   background-image:
     radial-gradient(ellipse 74rem 38rem at 100% 0, var(--canvas-mint), transparent 72%),
