@@ -53,4 +53,10 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .studio.no-motion .dashboard-loading-spinner{animation:none}
 .import-page-progress{margin:10px 0;display:grid;gap:6px;font-size:.85rem}
 .import-page-progress progress{width:100%;accent-color:var(--copper)}
+
+.settings-advanced{border-top:1px solid var(--rule)}
+.settings-advanced>summary{padding:14px 0;cursor:pointer;font-weight:700}
+.settings-advanced[open]>summary{border-bottom:1px solid var(--rule)}
+#balance-list .balance-account>.soft-button+.soft-button{margin-top:6px}
+#hapi-report-label{font-weight:750}
 `;
