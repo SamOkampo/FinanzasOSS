@@ -11,8 +11,8 @@ export const ASSISTANT_HTML = `
 <dialog id="assistant-dialog" class="assistant-dialog" aria-labelledby="assistant-title">
   <div class="assistant-heading">
     <div class="assistant-identity">
-      <span class="assistant-avatar" aria-hidden="true">Q</span>
-      <div><h2 id="assistant-title">Qwen</h2><p>Asistente de FinanzasOSS</p></div>
+      <span class="assistant-avatar" aria-hidden="true"><span class="assistant-sparkle"></span></span>
+      <div><h2 id="assistant-title">Asistente financiero <span class="assistant-ia-tag">IA</span></h2><p>Qwen · FinanzasOSS</p></div>
     </div>
     <form method="dialog"><button autofocus class="assistant-close" aria-label="Cerrar asistente">×</button></form>
   </div>
@@ -24,7 +24,7 @@ export const ASSISTANT_HTML = `
   <section id="assistant-chat" class="assistant-chat" data-assistant-chat="false" aria-label="Chat con Qwen" hidden>
     <div class="assistant-chat-tools">
       <button type="button" class="assistant-text-button" id="assistant-chat-threads" aria-expanded="false" aria-controls="assistant-chat-library">Historial</button>
-      <button type="button" class="assistant-text-button" id="assistant-chat-new">+ Nuevo chat</button>
+      <button type="button" class="assistant-text-button assistant-new-chat" id="assistant-chat-new">＋ Nuevo chat</button>
     </div>
     <div id="assistant-chat-library" class="assistant-chat-library assistant-fields" hidden>
       <label>Conversaciones guardadas <select id="assistant-chat-history"><option value="">Elige una conversación</option></select></label>
@@ -34,9 +34,8 @@ export const ASSISTANT_HTML = `
     </div>
     <div id="assistant-chat-scroll" class="assistant-chat-scroll" tabindex="0" aria-label="Mensajes de la conversación">
       <div id="assistant-chat-welcome" class="assistant-chat-welcome">
-        <div class="assistant-bubble assistant-bubble-qwen"><span class="assistant-speaker">Qwen</span>
-          <p>Hola, soy Qwen. ¿Qué quieres revisar hoy?</p>
-        </div>
+        <span class="assistant-welcome-mark" aria-hidden="true"><span class="assistant-sparkle"></span></span>
+        <h3>¿Qué quieres revisar hoy?</h3>
         <div class="assistant-chat-actions" aria-label="Preguntas sugeridas">
           <button type="button" class="assistant-chip" data-question="¿Cuánto gasté por categoría este mes?">Gastos del mes</button>
           <button type="button" class="assistant-chip" data-question="¿Cuáles son mis aportes pendientes en Hapi?">Aportes Hapi</button>
@@ -46,20 +45,24 @@ export const ASSISTANT_HTML = `
       </div>
       <div id="assistant-chat-turns" role="log" aria-label="Conversación" aria-relevant="additions text"></div>
       <div id="assistant-chat-pending" class="assistant-bubble assistant-bubble-qwen assistant-typing" hidden aria-hidden="true"><i></i><i></i><i></i></div>
+      <section id="assistant-chat-consent" class="assistant-consent" aria-labelledby="assistant-consent-title" hidden>
+        <h3 id="assistant-consent-title">¿Quieres activar Qwen para el chat?</h3>
+        <p>Cuando haga falta interpretar tu pregunta, se enviará su texto a Qwen con los identificadores comunes ocultos. Tus registros financieros se consultan en FinanzasOSS. Evita escribir datos personales o claves.</p>
+        <p>Puedes cambiar este permiso en Ajustes.</p>
+        <div class="assistant-chat-actions">
+          <button id="assistant-consent-allow" class="assistant-primary" type="button">Autorizar y continuar</button>
+          <button id="assistant-consent-skip" class="assistant-text-button" type="button">Seguir sin IA</button>
+        </div>
+        <p id="assistant-consent-feedback" role="status"></p>
+      </section>
     </div>
     <form id="assistant-chat-form" class="assistant-compose" autocomplete="off">
       <p id="assistant-chat-status" role="status" aria-live="polite"></p>
       <div class="assistant-compose-row">
         <label class="sr-only" for="assistant-chat-question">Escribe tu mensaje</label>
-        <input id="assistant-chat-question" maxlength="200" required placeholder="Escribe tu mensaje…" autocomplete="off" enterkeyhint="send">
-        <button type="submit" class="solid-button">Enviar</button>
+        <input id="assistant-chat-question" maxlength="200" required placeholder="Pregúntale a Qwen…" autocomplete="off" enterkeyhint="send">
+        <button type="submit" class="assistant-primary" aria-label="Enviar mensaje">Enviar <span aria-hidden="true">↑</span></button>
       </div>
-      <details id="assistant-chat-ai-label" class="assistant-chat-options" hidden>
-        <summary>Interpretar con IA</summary>
-        <label class="ai-document-consent"><input id="assistant-chat-ai" type="checkbox">
-          <span>Autorizo enviar a Qwen el texto de este mensaje si hay que interpretarlo.</span>
-        </label>
-      </details>
     </form>
   </section>
   <div id="assistant-pending" class="assistant-side" hidden>
@@ -68,6 +71,12 @@ export const ASSISTANT_HTML = `
     <div id="assistant-items"></div>
   </div>
   <div id="assistant-settings" class="assistant-side" hidden>
+  <details id="assistant-chat-preference" hidden>
+    <summary>Permiso de Qwen para el chat</summary>
+    <p>Qwen recibe el texto de la pregunta cuando hace falta interpretarla. Los identificadores comunes se ocultan. Evita incluir datos personales.</p>
+    <p id="assistant-chat-preference-status" role="status">Consultando permiso…</p>
+    <button id="assistant-chat-permission" class="assistant-text-button" type="button" disabled>Activar Qwen</button>
+  </details>
   <details id="assistant-notice-rules">
     <summary>Avisos y horario</summary>
     <form id="assistant-notice-form" class="assistant-fields" hidden>
@@ -144,7 +153,7 @@ export const ASSISTANT_CSS = `
 .assistant-chat-chart p{margin:6px 0}
 .assistant-chat-chart meter{width:100%;height:12px;display:block}
 .assistant-dialog[open]{display:flex;flex-direction:column;position:fixed;inset:auto 20px 22px auto;margin:0;
-  width:min(420px,calc(100% - 40px));height:min(660px,calc(100dvh - 44px));max-width:none;max-height:none;
+  width:min(520px,calc(100% - 40px));height:min(740px,calc(100dvh - 44px));max-width:none;max-height:none;
   padding:0;border:1px solid var(--rule);border-radius:22px;overflow:hidden;
   background:var(--surface);color:var(--ink);box-shadow:0 20px 68px rgba(0,0,0,.22)}
 .assistant-launch{position:fixed;z-index:7;right:20px;bottom:22px;
@@ -174,17 +183,42 @@ export const ASSISTANT_CSS = `
   .assistant-launch{right:max(12px,env(safe-area-inset-right));bottom:calc(var(--app-bottom-navigation) + 8px)}
   body:has(.assistant-launch:not([hidden])) .stage>.main{padding-bottom:calc(var(--app-bottom-navigation) + 68px)}
 }
-.assistant-dialog::backdrop{background:rgba(10,26,25,.42)}
-.assistant-heading{flex:none;display:flex;justify-content:space-between;align-items:center;gap:12px;
-  padding:12px 14px;background:#172e2c;color:#f7faf6}
+.assistant-dialog{
+  --chat-base:#f5f6fe;--chat-glow-blue:#a9d3fcba;--chat-glow-violet:#c8b3f8bd;--chat-glow-rose:#f9cae1bc;
+  --chat-ink:#202849;--chat-muted:#465572;--chat-rule:#4f609444;
+  --chat-surface:#ffffffac;--chat-compose:#ffffffba;--chat-input:#fff;--chat-accent:#40368a;
+  --chat-user:#e5e3fe;--chat-pill:#e4e2fa;--chat-button:#3654b1;--chat-button-end:#6843ae;
+}
+body.theme-night .assistant-dialog{
+  --chat-base:#131a2f;--chat-glow-blue:#24689482;--chat-glow-violet:#674cae85;--chat-glow-rose:#8540715c;
+  --chat-ink:#f2f4ff;--chat-muted:#c1ccea;--chat-rule:#a5b6ef55;
+  --chat-surface:#1a2444a8;--chat-compose:#161f38dc;--chat-input:#1b2442;--chat-accent:#e2dcff;
+  --chat-user:#323067;--chat-pill:#343765;--chat-button:#3859b7;--chat-button-end:#6a47b0;
+}
+.assistant-dialog[open]{
+  color:var(--chat-ink);border-color:var(--chat-rule);
+  background:
+    radial-gradient(ellipse 98% 60% at 4% 2%,var(--chat-glow-blue),transparent 74%),
+    radial-gradient(ellipse 102% 59% at 100% 12%,var(--chat-glow-violet),transparent 76%),
+    radial-gradient(ellipse 88% 62% at 96% 100%,var(--chat-glow-rose),transparent 80%),
+    var(--chat-base);
+}
+.assistant-dialog::backdrop{background:#11183280;backdrop-filter:blur(5px)}
+.assistant-heading{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px}
 .assistant-identity{display:flex;align-items:center;gap:10px;min-width:0}
-.assistant-heading h2{margin:0;font-size:18px;line-height:1.15}
-.assistant-heading p{margin:3px 0 0;color:#d3e2d8;font-size:12px}
-.assistant-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:14px;
-  background:#dcecd9;color:#172e2c;font-size:19px;font-weight:800}
+.assistant-heading h2{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0;font-size:clamp(15px,4.3vw,20px);line-height:1.14}
+.assistant-heading p{margin:3px 0 0;color:var(--chat-muted);font-size:12px}
+.assistant-avatar,.assistant-welcome-mark{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:14px;
+  background:linear-gradient(145deg,#ecf7ff,#bfc9ff 52%,#edbbed);box-shadow:0 5px 16px #6655ae35}
+.assistant-sparkle{display:block;width:24px;height:24px;
+  background:linear-gradient(145deg,#3177bc 10%,#6655c2 52%,#93429c);
+  clip-path:polygon(50% 0,65% 34%,100% 50%,65% 66%,50% 100%,35% 66%,0 50%,35% 34%)}
+.assistant-ia-tag,.assistant-answer-tag{font-size:10px;font-weight:800;line-height:1.3;
+  border:1px solid var(--chat-rule);border-radius:6px;padding:2px 5px;background:var(--chat-pill);color:var(--chat-accent)}
+.assistant-answer-tag{margin-inline-start:6px}
 .assistant-close{min-width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:inherit;font-size:26px;line-height:1}
 .assistant-close:hover{background:#ffffff19}
-.assistant-nav{flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;border-bottom:1px solid var(--rule)}
+.assistant-nav{flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;border-bottom:1px solid var(--chat-rule)}
 .assistant-nav button,.assistant-text-button,.assistant-chip{border:1px solid transparent;background:transparent;color:var(--ink);border-radius:10px;min-height:40px;padding:0 10px}
 .assistant-nav button{font-weight:700;white-space:nowrap;min-height:44px}
 .assistant-nav button[aria-pressed=true]{background:var(--paper);border-color:var(--rule)}
@@ -210,8 +244,7 @@ export const ASSISTANT_CSS = `
 .assistant-compose button{min-height:44px;white-space:nowrap}
 .assistant-compose p{font-size:12px;margin:0 0 5px;overflow-wrap:anywhere}
 .assistant-compose p:empty,.assistant-side p:empty,#assistant-movement-status:empty{display:none}
-.assistant-chat-options{margin-top:7px;font-size:12px}
-.assistant-chat-options summary,.assistant-side summary{cursor:pointer;padding:6px 0}
+.assistant-side summary{cursor:pointer;padding:6px 0}
 .assistant-side details{border-bottom:1px solid var(--rule);padding:5px 0}
 .assistant-side summary{min-height:44px;padding-top:11px;font-weight:700}
 .assistant-typing{display:flex;gap:5px;margin-top:3px;padding:13px}
@@ -222,9 +255,49 @@ export const ASSISTANT_CSS = `
 .assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
 #hapi-position-fields fieldset{min-width:0;display:grid;gap:10px;border:1px solid var(--rule);border-radius:12px}
 .assistant-fields input:not([type=checkbox]),.assistant-fields select{font-size:16px;width:100%;min-height:42px}
+.assistant-nav{gap:4px;padding:4px 12px 8px}
+.assistant-nav button,.assistant-text-button,.assistant-chip{color:var(--chat-ink);font-size:13px}
+.assistant-nav button{padding-inline:9px}
+.assistant-nav button[aria-pressed=true],.assistant-chip:hover,.assistant-text-button:hover{
+  border-color:var(--chat-rule);background:var(--chat-surface)}
+.assistant-nav span{background:var(--chat-button);color:#fff}
+.assistant-chat-tools{padding:5px 12px;gap:8px;border-color:var(--chat-rule)}
+.assistant-text-button{border-color:var(--chat-rule);border-radius:12px;text-decoration:none;min-height:44px}
+.assistant-new-chat{background:var(--chat-pill);color:var(--chat-accent)}
+.assistant-chat-scroll{padding:16px clamp(12px,4.4vw,22px)}
+.assistant-chat-welcome{text-align:center;padding:clamp(22px,6dvh,52px) 0 14px}
+.assistant-welcome-mark{width:58px;height:58px;border-radius:20px;margin:0 auto 14px}
+.assistant-welcome-mark .assistant-sparkle{width:32px;height:32px}
+.assistant-chat-welcome h3{margin:0 0 16px;font-size:clamp(22px,6vw,30px);line-height:1.15;letter-spacing:-.035em;text-wrap:balance}
+.assistant-chat-welcome .assistant-chat-actions{justify-content:center}
+.assistant-chat-welcome .assistant-chip{min-height:44px;border-color:var(--chat-rule);
+  padding-inline:12px;background:var(--chat-surface)}
+.assistant-bubble p{white-space:pre-wrap}
+.assistant-bubble-qwen{color:var(--chat-ink);border-color:var(--chat-rule);background:var(--chat-surface)}
+.assistant-bubble-user{color:var(--chat-ink);background:var(--chat-user)}
+.assistant-bubble a{background:var(--chat-input);color:var(--chat-accent);border-color:var(--chat-rule)}
+.assistant-compose{padding:9px 12px 12px;background:var(--chat-compose);border-color:var(--chat-rule)}
+.assistant-compose input:not([type=checkbox]){min-height:48px;border-color:var(--chat-rule);
+  border-radius:16px;background:var(--chat-input);color:var(--chat-ink)}
+.assistant-compose input::placeholder{color:var(--chat-muted)}
+.assistant-primary{min-height:44px;border:1px solid transparent;border-radius:14px;padding:8px 12px;
+  background:linear-gradient(125deg,var(--chat-button),var(--chat-button-end));color:#fff;font-weight:750;font-size:13px}
+.assistant-compose-row .assistant-primary{min-height:48px}
+.assistant-primary:hover:not(:disabled){filter:brightness(1.12)}
+.assistant-primary:disabled{opacity:.62;cursor:wait}
+.assistant-dialog :is(button,select,input,a):focus-visible{outline:2px solid var(--chat-accent);outline-offset:2px}
+.assistant-consent{margin:10px 0 4px;padding:13px 14px;border:1px solid var(--chat-rule);
+  border-radius:16px;background:var(--chat-surface);overflow-wrap:anywhere}
+.assistant-consent h3{margin:0 0 6px;font-size:16px}
+.assistant-consent p,#assistant-chat-preference p{font-size:13px;color:var(--chat-muted);margin:7px 0}
+.assistant-consent p:empty{display:none}
+.assistant-side details{border-color:var(--chat-rule)}
+.fos-keyboard-visible .assistant-chat-welcome{padding-block:6px}
+.fos-keyboard-visible .assistant-welcome-mark{display:none}
+
 @media(max-width:800px){
   .assistant-dialog[open]{inset:auto 8px max(8px,env(safe-area-inset-bottom)) 8px;width:calc(100% - 16px);
-    height:min(660px,calc(100dvh - max(8px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom))))}
+    height:min(740px,calc(100dvh - max(8px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom))))}
   .fos-keyboard-visible .assistant-dialog[open]{top:calc(var(--fos-visible-top,0px) + 4px);bottom:auto;
     height:calc(var(--fos-visible-height,100dvh) - 8px);animation:none}
   .fos-keyboard-visible .assistant-chat-tools{display:none}
@@ -246,7 +319,7 @@ export const ASSISTANT_JS = String.raw`
   const chatSection=byId("chat"),pendingView=byId("pending"),settingsView=byId("settings");
   const chatEnabled=chatSection.dataset.assistantChat==="true",nav=[...dialog.querySelectorAll("[data-assistant-view]")];
   const startingView=chatEnabled?"chat":"pending";
-  let view=startingView,creditAccount=null;
+  let view=startingView,creditAccount=null,loadChatPreference=()=>{};
   nav[0].hidden=!chatEnabled;
   const category=byId("category"),subcategory=byId("subcategory"),answer=byId("answer");
   const ai=byId("ai"),notices=byId("notices"),remember=byId("remember"),save=byId("save");
@@ -269,6 +342,7 @@ export const ASSISTANT_JS = String.raw`
     settingsView.hidden=next!=="settings";
     panel.hidden=true;
     if(next==="chat")byId("chat-scroll").scrollTop=byId("chat-scroll").scrollHeight;
+    if(next==="settings"&&chatEnabled)loadChatPreference();
     for(const button of nav)button.setAttribute("aria-pressed",String(button.dataset.assistantView===next));
   }
   function el(tag,text,className){
@@ -281,7 +355,7 @@ export const ASSISTANT_JS = String.raw`
     const options=data?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}:{};
     const response=await fetch(base+path,{...options,cache:"no-store",credentials:"same-origin"});
     const body=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(body.error||"No se pudo completar la solicitud.");
+    if(!response.ok)throw Object.assign(Error(body.error||"No se pudo completar la solicitud."),{code:body.code});
     return body;
   }
   function options(control,values,selected){
@@ -465,7 +539,6 @@ export const ASSISTANT_JS = String.raw`
       renderNotices(data);
       if(merchantSection.open)loadMerchants(true);
       ai.closest("label").hidden=!data.aiAvailable;
-      byId("chat-ai-label").hidden=!data.aiAvailable;
       for(const item of data.items){
         const button=document.createElement("button");
         button.className="soft-button";
@@ -489,10 +562,48 @@ export const ASSISTANT_JS = String.raw`
   function setupChat(section){
     const history=byId("chat-history"),turns=byId("chat-turns"),output=byId("chat-status");
     const input=byId("chat-question"),form=byId("chat-form"),remove=byId("chat-delete"),fresh=byId("chat-new");
-    const send=form.querySelector("[type=submit]"),consent=byId("chat-ai");
+    const send=form.querySelector("[type=submit]");
     const scroll=byId("chat-scroll"),pending=byId("chat-pending"),welcome=byId("chat-welcome");
-    const threads=byId("chat-threads"),library=byId("chat-library"),consentPanel=byId("chat-ai-label");
-    let id="",working=false,retry=null,saved=false;
+    const threads=byId("chat-threads"),library=byId("chat-library");
+    const consentPanel=byId("chat-consent"),allow=byId("consent-allow"),skip=byId("consent-skip");
+    const consentFeedback=byId("consent-feedback"),preference=byId("chat-preference");
+    const preferenceStatus=byId("chat-preference-status"),permission=byId("chat-permission");
+    let id="",working=false,retry=null,saved=false,mode="unset",updatingPermission=false;
+    let preferenceVersion=0;
+    function renderPreference(data){
+      mode=data.consent;
+      permission.textContent=mode==="allowed"?"Revocar permiso":"Autorizar Qwen para el chat";
+      permission.disabled=mode!=="allowed"&&!data.available;
+      preferenceStatus.textContent=mode==="allowed"?(data.available?"Qwen autorizado en este perfil.":"Qwen autorizado. El servicio está temporalmente deshabilitado."):
+        mode==="disabled"?"Uso de Qwen desactivado.":data.available?"Permiso pendiente.":"Qwen no está disponible.";
+    }
+    loadChatPreference=async()=>{
+      if(updatingPermission)return;
+      const version=++preferenceVersion;
+      preference.hidden=false;
+      try{
+        const current=await request("chat/preferences");
+        if(version===preferenceVersion)renderPreference(current);
+      }catch(error){if(version===preferenceVersion)preferenceStatus.textContent=error.message;}
+    };
+    async function changePreference(enabled,continuePrompt){
+      if(updatingPermission||working)return;
+      updatingPermission=true;preferenceVersion++;
+      allow.disabled=skip.disabled=permission.disabled=true;
+      const feedback=continuePrompt?consentFeedback:preferenceStatus;
+      feedback.textContent="Guardando permiso…";
+      let updated=false;
+      try{
+        renderPreference(await request("chat/preferences",{enabled,confirmed:true}));
+        consentPanel.hidden=true;consentFeedback.textContent="";
+        updated=true;
+      }catch(error){feedback.textContent=error.message;permission.disabled=false;}
+      finally{allow.disabled=skip.disabled=false;updatingPermission=false;}
+      if(updated&&continuePrompt&&view==="chat"&&dialog.open)form.requestSubmit();
+    }
+    allow.addEventListener("click",()=>void changePreference(true,true));
+    skip.addEventListener("click",()=>void changePreference(false,true));
+    permission.addEventListener("click",()=>void changePreference(mode!=="allowed",false));
     const format=(amount,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(amount)/100);
     function bottom(){scroll.scrollTop=scroll.scrollHeight;}
     function bubble(who,message){
@@ -502,6 +613,7 @@ export const ASSISTANT_JS = String.raw`
     }
     function render(turn,includeQuestion=true){
       const answer=turn.answer,card=bubble("Qwen",answer.text);
+      if(answer.aiUsed)card.querySelector(".assistant-speaker").append(el("span","IA","assistant-answer-tag"));
       if(includeQuestion)turns.append(bubble("Tú",turn.question));
       if(answer.totalMinor!==undefined&&answer.currency)card.append(el("strong",format(answer.totalMinor,answer.currency)));
       if(answer.points?.length&&answer.currency){
@@ -531,8 +643,8 @@ export const ASSISTANT_JS = String.raw`
     }
     function freshThread(){
       id="";retry=null;saved=false;turns.replaceChildren();history.value="";welcome.hidden=false;
-      remove.hidden=true;input.value="";consent.checked=false;output.textContent="";
-      consentPanel.open=false;closeHistory();scroll.scrollTop=0;
+      remove.hidden=true;input.value="";output.textContent="";
+      consentPanel.hidden=true;closeHistory();scroll.scrollTop=0;
     }
     async function loadHistory(){
       const data=await request("chat");
@@ -562,7 +674,7 @@ export const ASSISTANT_JS = String.raw`
       setBusy(true);output.textContent="Cargando conversación…";
       try{
         const data=await request("chat?id="+encodeURIComponent(history.value));
-        id=data.thread.id;retry=null;saved=true;input.value="";consent.checked=false;consentPanel.open=false;turns.replaceChildren();
+        id=data.thread.id;retry=null;saved=true;input.value="";consentPanel.hidden=true;turns.replaceChildren();
         for(const turn of data.turns)render(turn);
         welcome.hidden=Boolean(data.turns.length);remove.hidden=false;output.textContent="";
         closeHistory();threads.focus({preventScroll:true});bottom();
@@ -572,20 +684,24 @@ export const ASSISTANT_JS = String.raw`
     form.addEventListener("submit",async event=>{
       event.preventDefault();
       const question=input.value.trim();
-      if(working||!question)return;
+      if(working||updatingPermission||!question)return;
+      if(!consentPanel.hidden){allow.focus();return;}
       if(!id)id=crypto.randomUUID();
       if(!retry||retry.question!==question)retry={id,question,turnId:crypto.randomUUID()};
-      const optimistic=bubble("Tú",question),allowAI=consent.checked;
-      input.value="";consent.checked=false;consentPanel.open=false;
+      const optimistic=bubble("Tú",question);
+      input.value="";
       welcome.hidden=true;turns.append(optimistic);pending.hidden=false;
-      setBusy(true);output.textContent="Qwen está consultando tus registros…";bottom();
+      setBusy(true);output.textContent="Preparando la respuesta…";bottom();
       try{
-        const data=await request("chat",{...retry,allowAI});
+        const data=await request("chat",retry);
         render(data.turn,false);retry=null;saved=true;remove.hidden=false;output.textContent="";
       }catch(error){
         optimistic.remove();welcome.hidden=Boolean(turns.children.length);
         if(!input.value)input.value=question;
-        output.textContent=error.message;
+        if(error.code==="qwen_consent_required"){
+          output.textContent="";
+          consentPanel.hidden=false;consentFeedback.textContent="";input.blur();allow.focus({preventScroll:true});
+        }else output.textContent=error.message;
       }
       finally{pending.hidden=true;setBusy(false);bottom();}
     });
