@@ -1903,14 +1903,14 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
       </section>
       `+ft+`<section class="space" id="space-connections" data-space="connections" aria-labelledby="heading-connections" hidden>
         <div class="intro-line"><span class="intro-index">07 \u2014 SALDOS</span><span class="intro-right">REGISTROS VERIFICADOS</span></div>
-        <div class="page-intro"><h1 id="heading-connections">Saldos</h1><p>Consulta los saldos que registraste y comp\xE1ralos con tus movimientos.</p>
+        <div class="page-intro"><h1 id="heading-connections">Saldos</h1><p>Compara el saldo estimado con el \xFAltimo saldo que confirmaste.</p>
           <a class="soft-button" href="#imports">Importar extracto</a>
         </div>
         <section class="verified-balances" aria-labelledby="verified-balances-heading">
  <div class="panel-heading">
   <div><span class="micro-label">SALDOS VERIFICADOS \xB7 CONCILIACI\xD3N</span>
   <h2 id="verified-balances-heading">Cu\xE1nto tienes. <em>Con evidencia.</em></h2>
-  <p>Registra el saldo que consultaste en cada aplicaci\xF3n bancaria. No hay conexi\xF3n a bancos ni actualizaci\xF3n en tiempo real. El saldo conservar\xE1 su fecha de consulta.</p></div>
+  <p>El saldo estimado parte del \xFAltimo saldo confirmado y suma los abonos y resta los cargos registrados de esa cuenta. Para verificar la cifra, consulta tu banco.</p></div>
  </div>
  <div class="balance-refresh-controls">
    <button id="refresh-balances" class="soft-button" type="button" aria-label="Actualizar saldos y conciliaci\xF3n">\u21BB Actualizar saldos</button>
@@ -4078,8 +4078,8 @@ dialog[open]{touch-action:pan-y}
  if(!form||!list||!summary)return;
  const bank=$("verify-balance-bank"),kind=$("verify-balance-type"),amount=$("verify-balance-amount");
  const feedback=$("balance-feedback"),review=$("balance-review"),submit=$("verify-balance-submit");
- const currency=minor=>new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",
-   maximumFractionDigits:0}).format(Number(minor||0)/100);
+ const money=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0,maximumFractionDigits:2});
+ const currency=minor=>money.format(Number(minor||0)/100);
  const when=iso=>new Intl.DateTimeFormat("es-CO",{timeZone:"America/Bogota",
    dateStyle:"medium",timeStyle:"short"}).format(new Date(iso));
  const accountTypes={deposit:"Cuenta o billetera",cash:"Efectivo",credit:"Tarjeta de cr\xE9dito (deuda)"};
@@ -4093,10 +4093,14 @@ dialog[open]{touch-action:pan-y}
  function status(txt,failed=false){
   feedback.textContent=txt;feedback.className="expense-feedback"+(failed?" fail":"");
  }
+ function privateText(tag,style,value){
+  const node=el(tag,style,value);
+  node.setAttribute("data-private","");
+  return node;
+ }
  function moneyBox(label,minor){
   const row=el("div","balance-summary-item");
-  row.append(el("span","",label),el("strong","balance-private",currency(minor)));
-  row.querySelector("strong").setAttribute("data-private","");
+  row.append(el("span","",label),privateText("strong","balance-private",currency(minor)));
   return row;
  }
  async function load(){
@@ -4114,14 +4118,18 @@ dialog[open]{touch-action:pan-y}
     if(run!==latestLoad)return;
     list.replaceChildren();summary.replaceChildren();
   const accounts=Array.isArray(data.accounts)?data.accounts:[];
-  const deposits=accounts.filter(x=>x.hasSnapshot&&(x.type==="deposit"||x.type==="cash"));
+  const deposits=accounts.filter(x=>x.hasSnapshot&&x.type==="deposit");
+  const cash=accounts.filter(x=>x.hasSnapshot&&x.type==="cash");
   const credit=accounts.filter(x=>x.hasSnapshot&&x.type==="credit");
-  if(deposits.length)summary.append(moneyBox("Suma de \xFAltimos saldos informados (no es saldo bancario actual)",
-    deposits.reduce((s,x)=>s+Number(x.latest.amountMinor),0)));
+  const sum=(rows,amount)=>rows.reduce((total,row)=>total+BigInt(amount(row)),0n);
+  if(deposits.length)summary.append(moneyBox("Saldo estimado en cuentas y billeteras",
+    sum(deposits,x=>x.estimate?.amountMinor??x.latest.amountMinor)));
+  if(cash.length)summary.append(moneyBox("Efectivo confirmado",
+    sum(cash,x=>x.latest.amountMinor)));
   if(credit.length)summary.append(moneyBox("Deuda informada de tarjetas de cr\xE9dito",
-    credit.reduce((s,x)=>s+Number(x.latest.amountMinor),0)));
-  if(!deposits.length&&!credit.length)summary.append(el("p","balance-empty",
-    "No hay saldos de bancos verificados. Los gastos y los ingresos no permiten inferirlos."));
+    sum(credit,x=>x.latest.amountMinor)));
+  if(!deposits.length&&!cash.length&&!credit.length)summary.append(el("p","balance-empty",
+    "Registra un saldo confirmado para empezar."));
   for(const a of accounts){
     const card=el("article","balance-account");
     const header=el("div","balance-account-head");
@@ -4129,17 +4137,25 @@ dialog[open]{touch-action:pan-y}
     card.append(header);
     if(a.latest){
       const line=el("div","balance-account-value");
-      line.append(el("strong","balance-private",currency(a.latest.amountMinor)),
-        el("small","",when(a.latest.asOf)+" \xB7 confirmado por ti"));
-      line.querySelector("strong").setAttribute("data-private","");
+      if(a.estimate)line.append(el("small","","Saldo estimado"));
+      line.append(privateText("strong","balance-private",currency(a.estimate?.amountMinor??a.latest.amountMinor)));
+      const confirmed=el("small","","Confirmado el "+when(a.latest.asOf));
+      if(a.estimate)confirmed.append(document.createTextNode(" \xB7 "),privateText("span","",currency(a.latest.amountMinor)));
+      line.append(confirmed);
       card.append(line);
+      if(a.estimate&&(a.estimate.incomingCount||a.estimate.outgoingCount)){
+        card.append(privateText("p","balance-help",
+          "Desde el corte \xB7 Abonos "+currency(a.estimate.incomingMinor)+" \xB7 Cargos "+currency(a.estimate.outgoingMinor)));
+      }
+      if(a.estimate?.uncertainCount)card.append(el("p","balance-help",
+        "Hay movimientos del d\xEDa del corte que se importaron sin hora y quedan fuera de la estimaci\xF3n."));
     }else card.append(el("p","", "Sin saldo registrado."));
     const rec=a.reconciliation;
     if(rec){
       const equal=rec.status==="matches_recorded_movements";
-      card.append(el("p",equal?"balance-matches":"balance-difference",
-        equal?"Conciliaci\xF3n parcial: coincide con los movimientos registrados.":"Diferencia por revisar: "+currency(rec.differenceMinor)));
-      card.append(el("p","balance-help",
+      card.append(equal?el("p","balance-matches","Los saldos coinciden con los movimientos registrados."):
+        privateText("p","balance-difference","Diferencia por revisar: "+currency(rec.differenceMinor)));
+      card.append(privateText("p","balance-help",
         "Entre "+when(rec.after)+" y "+when(rec.until)+": "+
         rec.incomingCount+" abonos ("+currency(rec.incomingMinor)+"), "+
         rec.outgoingCount+" cargos ("+currency(rec.outgoingMinor)+"). "+
@@ -4155,7 +4171,7 @@ dialog[open]{touch-action:pan-y}
         "El efectivo no puede conciliarse autom\xE1ticamente porque tus registros no identifican una caja espec\xEDfica."));
     }else card.append(el("p","balance-help",
       "Para comparar movimientos, registra otro saldo confirmado en una fecha posterior."));
-    const action=el("button","soft-button","Actualizar saldo de esta cuenta");
+    const action=el("button","soft-button","Confirmar saldo de esta cuenta");
     action.type="button";action.addEventListener("click",()=>{
       bank.value=a.label;kind.value=a.type;bank.focus();
       form.scrollIntoView({behavior:"smooth",block:"center"});
@@ -4177,7 +4193,9 @@ dialog[open]{touch-action:pan-y}
   for(const value of data.bankLabels||[]){const opt=document.createElement("option");opt.value=value;dl.append(opt);}
   // Maintain the app's existing privacy toggle for dynamically created amounts.
   if(document.querySelector("#studio")?.classList.contains("is-private")){
-    for(const x of list.querySelectorAll("[data-private]"))x.setAttribute("aria-label","Monto privado");
+    for(const x of [...summary.querySelectorAll("[data-private]"),...list.querySelectorAll("[data-private]")]){
+      x.setAttribute("aria-hidden","true");x.setAttribute("inert","");
+    }
   }
   if(refreshState)refreshState.textContent="Saldos actualizados desde FinanzasOSS a las "+
     new Intl.DateTimeFormat("es-CO",{timeZone:"America/Bogota",hour:"numeric",
@@ -4243,11 +4261,57 @@ dialog[open]{touch-action:pan-y}
  $("refresh-balances")?.addEventListener("click",reloadBalances);
  void load().catch(e=>status(e.message,true));
  window.addEventListener("hashchange",()=>{
-  if(location.hash==="#connections")void load().catch(e=>status(e.message,true));
+  if(location.hash==="#connections")reloadBalances();
+ });
+ document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"&&$("space-connections")?.hidden===false)reloadBalances();
  });
  document.querySelectorAll('button[data-view="connections"]').forEach(btn=>
   btn.addEventListener("click",()=>void load().catch(e=>status(e.message,true))));
-})();`;var Y=class extends Error{constructor(i,t=422){super(i);this.status=t}},Ha=/^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/,La=new Set(["deposit","cash","credit"]);function kA(A,e=200){return new Response(JSON.stringify(A),{status:e,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'"}})}function Ja(A){if(!A||typeof A!="object"||Array.isArray(A))throw new Y("Se requiere un objeto JSON.");let e=A,i=new Set(["bankLabel","accountType","requestKey","amount","asOf","confirmed"]);if(Object.keys(e).some(n=>!i.has(n)))throw new Y("Campo no admitido.");if(e.confirmed!==!0)throw new Y("Confirma el saldo le\xEDdo en tu banco.");if(typeof e.bankLabel!="string"||e.bankLabel.trim().length<1||e.bankLabel.trim().length>80||/[\u0000-\u001f\u007f]/.test(e.bankLabel))throw new Y("Especifica el banco o billetera.");if(typeof e.accountType!="string"||!La.has(e.accountType))throw new Y("Tipo de cuenta inv\xE1lido.");if(typeof e.requestKey!="string"||!Ha.test(e.requestKey))throw new Y("Identificador inv\xE1lido.");if(typeof e.amount!="string"||!/^(?:0|[1-9][0-9]{0,9})$/.test(e.amount))throw new Y("Saldo COP entero inv\xE1lido.");let t=Number(e.amount)*100;if(!Number.isSafeInteger(t)||t>1e12)throw new Y("Saldo fuera del l\xEDmite permitido.");if(typeof e.asOf!="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(e.asOf)||!Number.isFinite(Date.parse(e.asOf))||new Date(e.asOf).toISOString()!==e.asOf||Date.parse(e.asOf)>Date.now()+5*6e4)throw new Y("Fecha de saldo inv\xE1lida o futura.");return{bankLabel:e.bankLabel.trim(),accountType:e.accountType,requestKey:e.requestKey,amountMinor:t,asOf:e.asOf}}async function bt(A,e,i){let t=Ja(i);await A.prepare("INSERT INTO quick_balance_accounts(id,owner_id,bank_label,account_type) VALUES(?,?,?,?) ON CONFLICT(owner_id,bank_label) DO NOTHING RETURNING id").bind(crypto.randomUUID(),e,t.bankLabel,t.accountType).first();let n=await A.prepare("SELECT id,owner_id,bank_label,account_type,currency FROM quick_balance_accounts WHERE owner_id=? AND bank_label=? COLLATE NOCASE LIMIT 1").bind(e,t.bankLabel).first();if(!n)throw new Y("No se pudo verificar la cuenta.",503);if(n.account_type!==t.accountType)throw new Y("Esta entidad ya est\xE1 registrada con otro tipo de cuenta; no se combinan saldos y deudas.",409);let a=await A.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at FROM quick_balance_snapshots WHERE owner_id=? AND request_key=? LIMIT 1").bind(e,t.requestKey).first();if(a)return a.account_id!==n.id||a.amount_minor!==t.amountMinor||a.as_of!==t.asOf?kA({error:"El identificador ya corresponde a otro saldo."},409):kA({snapshotId:a.id,replayed:!0,source:"user_verified"});let s=await A.prepare("INSERT INTO quick_balance_snapshots(id,owner_id,account_id,request_key,amount_minor,as_of) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id").bind(crypto.randomUUID(),e,n.id,t.requestKey,t.amountMinor,t.asOf).first();return s?kA({snapshotId:s.id,replayed:!1,source:"user_verified"},201):kA({error:"Ya existe otro saldo con esa hora, o el env\xEDo se duplic\xF3. Revisa antes de reintentar."},409)}async function qa(A,e,i,t,n){let a=["SELECT SUM(credit_minor) AS in_minor,SUM(debit_minor) AS out_minor,","SUM(credit_count) AS in_count,SUM(debit_count) AS out_count FROM (","SELECT 0 AS credit_minor,SUM(amount_minor) AS debit_minor,0 AS credit_count,COUNT(*) AS debit_count ","FROM quick_shortcut_expenses WHERE owner_id=? AND kind='purchase' AND deleted_at IS NULL ","AND payment_method IN ('debit_card','bank_transfer','digital_wallet') ","AND lower(trim(bank_label))=lower(trim(?)) AND occurred_at>? AND occurred_at<=? UNION ALL ","SELECT 0,SUM(amount_minor),0,COUNT(*) FROM quick_manual_entries ","WHERE owner_id=? AND kind='purchase' AND deleted_at IS NULL ","AND payment_method IN ('debit_card','bank_transfer','digital_wallet') ","AND lower(trim(bank_label))=lower(trim(?)) AND occurred_at>? AND occurred_at<=? UNION ALL ","SELECT SUM(amount_minor),0,COUNT(*),0 FROM quick_income_entries ","WHERE owner_id=? AND payment_method IN ('bank_transfer','digital_wallet') ","AND lower(trim(bank_label))=lower(trim(?)) AND occurred_at>? AND occurred_at<=? UNION ALL ","SELECT SUM(amount_minor),0,COUNT(*),0 FROM quick_statement_credits ","WHERE owner_id=? AND lower(trim(bank_label))=lower(trim(?)) ","AND occurred_at>? AND occurred_at<=? )"].join(""),s=[e,i,t,n,e,i,t,n,e,i,t,n,e,i,t,n],r=await A.prepare(a).bind(...s).first();return{in_minor:Number(r?.in_minor||0),out_minor:Number(r?.out_minor||0),in_count:Number(r?.in_count||0),out_count:Number(r?.out_count||0)}}async function Ee(A,e){let i=await A.prepare("SELECT id,owner_id,bank_label,account_type,currency FROM quick_balance_accounts WHERE owner_id=? ORDER BY bank_label LIMIT 50").bind(e).all(),t=[];for(let n of i.results){let a=await A.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at FROM quick_balance_snapshots WHERE owner_id=? AND account_id=? ORDER BY as_of DESC,id DESC LIMIT 2").bind(e,n.id).all(),[s,r]=a.results,g={id:n.id,label:n.bank_label,type:n.account_type,currency:n.currency,hasSnapshot:!!s,latest:s?{amountMinor:String(s.amount_minor),asOf:s.as_of,source:"user_verified"}:null,previous:r?{amountMinor:String(r.amount_minor),asOf:r.as_of}:null,reconciliation:null,connectionStatus:"not_connected"};if(r&&s&&n.account_type==="deposit"){let B=await qa(A,e,n.bank_label,r.as_of,s.as_of),o=r.amount_minor+B.in_minor-B.out_minor,I=s.amount_minor-o;g.reconciliation={status:I===0?"matches_recorded_movements":"difference_requires_review",expectedMinor:String(o),differenceMinor:String(I),incomingMinor:String(B.in_minor),outgoingMinor:String(B.out_minor),incomingCount:B.in_count,outgoingCount:B.out_count,after:r.as_of,until:s.as_of,scope:"Only exact-bank-label movements; not an official bank reconciliation"}}t.push(g)}return t}async function kt(A,e){let i=await Ee(A,e),t=await A.prepare("SELECT bank_label AS label FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL AND bank_label IS NOT NULL UNION SELECT bank_label FROM quick_income_entries WHERE owner_id=? AND bank_label IS NOT NULL UNION SELECT bank_label FROM quick_statement_credits WHERE owner_id=? UNION SELECT bank_label FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL AND bank_label IS NOT NULL ORDER BY label LIMIT 50").bind(e,e,e,e).all();return kA({accounts:i,bankLabels:t.results.map(n=>n.label),connectionStatus:"not_connected",balanceSource:"user_verified",note:"Saldos consultados por ti y fechados; no son acceso bancario en vivo. Solo se concilian dep\xF3sitos con al menos dos snapshots y etiquetas exactas. Tarjetas de cr\xE9dito muestran deuda y no se mezclan con efectivo."})}var Ft=`(()=>{
+})();`;var Y=class extends Error{constructor(i,t=422){super(i);this.status=t}},Ha=/^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/,La=new Set(["deposit","cash","credit"]);function kA(A,e=200){return new Response(JSON.stringify(A),{status:e,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer","Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'"}})}function Ja(A){if(!A||typeof A!="object"||Array.isArray(A))throw new Y("Se requiere un objeto JSON.");let e=A,i=new Set(["bankLabel","accountType","requestKey","amount","asOf","confirmed"]);if(Object.keys(e).some(n=>!i.has(n)))throw new Y("Campo no admitido.");if(e.confirmed!==!0)throw new Y("Confirma el saldo le\xEDdo en tu banco.");if(typeof e.bankLabel!="string"||e.bankLabel.trim().length<1||e.bankLabel.trim().length>80||/[\u0000-\u001f\u007f]/.test(e.bankLabel))throw new Y("Especifica el banco o billetera.");if(typeof e.accountType!="string"||!La.has(e.accountType))throw new Y("Tipo de cuenta inv\xE1lido.");if(typeof e.requestKey!="string"||!Ha.test(e.requestKey))throw new Y("Identificador inv\xE1lido.");if(typeof e.amount!="string"||!/^(?:0|[1-9][0-9]{0,9})$/.test(e.amount))throw new Y("Saldo COP entero inv\xE1lido.");let t=Number(e.amount)*100;if(!Number.isSafeInteger(t)||t>1e12)throw new Y("Saldo fuera del l\xEDmite permitido.");if(typeof e.asOf!="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(e.asOf)||!Number.isFinite(Date.parse(e.asOf))||new Date(e.asOf).toISOString()!==e.asOf||Date.parse(e.asOf)>Date.now()+5*6e4)throw new Y("Fecha de saldo inv\xE1lida o futura.");return{bankLabel:e.bankLabel.trim(),accountType:e.accountType,requestKey:e.requestKey,amountMinor:t,asOf:e.asOf}}async function bt(A,e,i){let t=Ja(i);await A.prepare("INSERT INTO quick_balance_accounts(id,owner_id,bank_label,account_type) VALUES(?,?,?,?) ON CONFLICT(owner_id,bank_label) DO NOTHING RETURNING id").bind(crypto.randomUUID(),e,t.bankLabel,t.accountType).first();let n=await A.prepare("SELECT id,owner_id,bank_label,account_type,currency FROM quick_balance_accounts WHERE owner_id=? AND bank_label=? COLLATE NOCASE LIMIT 1").bind(e,t.bankLabel).first();if(!n)throw new Y("No se pudo verificar la cuenta.",503);if(n.account_type!==t.accountType)throw new Y("Esta entidad ya est\xE1 registrada con otro tipo de cuenta; no se combinan saldos y deudas.",409);let a=await A.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at FROM quick_balance_snapshots WHERE owner_id=? AND request_key=? LIMIT 1").bind(e,t.requestKey).first();if(a)return a.account_id!==n.id||a.amount_minor!==t.amountMinor||a.as_of!==t.asOf?kA({error:"El identificador ya corresponde a otro saldo."},409):kA({snapshotId:a.id,replayed:!0,source:"user_verified"});let s=await A.prepare("INSERT INTO quick_balance_snapshots(id,owner_id,account_id,request_key,amount_minor,as_of) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id").bind(crypto.randomUUID(),e,n.id,t.requestKey,t.amountMinor,t.asOf).first();return s?kA({snapshotId:s.id,replayed:!1,source:"user_verified"},201):kA({error:"Ya existe otro saldo con esa hora, o el env\xEDo se duplic\xF3. Revisa antes de reintentar."},409)}async function qa(A,e,i){if(!i.length)return new Map;let t=i.map(o=>o.after).sort()[0],n=i.map(o=>o.until).sort().at(-1),a=new Date(Date.parse(t)-864e5).toISOString(),s=new Date(Date.parse(n)+864e5).toISOString(),r=`
+  WITH periods AS (
+    SELECT json_extract(value,'$.id') id, lower(trim(json_extract(value,'$.label'))) label,
+      json_extract(value,'$.after') start_at, json_extract(value,'$.until') end_at,
+      date(json_extract(value,'$.after'),'-5 hours') start_day,
+      date(json_extract(value,'$.until'),'-5 hours') end_day,
+      json_extract(value,'$.estimated') estimated
+    FROM json_each(?)
+  ), movements AS (
+    SELECT bank_label,occurred_at,amount_minor,'debit' direction,
+      (client_entry_id GLOB 'import_*' OR client_entry_id GLOB 'v41_*') date_only, 0 estimate_only
+    FROM quick_shortcut_expenses
+    WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP' AND kind='purchase' AND deleted_at IS NULL
+      AND payment_method IN ('debit_card','bank_transfer','digital_wallet')
+    UNION ALL
+    SELECT bank_label,occurred_at,amount_minor,'debit',0,(kind<>'purchase')
+    FROM quick_manual_entries
+    WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP' AND deleted_at IS NULL
+      AND payment_method IN ('debit_card','bank_transfer','digital_wallet')
+    UNION ALL
+    SELECT bank_label,occurred_at,amount_minor,'credit',0,0
+    FROM quick_income_entries
+    WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP'
+      AND payment_method IN ('bank_transfer','digital_wallet')
+    UNION ALL
+    SELECT bank_label,occurred_at,amount_minor,'credit',1,0
+    FROM quick_statement_credits
+    WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP'
+  ), candidates AS (
+    SELECT p.id,m.amount_minor,m.direction,
+      CASE WHEN p.estimated AND m.date_only THEN
+        date(m.occurred_at,'-5 hours') > p.start_day AND date(m.occurred_at,'-5 hours') <= p.end_day
+      ELSE m.occurred_at > p.start_at AND m.occurred_at <= p.end_at END included,
+      (p.estimated AND m.date_only AND date(m.occurred_at,'-5 hours')=p.start_day) uncertain
+    FROM periods p JOIN movements m ON p.label=lower(trim(m.bank_label))
+    WHERE p.estimated OR NOT m.estimate_only
+  )
+  SELECT id,
+    CAST(SUM(CASE WHEN included AND direction='credit' THEN amount_minor ELSE 0 END) AS TEXT) in_minor,
+    CAST(SUM(CASE WHEN included AND direction='debit' THEN amount_minor ELSE 0 END) AS TEXT) out_minor,
+    SUM(CASE WHEN included AND direction='credit' THEN 1 ELSE 0 END) in_count,
+    SUM(CASE WHEN included AND direction='debit' THEN 1 ELSE 0 END) out_count,
+    SUM(CASE WHEN uncertain THEN 1 ELSE 0 END) uncertain_count
+  FROM candidates GROUP BY id`,g=[e,a,s],B=await A.prepare(r).bind(JSON.stringify(i),...g,...g,...g,...g).all();return new Map(B.results.map(o=>[o.id,o]))}async function Ee(A,e,i){let t=await A.prepare("SELECT id,owner_id,bank_label,account_type,currency FROM quick_balance_accounts WHERE owner_id=? ORDER BY bank_label LIMIT 50").bind(e).all(),n=[],a=[];for(let g of t.results){let B=await A.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at FROM quick_balance_snapshots WHERE owner_id=? AND account_id=? ORDER BY as_of DESC,id DESC LIMIT 2").bind(e,g.id).all(),[o,I]=B.results,l={id:g.id,label:g.bank_label,type:g.account_type,currency:g.currency,hasSnapshot:!!o,latest:o?{amountMinor:String(o.amount_minor),asOf:o.as_of,source:"user_verified"}:null,previous:I?{amountMinor:String(I.amount_minor),asOf:I.as_of}:null,reconciliation:null,estimate:null,connectionStatus:"not_connected"};o&&g.account_type==="deposit"&&(I&&a.push({id:g.id,label:g.bank_label,after:I.as_of,until:o.as_of,estimated:!1}),i&&o.as_of<=i&&a.push({id:g.id+":estimate",label:g.bank_label,after:o.as_of,until:i,estimated:!0})),n.push(l)}let s=await qa(A,e,a),r={in_minor:"0",out_minor:"0",in_count:0,out_count:0,uncertain_count:0};for(let g of n){let{latest:B,previous:o}=g;if(!(!B||g.type!=="deposit")){if(o){let I=s.get(g.id)??r,l=BigInt(o.amountMinor)+BigInt(I.in_minor)-BigInt(I.out_minor),Q=BigInt(B.amountMinor)-l;g.reconciliation={status:Q===0n?"matches_recorded_movements":"difference_requires_review",expectedMinor:String(l),differenceMinor:String(Q),incomingMinor:String(I.in_minor),outgoingMinor:String(I.out_minor),incomingCount:I.in_count,outgoingCount:I.out_count,after:o.asOf,until:B.asOf,scope:"Only exact-bank-label movements; not an official bank reconciliation"}}if(i&&B.asOf<=i){let I=s.get(g.id+":estimate")??r;g.estimate={amountMinor:String(BigInt(B.amountMinor)+BigInt(I.in_minor)-BigInt(I.out_minor)),asOf:i,incomingMinor:String(I.in_minor),outgoingMinor:String(I.out_minor),incomingCount:I.in_count,outgoingCount:I.out_count,uncertainCount:I.uncertain_count}}}}return n}async function kt(A,e){let i=await Ee(A,e,new Date().toISOString()),t=await A.prepare("SELECT bank_label AS label FROM quick_shortcut_expenses WHERE owner_id=? AND deleted_at IS NULL AND bank_label IS NOT NULL UNION SELECT bank_label FROM quick_income_entries WHERE owner_id=? AND bank_label IS NOT NULL UNION SELECT bank_label FROM quick_statement_credits WHERE owner_id=? UNION SELECT bank_label FROM quick_manual_entries WHERE owner_id=? AND deleted_at IS NULL AND bank_label IS NOT NULL ORDER BY label LIMIT 50").bind(e,e,e,e).all();return kA({accounts:i,bankLabels:t.results.map(n=>n.label),connectionStatus:"not_connected",balanceSource:"user_verified",note:"La estimaci\xF3n parte del \xFAltimo saldo confirmado y los movimientos en COP de la misma cuenta. La deuda de tarjetas y el efectivo informado se muestran por separado."})}var Ft=`(()=>{
 "use strict";
 // iOS Safari and standalone PWA have a visual viewport distinct from 100dvh.
 const root=document.documentElement;
