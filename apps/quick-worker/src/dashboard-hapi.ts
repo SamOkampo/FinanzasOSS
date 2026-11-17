@@ -100,8 +100,6 @@ export const HAPI_JS = String.raw`
   const panel=node("deposits");
   if(!panel||panel.dataset.hapiEnabled!=="true")return;
   panel.hidden=false;
-  document.getElementById("hapi-placeholder").hidden=true;
-  document.getElementById("portfolio-no-data").hidden=true;
   const status=node("status"),origin=node("origin"),history=node("history"),out=node("out"),credit=node("credit");
   let requestKey=crypto.randomUUID(),selected=null,busy=false,loading=false;
   const money=(minor,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(minor)/100);

@@ -59,4 +59,17 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .settings-advanced[open]>summary{border-bottom:1px solid var(--rule)}
 #balance-list .balance-account>.soft-button+.soft-button{margin-top:6px}
 #hapi-report-label{font-weight:750}
+
+.page-intro.compact-intro{padding:18px 0 16px}
+.compact-intro h1{font-size:clamp(29px,4.5vw,44px);letter-spacing:-.035em}
+#space-today .compact-intro{padding-bottom:10px}
+.movement-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:none}
+.secondary-disclosure>summary{cursor:pointer;font-weight:700}
+.secondary-disclosure[open]>summary{margin-bottom:10px}
+.plan-stats{margin:12px 0 18px}
+.plan-stats dl{display:grid;gap:8px;margin:0}
+.plan-stats dl div{display:flex;justify-content:space-between;gap:12px}
+.plan-stats dd{margin:0;font-variant-numeric:tabular-nums}
+.more-links button{grid-template-columns:minmax(0,1fr) auto}
+#hapi-deposits[data-hapi-enabled="true"]+.hapi-unavailable{display:none}
 `;
