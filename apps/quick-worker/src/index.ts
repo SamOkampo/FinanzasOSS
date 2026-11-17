@@ -34,7 +34,7 @@ import { runCategoryAutomation, categoryAutomationStatus, setCategoryAutomation,
 import { excelExport } from "./excel-export.js";
 import { INSIGHTS_JS } from "./dashboard-insights-js.js";
 import { ASSISTANT_CSS, ASSISTANT_JS } from "./dashboard-assistant.js";
-import { askAssistant, deleteAssistantConversation, listAssistantConversations } from "./assistant-conversations.js";
+import { askAssistant, assistantChatPreference, deleteAssistantConversation, listAssistantConversations, saveAssistantChatPreference } from "./assistant-conversations.js";
 import { ASSISTANT_DAILY_CRON, ASSISTANT_HOURLY_CRON, answerAssistant, assistantAcknowledge, assistantCreditDue, assistantDismissCategory, assistantInbox, assistantSnooze,
   confirmAssistant, forgetRememberedMerchant, listRememberedMerchants, sendAssistantDigest, setAssistantNotices } from "./financial-assistant.js";
 import { TRANSFER_LINKS_JS } from "./dashboard-transfer-links-js.js";
@@ -85,7 +85,9 @@ export interface QuickWorkerEnv {
       {type:"text";text:string}|{type:"image_url";image_url:{url:string}}
     >}[];
       max_tokens?:number;max_completion_tokens?:number;
-      reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean}):Promise<unknown>;
+      reasoning_effort?:"low"|"medium"|"xhigh";temperature:number;stream:boolean;
+      response_format?:{type:"json_schema";json_schema:{name:string;strict:boolean;schema:Record<string,unknown>}};
+      chat_template_kwargs?:{enable_thinking:boolean}}):Promise<unknown>;
     toMarkdown?(document:{name:string;blob:Blob}):Promise<unknown>;
   };
 }
@@ -502,6 +504,7 @@ export async function handleQuickRequest(
         pathname==="/api/quick/v41/hapi/portfolio"||pathname.startsWith("/api/quick/v41/hapi/activity/");
       const data = await parseJson(request,statementBody?85000:4096);
       if (pathname === "/api/quick/v41/agent/chat") return await askAssistant(env.DB,owner,env,data);
+      if (pathname === "/api/quick/v41/agent/chat/preferences") return await saveAssistantChatPreference(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/chat/delete") return await deleteAssistantConversation(env.DB,owner,data);
       if (pathname === "/api/quick/v41/agent/answer") return await answerAssistant(env.DB,owner,env,data);
       if (pathname === "/api/quick/v41/agent/confirm") return await confirmAssistant(env.DB,owner,data);
@@ -569,6 +572,7 @@ export async function handleQuickRequest(
       }
       if (pathname === "/api/quick/shortcut/revoke") return await revokeShortcut(env.DB, owner, data);
     } else if (request.method === "GET") {
+      if (pathname === "/api/quick/v41/agent/chat/preferences") return await assistantChatPreference(env.DB,owner,env);
       if (pathname === "/api/quick/v41/agent/chat")
         return await listAssistantConversations(env.DB,owner,new URL(request.url).searchParams.get("id"));
       if (pathname === "/api/quick/v41/agent/inbox") return await assistantInbox(env.DB,owner,env);

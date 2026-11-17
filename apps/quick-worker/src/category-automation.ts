@@ -20,12 +20,12 @@ export const merchantKey = (merchant: string | null): string | null => {
 };
 // Send only a minimized description to Cloudflare Workers AI, never amount,
 // bank account, transaction ID, exact payee name or financial credentials.
-export const protectCategoryText = (value: string): string => {
+export const protectCategoryText = (value: string, maxLength=100): string => {
   const safe=value.replace(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,"[correo]")
     .replace(/@[a-z0-9._-]+/gi,"[llave]")
     .replace(/\b[0-9]{3,}\b/g,"[número]")
     .replace(/\b(?:\+?57)?3[0-9]{9}\b/g,"[teléfono]")
-    .trim().slice(0,100);
+    .trim().slice(0,maxLength);
   // Retain transaction purpose while removing identifiable counterparties.
   const normalized=safe.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   if(/^(?:bre-b|transferencia|le transferi|transferi|envio dinero|le mande plata)/.test(normalized)) {
