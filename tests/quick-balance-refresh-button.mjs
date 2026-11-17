@@ -25,12 +25,16 @@ const ids=[
   "verify-balance-form","balance-list","balance-summary","verify-balance-bank",
   "verify-balance-type","verify-balance-amount","balance-feedback","balance-review",
   "verify-balance-submit","balance-bank-labels","reload","refresh-balances",
-  "balance-refresh-state",
+  "balance-refresh-state","space-connections",
 ];
 const els=Object.fromEntries(ids.map(id=>[id,new FakeElement("div",id)]));
+const documentEvents=new Map();
 const document={
+  visibilityState:"visible",
+  addEventListener:(name,fn)=>documentEvents.set(name,fn),
   getElementById:id=>els[id]||null,
   createElement:tag=>new FakeElement(tag),
+  createTextNode:value=>Object.assign(new FakeElement("text"),{textContent:value}),
   querySelector:()=>null,
   querySelectorAll:()=>[],
 };
@@ -72,6 +76,14 @@ assert.equal(els["refresh-balances"].disabled,false);
 els["refresh-balances"].click();
 await tick();
 assert.equal(requests,3,"The panel has a dedicated refresh button");
+current.accounts[0].estimate={amountMinor:"57392100",incomingCount:1,outgoingCount:0,
+  incomingMinor:"1000000",outgoingMinor:"0",uncertainCount:1};
+documentEvents.get("visibilitychange")();
+await tick();
+assert.equal(requests,4,"Returning to Saldos after an external income refetches it");
+assert.match(texts(els["balance-list"]),/Saldo estimado.*573\.921.*Confirmado el.*563\.921/);
+assert.match(texts(els["balance-list"]),/día del corte.*sin hora/);
+assert.match(texts(els["balance-summary"]),/573\.921/);
 assert.match(DASH_HTML,/id="refresh-balances"/);
 assert.match(DASH_HTML,/id="balance-refresh-state"/);
 assert.match(DASH_HTML,/aria-label="Actualizar movimientos y saldos"/);
