@@ -60,6 +60,9 @@ const firstResult=(await call("/api/quick/balances")).body.accounts;
 assert.equal(firstResult.length,1);
 assert.equal(firstResult[0].latest.amountMinor,"10000000");
 assert.equal(firstResult[0].reconciliation,null,"One balance cannot prove reconciliation");
+assert.equal(firstResult[0].estimate.amountMinor,"11076800","One confirmed balance is enough to estimate");
+assert.equal(firstResult[0].estimate.incomingCount,2);
+assert.equal(firstResult[0].estimate.outgoingCount,1);
 assert.equal((await call("/api/quick/balances", "GET", null,B)).body.accounts.length,0,"Account is tenant private");
 assert.equal((await call("/api/quick/balances/verify","POST",second)).status,201);
 const matched=(await call("/api/quick/balances")).body.accounts[0];
@@ -70,6 +73,8 @@ assert.equal(matched.reconciliation.differenceMinor,"0");
 assert.equal(matched.reconciliation.status,"matches_recorded_movements");
 assert.equal(matched.reconciliation.incomingCount,2);
 assert.equal(matched.reconciliation.outgoingCount,1);
+assert.equal(matched.estimate.amountMinor,matched.latest.amountMinor,"New verified balance resets the estimate window");
+assert.equal(matched.estimate.incomingCount,0,"Already included movements must never count twice");
 const third={...second,amount:"110000",requestKey:"balance-snapshot-third-003",
  asOf:new Date(d.getTime()-12*3600000).toISOString()};
 assert.equal((await call("/api/quick/balances/verify","POST",third)).status,201);
@@ -86,6 +91,45 @@ assert.equal(nu.type,"credit");
 assert.equal(nu.reconciliation,null,"Credit card debt must not be reconciled as a deposit");
 assert.equal(nu.latest.amountMinor,"5000000");
 assert.ok(!JSON.stringify((await call("/api/quick/balances", "GET", null,B)).body).includes("Nu Bank"));
+assert.equal(nu.estimate,null,"Credit card purchases must never change the reported deposit balance");
+
+const labeledIncome={clientEntryId:"income-for-projection-001",amount:"8500",concept:"Ingreso de prueba",
+ paymentMethod:"bank_transfer",bankLabel:"PLATA PAY",incomeCategory:"other",confirmed:true};
+assert.equal((await call("/api/quick/studio/income","POST",labeledIncome)).status,201);
+assert.equal((await call("/api/quick/studio/income","POST",labeledIncome)).body.replayed,true);
+assert.equal((await call("/api/quick/studio/income","POST",{...labeledIncome,amount:"5000"},B)).status,201);
+assert.equal((await call("/api/quick/studio/income","POST",{...labeledIncome,clientEntryId:"cash-for-projection-001",
+  bankLabel:undefined,paymentMethod:"cash"})).status,201);
+const afterIncome=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Plata Pay");
+assert.equal(afterIncome.latest.amountMinor,"11000000");
+assert.equal(afterIncome.estimate.amountMinor,"11850000");
+assert.equal(afterIncome.estimate.incomingCount,1);
+
+const localDay=offset=>new Date(Date.now()-(offset*24+5)*3600000).toISOString().slice(0,10);
+const cutDay=localDay(10);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,bankLabel:"Cuenta de corte",
+  asOf:cutDay+"T20:00:00.000Z",requestKey:"projection-cut-bogota-001"})).status,201);
+for(const [id,date,minor] of [["v41_same_day_credit",cutDay+"T17:00:00.000Z",5000],
+  ["v41_tomorrow_credit",localDay(9)+"T17:00:00.000Z",10000],
+  ["v41_future_credit",localDay(-2)+"T17:00:00.000Z",999999]]){
+ p("INSERT INTO quick_statement_credits(id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind) VALUES(?,?,?,?,'COP',?,?,?,'received_transfer')",
+   [id,A,id,minor,date,"Abono de extracto","Cuenta de corte"]);
+}
+for(const [id,date,minor,deleted,method] of [
+ ["expense_at_cut",cutDay+"T20:00:00.000Z",88800,null,"debit_card"],
+ ["expense_after_cut",cutDay+"T21:00:00.000Z",2100,null,"debit_card"],
+ ["import_undated_debit",cutDay+"T17:00:00.000Z",9900,null,"debit_card"],
+ ["expense_deleted_after_cut",cutDay+"T21:01:00.000Z",5000,later,"debit_card"],
+ ["expense_on_card",cutDay+"T21:02:00.000Z",6000,null,"credit_card"],
+]){
+ p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label,deleted_at) VALUES(?,?,?,?,'COP',?,'purchase',?,?,?,?)",
+   [id,A,id,minor,method,date,"Cargo de prueba","Cuenta de corte",deleted]);
+}
+const atCut=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Cuenta de corte");
+assert.equal(atCut.estimate.amountMinor,"10007900");
+assert.equal(atCut.estimate.uncertainCount,2);
+assert.equal(atCut.estimate.outgoingCount,1);
+
 assert.match(DASH_HTML,/id="verify-balance-form"/);
 assert.match(DASH_HTML,/\/balances\.js/);
 assert.match(BALANCES_JS,/not.*connected|no se|No se/i);
