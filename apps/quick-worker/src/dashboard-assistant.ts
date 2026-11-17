@@ -89,10 +89,10 @@ export const ASSISTANT_HTML = `
     <div class="assistant-fields" id="assistant-merchants-list"></div>
     <button type="button" class="soft-button" id="assistant-merchants-more" hidden>Ver más comercios</button>
   </details>
-  <details id="assistant-credit">
+  <details id="assistant-credit" hidden>
     <summary>Vencimientos de tarjetas</summary>
     <p id="assistant-credit-empty" hidden>Primero registra la tarjeta en Saldos.</p>
-    <form id="assistant-credit-form" class="assistant-fields">
+    <form id="assistant-credit-form" class="assistant-fields" hidden>
       <label>Tarjeta <select id="assistant-credit-account" required></select></label>
       <label>Fecha de vencimiento <input id="assistant-credit-date" type="date" required></label>
       <button type="submit" class="soft-button">Guardar vencimiento verificado</button>
@@ -208,10 +208,12 @@ export const ASSISTANT_JS = String.raw`
   const launcher=byId("open");
   if(!dialog||launcher.dataset.assistantEnabled!=="true")return;
   launcher.hidden=false;
+  const noticeSettings=document.getElementById("qwen-notice-settings");
+  if(noticeSettings)noticeSettings.hidden=false;
   const chatSection=byId("chat"),pendingView=byId("pending"),settingsView=byId("settings");
   const chatEnabled=chatSection.dataset.assistantChat==="true",nav=[...dialog.querySelectorAll("[data-assistant-view]")];
   const startingView=chatEnabled?"chat":"pending";
-  let view=startingView;
+  let view=startingView,creditAccount=null;
   nav[0].hidden=!chatEnabled;
   const category=byId("category"),subcategory=byId("subcategory"),answer=byId("answer");
   const ai=byId("ai"),notices=byId("notices"),remember=byId("remember"),save=byId("save");
@@ -314,10 +316,20 @@ export const ASSISTANT_JS = String.raw`
     }
   }
   function renderCredit(credit){
-    const select=byId("credit-account"),list=byId("credit-list");
+    const select=byId("credit-account"),list=byId("credit-list"),section=byId("credit");
+    const requestedAccount=creditAccount;
+    const selected=credit.accounts.find(item=>item.id===(requestedAccount||select.value));
+    creditAccount=null;
     select.replaceChildren(new Option("Elige una tarjeta",""),...credit.accounts.map(item=>new Option(item.bank_label,item.id)));
+    select.value=selected?.id||"";
+    section.hidden=!requestedAccount&&!credit.accounts.length;
     byId("credit-form").hidden=!credit.accounts.length;
     byId("credit-empty").hidden=Boolean(credit.accounts.length);
+    if(requestedAccount&&dialog.open&&view==="settings"){
+      section.open=true;
+      if(selected)byId("credit-date").focus();
+      else section.querySelector("summary").focus();
+    }
     list.replaceChildren();
     for(const item of credit.dues){
       const row=el("article","","ai-document-table");
@@ -555,14 +567,25 @@ export const ASSISTANT_JS = String.raw`
     showView(next);dialog.showModal();inbox();
   }
   launcher.addEventListener("click",()=>open(startingView));
-  if(location.hash==="#qwen")open(startingView);
-  if(location.hash==="#qwen-pending")open("pending");
-  window.addEventListener("hashchange",()=>{
+  document.addEventListener("finanzas:credit-due",event=>{
+    creditAccount=event.detail;
+    open("settings");
+  });
+  function openFromHash(){
     if(location.hash==="#qwen")open(startingView);
     if(location.hash==="#qwen-pending")open("pending");
-  });
+    if(location.hash==="#qwen-settings"){
+      byId("notice-form").closest("details").open=true;
+      open("settings");
+    }
+  }
+  openFromHash();
+  window.addEventListener("hashchange",openFromHash);
   dialog.addEventListener("close",()=>{
-    if(location.hash==="#qwen"||location.hash==="#qwen-pending")history.replaceState(null,"",location.pathname+location.search+"#plan");
+    creditAccount=null;
+    const section=location.hash==="#qwen-settings"?"#settings":
+      ["#qwen","#qwen-pending"].includes(location.hash)?"#plan":null;
+    if(section)history.replaceState(null,"",location.pathname+location.search+section);
   });
   byId("back").addEventListener("click",()=>{if(!busy)inbox();});
   byId("dismiss-category").addEventListener("click",async()=>{

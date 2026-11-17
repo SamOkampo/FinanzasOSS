@@ -15,7 +15,7 @@ export const HAPI_HTML = `
   </details>
   <details id="hapi-reports" hidden><summary>Cortes anteriores</summary><ul id="hapi-reports-list"></ul></details>
   <details>
-    <summary>Registrar corte del portafolio</summary>
+    <summary id="hapi-report-label">Añadir reporte de Hapi</summary>
     <form id="hapi-pdf" class="assistant-fields" autocomplete="off">
       <label>Reporte mensual en PDF <input id="hapi-pdf-file" type="file" accept="application/pdf,.pdf" required></label>
       <p>El PDF se lee en este dispositivo. Revisa el corte antes de guardarlo.</p>
@@ -40,42 +40,45 @@ export const HAPI_HTML = `
       <button class="solid-button" type="submit">Guardar corte</button>
     </form>
   </details>
-  <details id="hapi-activity" data-hapi-activity="false" hidden>
-    <summary>Actividad de Hapi en USD</summary>
-    <form id="hapi-activity-read" class="assistant-fields">
-      <label>Reporte digital en PDF <input id="hapi-activity-pdf" type="file" accept="application/pdf,.pdf" required></label>
-      <button class="soft-button" type="submit">Preparar actividad</button>
-    </form>
-    <p>El PDF se lee en este dispositivo. Guarda solo las filas que puedas verificar en tu reporte.</p>
-    <p id="hapi-activity-status" role="status" aria-live="polite"></p>
-    <form id="hapi-activity-review" class="assistant-fields" hidden>
-      <label>Bloque de revisión <select id="hapi-activity-page"></select></label>
-      <div id="hapi-activity-rows" class="assistant-fields"></div>
-      <label class="ai-document-consent"><input id="hapi-activity-ack" type="checkbox" required>
-        <span>Comparé las filas seleccionadas con mi reporte de Hapi.</span></label>
-      <button id="hapi-activity-save" class="solid-button" type="submit">Guardar filas seleccionadas</button>
-    </form>
-    <details>
-      <summary>Historial de actividad</summary>
-      <div id="hapi-activity-history" class="assistant-fields"></div>
-    </details>
-  </details>
-  <h4>Aportes</h4>
-  <p>Registro manual. Usa el movimiento de tu banco y el comprobante de acreditación de Hapi.</p>
-  <button type="button" class="soft-button" id="hapi-refresh">Actualizar aportes</button>
   <p id="hapi-status" role="status" aria-live="polite"></p>
   <details>
-    <summary>Registrar salida hacia Hapi</summary>
-    <form id="hapi-out" class="assistant-fields" autocomplete="off">
-      <label>Movimiento de origen <select id="hapi-origin"></select></label>
-      <div id="hapi-manual" class="assistant-fields">
-        <label>Banco de origen <input id="hapi-bank" maxlength="80" required></label>
-        <label>Fecha de salida <input id="hapi-debited" type="date" required></label>
-        <label>Importe total debitado en COP <input id="hapi-cop" inputmode="decimal" required></label>
-      </div>
-      <label class="ai-document-consent"><input type="checkbox" id="hapi-out-confirm" required> Confirmo que el débito salió hacia mi cuenta de Hapi.</label>
-      <button class="solid-button" type="submit">Registrar aporte pendiente</button>
-    </form>
+    <summary>Más opciones de Hapi</summary>
+    <details id="hapi-activity" data-hapi-activity="false" hidden>
+      <summary>Actividad de Hapi en USD</summary>
+      <form id="hapi-activity-read" class="assistant-fields">
+        <label>Reporte digital en PDF <input id="hapi-activity-pdf" type="file" accept="application/pdf,.pdf" required></label>
+        <button class="soft-button" type="submit">Preparar actividad</button>
+      </form>
+      <p>El PDF se lee en este dispositivo. Guarda solo las filas que puedas verificar en tu reporte.</p>
+      <p id="hapi-activity-status" role="status" aria-live="polite"></p>
+      <form id="hapi-activity-review" class="assistant-fields" hidden>
+        <label>Bloque de revisión <select id="hapi-activity-page"></select></label>
+        <div id="hapi-activity-rows" class="assistant-fields"></div>
+        <label class="ai-document-consent"><input id="hapi-activity-ack" type="checkbox" required>
+          <span>Comparé las filas seleccionadas con mi reporte de Hapi.</span></label>
+        <button id="hapi-activity-save" class="solid-button" type="submit">Guardar filas seleccionadas</button>
+      </form>
+      <details>
+        <summary>Historial de actividad</summary>
+        <div id="hapi-activity-history" class="assistant-fields"></div>
+      </details>
+    </details>
+    <h4>Aportes</h4>
+    <p>Registro manual. Usa el movimiento de tu banco y el comprobante de acreditación de Hapi.</p>
+    <button type="button" class="soft-button" id="hapi-refresh">Actualizar aportes</button>
+    <details>
+      <summary>Registrar salida hacia Hapi</summary>
+      <form id="hapi-out" class="assistant-fields" autocomplete="off">
+        <label>Movimiento de origen <select id="hapi-origin"></select></label>
+        <div id="hapi-manual" class="assistant-fields">
+          <label>Banco de origen <input id="hapi-bank" maxlength="80" required></label>
+          <label>Fecha de salida <input id="hapi-debited" type="date" required></label>
+          <label>Importe total debitado en COP <input id="hapi-cop" inputmode="decimal" required></label>
+        </div>
+        <label class="ai-document-consent"><input type="checkbox" id="hapi-out-confirm" required> Confirmo que el débito salió hacia mi cuenta de Hapi.</label>
+        <button class="solid-button" type="submit">Registrar aporte pendiente</button>
+      </form>
+    </details>
   </details>
   <div id="hapi-history"></div>
   <form id="hapi-credit" class="assistant-fields" autocomplete="off" hidden>
@@ -157,6 +160,7 @@ export const HAPI_JS = String.raw`
   }
   function renderPortfolio(portfolio){
     const snapshot=portfolio.latest;
+    node("report-label").textContent=snapshot?"Añadir otro reporte":"Añadir mi primer reporte";
     const reports=node("reports-list");
     reports.replaceChildren();
     node("reports").hidden=portfolio.history.length<2;
@@ -235,7 +239,7 @@ export const HAPI_JS = String.raw`
       const [data,portfolio]=await Promise.all([request("deposits"),request("portfolio")]);
       render(data);
       renderPortfolio(portfolio);
-      status.textContent=data.items.length?"":"Todavía no hay aportes registrados.";
+      status.textContent="";
     }catch(error){status.textContent=error.message;}
     finally{loading=false;}
   }
