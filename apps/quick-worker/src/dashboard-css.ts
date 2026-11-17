@@ -72,4 +72,29 @@ export const DASH_CSS = "\n:root{color-scheme:light;--paper:#f5f3ee;--surface:#f
 .plan-stats dd{margin:0;font-variant-numeric:tabular-nums}
 .more-links button{grid-template-columns:minmax(0,1fr) auto}
 #hapi-deposits[data-hapi-enabled="true"]+.hapi-unavailable{display:none}
+
+.stage {
+  --canvas-top: #e9f3ec;
+  --canvas-middle: #f8f6f0;
+  --canvas-mint: #8ec8b66e;
+  --canvas-warm: #e4b48557;
+  --canvas-toolbar: #f3f7f2;
+  --ink-muted: #485c53;
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 74rem 38rem at 100% 0, var(--canvas-mint), transparent 72%),
+    radial-gradient(ellipse 44rem 36rem at 0 32rem, var(--canvas-warm), transparent 74%),
+    linear-gradient(155deg, var(--canvas-top) 0, var(--canvas-middle) 40rem, var(--paper) 82rem);
+}
+.theme-night .stage {
+  --canvas-top: #182c2c;
+  --canvas-middle: #142124;
+  --canvas-mint: #367e7e70;
+  --canvas-warm: #a269492c;
+  --canvas-toolbar: #152628;
+  --ink-muted: #b4c5bb;
+}
+.stage .masthead {
+  background: var(--canvas-toolbar);
+}
 `;
