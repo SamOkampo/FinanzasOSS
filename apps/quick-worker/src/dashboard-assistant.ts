@@ -185,7 +185,7 @@ export const ASSISTANT_CSS = `
 .assistant-typing i:nth-child(2){opacity:.65}.assistant-typing i:nth-child(3){opacity:.35}
 .assistant-fields,#assistant-items{display:grid;gap:10px;margin:13px 0}
 .assistant-fields label:not(.ai-document-consent){display:grid;gap:6px}
-.assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-placeholder[hidden],#portfolio-no-data[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
+.assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
 #hapi-position-fields fieldset{min-width:0;display:grid;gap:10px;border:1px solid var(--rule);border-radius:12px}
 .assistant-fields input:not([type=checkbox]),.assistant-fields select{font-size:16px;width:100%;min-height:42px}
 @media(max-width:800px){
