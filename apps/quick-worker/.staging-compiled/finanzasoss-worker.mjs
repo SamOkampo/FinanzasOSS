@@ -460,8 +460,6 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   const panel=node("deposits");
   if(!panel||panel.dataset.hapiEnabled!=="true")return;
   panel.hidden=false;
-  document.getElementById("hapi-placeholder").hidden=true;
-  document.getElementById("portfolio-no-data").hidden=true;
   const status=node("status"),origin=node("origin"),history=node("history"),out=node("out"),credit=node("credit");
   let requestKey=crypto.randomUUID(),selected=null,busy=false,loading=false;
   const money=(minor,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(minor)/100);
@@ -1027,7 +1025,7 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
 .assistant-typing i:nth-child(2){opacity:.65}.assistant-typing i:nth-child(3){opacity:.35}
 .assistant-fields,#assistant-items{display:grid;gap:10px;margin:13px 0}
 .assistant-fields label:not(.ai-document-consent){display:grid;gap:6px}
-.assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-placeholder[hidden],#portfolio-no-data[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
+.assistant-fields[hidden],.assistant-dialog [hidden],.assistant-launch[hidden],#hapi-deposits[hidden],#hapi-credit[hidden],#hapi-manual[hidden],#hapi-reports[hidden],#hapi-activity[hidden]{display:none}
 #hapi-position-fields fieldset{min-width:0;display:grid;gap:10px;border:1px solid var(--rule);border-radius:12px}
 .assistant-fields input:not([type=checkbox]),.assistant-fields select{font-size:16px;width:100%;min-height:42px}
 @media(max-width:800px){
@@ -1715,11 +1713,11 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
     </a>
     <div class="rail-meta"><span class="live-led"></span> ENTORNO PRIVADO <span class="rail-number">01/08</span></div>
     <nav class="rail-navigation" id="primary-nav" aria-label="Espacios financieros">
-      <button class="rail-item is-active" type="button" data-view="today" aria-current="page"><span class="rail-glyph" aria-hidden="true">\u25EB</span><span>Hoy</span><span class="rail-index">01</span></button>
-      <button class="rail-item" type="button" data-view="movement"><span class="rail-glyph" aria-hidden="true">\u21C4</span><span>Movimientos</span><span class="rail-index">02</span></button>
-      <button class="rail-item" type="button" data-view="portfolio"><span class="rail-glyph" aria-hidden="true">\u25C8</span><span>Portafolios</span><span class="rail-index">03</span></button>
-      <button class="rail-item" type="button" data-view="plan"><span class="rail-glyph" aria-hidden="true">\u25A4</span><span>Plan</span><span class="rail-index">04</span></button>
-      <button class="rail-item" type="button" data-view="map"><span class="rail-glyph" aria-hidden="true">\u25CE</span><span>Mapa financiero</span><span class="rail-index">05</span></button>
+      <button class="rail-item is-active" type="button" data-view="today" aria-current="page"><span class="rail-glyph" aria-hidden="true">\u25EB</span><span>Hoy</span></button>
+      <button class="rail-item" type="button" data-view="movement"><span class="rail-glyph" aria-hidden="true">\u21C4</span><span>Movimientos</span></button>
+      <button class="rail-item" type="button" data-view="portfolio"><span class="rail-glyph" aria-hidden="true">\u25C8</span><span>Portafolios</span></button>
+      <button class="rail-item" type="button" data-view="plan"><span class="rail-glyph" aria-hidden="true">\u25A4</span><span>Plan</span></button>
+      <button class="rail-item" type="button" data-view="map"><span class="rail-glyph" aria-hidden="true">\u25CE</span><span>Mapa financiero</span></button>
     </nav>
     <div class="rail-group-label">HERRAMIENTAS</div>
     <nav class="rail-navigation secondary-nav" aria-label="Herramientas">
@@ -1727,7 +1725,6 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
       <button class="rail-item" type="button" data-view="connections"><span class="rail-glyph" aria-hidden="true">\u2301</span><span>Saldos</span></button>
       <button class="rail-item" type="button" data-view="settings"><span class="rail-glyph" aria-hidden="true">\u2699</span><span>Ajustes</span></button>
     </nav>
-    <div class="rail-bottom"><p class="rail-quote">No se trata de ver m\xE1s n\xFAmeros.<br><em>Se trata de entenderlos.</em></p><div class="rail-foot"><span>FINANZASOSS</span><span>2026 \xB7 CO</span></div></div>
   </aside>
   <div class="stage">
     <header class="masthead">
@@ -1745,18 +1742,8 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
       <div id="dashboard-loading" class="dashboard-loading" role="status" hidden><span class="dashboard-loading-spinner" aria-hidden="true"></span><span id="dashboard-loading-text"></span></div>
       <div id="error" class="alert" role="alert" hidden></div>
       <section class="space is-visible" id="space-today" data-space="today" aria-labelledby="heading-today">
-        <div class="intro-line"><span class="intro-index">01 \u2014 RESUMEN</span><span class="intro-right">TU DINERO, SIN RUIDO <span aria-hidden="true"><span class="native-arrow" aria-hidden="true"></span></span></span></div>
-        <div class="editorial-hero">
-          <div class="hero-copy">
-            <p class="eyebrow">FINANZAS PERSONALES / BOGOT\xC1</p>
-            <h1 id="heading-today">Un poco m\xE1s <em>de claridad.</em></h1>
-            <p class="hero-sub">Lo que gastas, c\xF3mo lo gastas y lo que vale la pena mirar. Todo en un solo espacio.</p>
-            <div class="hero-status"><span class="live-led"></span><span id="hero-status">Sincronizando tus registros\u2026</span></div>
-          </div>
-          <div class="hero-stamp" aria-hidden="true"><span>F</span><span class="stamp-arrow"><span class="native-arrow" aria-hidden="true"></span></span><small>FI<span>NA</span>NZAS</small></div>
-        </div>
+        <div class="page-intro compact-intro"><h1 id="heading-today">Hoy</h1></div>
         <div class="budget-home" id="budget-home" aria-live="polite"><div><span class="micro-label">TU PLAN DE GASTOS</span><p id="budget-home-status">Configura tus l\xEDmites para seguir tus gastos diarios, semanales, mensuales y anuales.</p></div><button type="button" class="soft-button" data-view="plan">Gestionar l\xEDmites <span class="native-arrow" aria-hidden="true"></span></button></div>
-        <div class="section-topline"><span>LECTURA DEL PER\xCDODO</span><span class="section-count">DATOS COP \xB7 REGISTRADOS</span></div>
         <div class="period-strip">
           <div class="period-controls" role="group" aria-label="Seleccionar per\xEDodo">
             <button type="button" class="period-btn" data-period="day">Hoy</button>
@@ -1768,10 +1755,10 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
           <span id="period-label" class="period-caption">Cargando\u2026</span>
         </div>
         <div class="metrics">
-          <article class="metric metric-feature"><div class="metric-top"><span>GASTOS DEL PER\xCDODO</span><span>01 / 04</span></div><div class="metric-money" data-private id="kpi-total">\u2014</div><div class="metric-bottom"><span class="delta muted" id="kpi-compare">Cargando</span><span class="kpi-note">vs. per\xEDodo anterior</span></div></article>
-          <article class="metric"><div class="metric-top"><span>MOVIMIENTOS</span><span>02 / 04</span></div><div class="metric-money" id="kpi-count">\u2014</div><p>Gastos registrados</p></article>
-          <article class="metric"><div class="metric-top"><span>PROMEDIO</span><span>03 / 04</span></div><div class="metric-money" data-private id="kpi-average">\u2014</div><p>Por movimiento</p></article>
-          <article class="metric"><div class="metric-top"><span>HIST\xD3RICO</span><span>04 / 04</span></div><div class="metric-money" data-private id="kpi-all">\u2014</div><p id="all-count">Total de gastos</p></article>
+          <article class="metric metric-feature"><div class="metric-top"><span>GASTOS DEL PER\xCDODO</span></div><div class="metric-money" data-private id="kpi-total">\u2014</div><div class="metric-bottom"><span class="delta muted" id="kpi-compare">Cargando</span><span class="kpi-note">vs. per\xEDodo anterior</span></div></article>
+          <article class="metric"><div class="metric-top"><span>MOVIMIENTOS</span></div><div class="metric-money" id="kpi-count">\u2014</div><p>Gastos registrados</p></article>
+          <article class="metric"><div class="metric-top"><span>PROMEDIO</span></div><div class="metric-money" data-private id="kpi-average">\u2014</div><p>Por movimiento</p></article>
+          <article class="metric"><div class="metric-top"><span>HIST\xD3RICO</span></div><div class="metric-money" data-private id="kpi-all">\u2014</div><p id="all-count">Total de gastos</p></article>
         </div>
         <section class="category-spend" aria-labelledby="category-spend-heading">
   <div class="panel-heading"><div><span class="micro-label">CATEGOR\xCDAS / GASTO REAL REGISTRADO</span>
@@ -1783,64 +1770,38 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   <button type="button" class="soft-button category-review-link" data-view="plan">Revisar categor\xEDas pendientes</button>
 </section>
         <div class="analytics-grid">
-          <article class="editorial-panel trend-panel"><div class="panel-heading"><div><div class="micro-label">EVOLUCI\xD3N / 01</div><h2>El pulso de tus gastos</h2><p id="trend-subtitle">Evoluci\xF3n del per\xEDodo</p></div><span class="panel-tag">COP <span class="tiny-dot"></span></span></div>
+          <article class="editorial-panel trend-panel"><div class="panel-heading"><div><h2>El pulso de tus gastos</h2><p id="trend-subtitle">Evoluci\xF3n del per\xEDodo</p></div><span class="panel-tag">COP <span class="tiny-dot"></span></span></div>
             <div class="chart-wrap" data-private><svg id="trend" role="img" aria-label="Gr\xE1fico de gastos" viewBox="0 0 800 255" preserveAspectRatio="none"><defs><linearGradient id="trendGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#bb784e" stop-opacity=".21"/><stop offset="100%" stop-color="#bb784e" stop-opacity="0"/></linearGradient></defs><g id="gridlines"></g><path id="trend-area" fill="url(#trendGradient)"></path><path id="trend-line" fill="none" stroke="#aa613f" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"></path><g id="trend-dots"></g></svg><div class="chart-ends"><span id="chart-first">\u2014</span><span id="chart-last">\u2014</span></div></div>
             <div class="panel-footer"><span><i class="tiny-dot"></i> Datos registrados</span><strong id="trend-total" data-private>\u2014</strong></div>
           </article>
-          <article class="editorial-panel method-panel"><div class="panel-heading"><div><div class="micro-label">COMPORTAMIENTO / 02</div><h2>C\xF3mo se mueve</h2><p>Distribuci\xF3n por medios de pago</p></div></div>
+          <article class="editorial-panel method-panel"><div class="panel-heading"><div><h2>C\xF3mo se mueve</h2><p>Distribuci\xF3n por medios de pago</p></div></div>
             <div class="donut-area" data-private><div class="donut" id="donut" role="img" aria-label="Distribuci\xF3n por m\xE9todo"><div class="donut-hole"><span>REGISTROS</span><strong id="donut-total">\u2014</strong></div></div></div><div id="methods" class="methods"></div>
           </article>
         </div>
         <div class="bottom-grid">
-          <article class="editorial-panel bars-panel"><div class="panel-heading"><div><div class="micro-label">\xDALTIMOS SIETE D\xCDAS / 03</div><h2>Semana a semana</h2><p>Actividad reciente en horario de Colombia</p></div></div><div id="week-bars" class="week-bars" data-private></div></article>
-          <article class="editorial-panel insight-panel"><div class="panel-heading"><div><div class="micro-label">UNA MIRADA M\xC1S / 04</div><h2>En perspectiva</h2></div></div><div class="insight-row"><span>D\xEDa de mayor gasto</span><strong id="peak-day" data-private>\u2014</strong></div><div class="insight-row"><span>M\xE9todo predominante</span><strong id="top-method">\u2014</strong></div><div class="insight-row"><span>Ingresos registrados</span><strong id="income-total" data-private>\u2014</strong></div><div class="insight-row"><span>Ingresos del mes</span><strong id="income-month" data-private>\u2014</strong></div><div class="insight-row"><span>Movimientos hist\xF3ricos</span><strong id="all-movements">\u2014</strong></div></article>
+          <article class="editorial-panel bars-panel"><div class="panel-heading"><div><h2>Semana a semana</h2><p>Actividad reciente en horario de Colombia</p></div></div><div id="week-bars" class="week-bars" data-private></div></article>
+          <article class="editorial-panel insight-panel"><div class="panel-heading"><div><h2>En perspectiva</h2></div></div><div class="insight-row"><span>D\xEDa de mayor gasto</span><strong id="peak-day" data-private>\u2014</strong></div><div class="insight-row"><span>M\xE9todo predominante</span><strong id="top-method">\u2014</strong></div><div class="insight-row"><span>Ingresos registrados</span><strong id="income-total" data-private>\u2014</strong></div><div class="insight-row"><span>Ingresos del mes</span><strong id="income-month" data-private>\u2014</strong></div><div class="insight-row"><span>Movimientos hist\xF3ricos</span><strong id="all-movements">\u2014</strong></div></article>
         </div>
         <button type="button" class="full-link" data-view="movement"><span>Explora el historial de movimientos</span><span>VER TODOS <b aria-hidden="true"><span class="native-arrow" aria-hidden="true"></span></b></span></button>
       </section>
       <section class="space" id="space-movement" data-space="movement" aria-labelledby="heading-movement" hidden>
-        <div class="intro-line"><span class="intro-index">02 \u2014 MOVIMIENTOS</span><span class="intro-right">SIN SALDOS SUPUESTOS</span></div>
-        <div class="page-intro"><p class="eyebrow">TU LIBRO DE REGISTRO</p><h1 id="heading-movement">Cada peso <em>cuenta algo.</em></h1><p>Ingresos, gastos y transferencias registrados sin mezclar los movimientos entre tus cuentas.</p><button id="add-income-movement" class="soft-button" type="button">\uFF0B Registrar ingreso</button></div>
-        
-<section class="bank-insights" aria-labelledby="bank-insights-heading">
- <div class="panel-heading"><div><span class="micro-label">BANCOS \xB7 DATOS REGISTRADOS</span><h2 id="bank-insights-heading">Tus gastos <em>por entidad.</em></h2><p>No muestra saldos ni conexiones bancarias: solo las etiquetas que escribiste. No incluye deudas ni transferencias ambiguas.</p></div></div>
- <div id="bank-insights-status" role="status" aria-live="polite">Preparando informe de bancos\u2026</div>
- <div id="bank-insights-list" class="bank-insights-list" data-private></div>
-</section>
-<section class="bank-insights" aria-labelledby="benefits-heading">
- <div class="panel-heading"><div><span class="micro-label">SIMULADOR \xB7 SIN GUARDAR DATOS</span><h2 id="benefits-heading">Rendimientos y <em>cashback.</em></h2><p>Introduce tus propias tasas y compras elegibles. Es una estimaci\xF3n, no dinero recibido ni una tasa garantizada.</p></div></div>
- <div class="benefits-grid">
-  <label>Saldo a comparar (COP) <input id="benefit-balance" type="number" min="0" max="100000000000" step="1000" inputmode="numeric" placeholder="Ej. 2000000" autocomplete="off"></label>
-  <label>Tasa efectiva anual (%) <input id="benefit-ea" type="number" min="0" max="100" step=".01" inputmode="decimal" placeholder="Seg\xFAn tu app" autocomplete="off"></label>
-  <label>D\xEDas de comparaci\xF3n <input id="benefit-days" type="number" min="1" max="365" step="1" value="30" inputmode="numeric"></label>
-  <label>Compras elegibles (COP) <input id="benefit-purchases" type="number" min="0" max="100000000000" step="1000" inputmode="numeric" placeholder="Solo las elegibles" autocomplete="off"></label>
-  <label>Cashback aplicable (%) <input id="benefit-cashback" type="number" min="0" max="50" step=".1" inputmode="decimal" placeholder="Ej. 5" autocomplete="off"></label>
- </div>
- <div class="benefits-results"><div>Intereses estimados <strong id="benefit-interest" data-private>\u2014</strong></div><div>Cashback estimado <strong id="benefit-rewards" data-private>\u2014</strong></div></div>
- <p class="budget-note">No se registran ingresos en FinanzasOSS con este simulador. La tasa E.A. se convierte al plazo indicado; puede cambiar y estar sujeta a requisitos, retenciones o impuestos. El cashback real depende del comercio, MCC, topes y condiciones de la promoci\xF3n.</p>
-</section>
+        <div class="page-intro compact-intro movement-intro"><h1 id="heading-movement">Movimientos</h1><button id="add-income-movement" class="soft-button" type="button">\uFF0B Registrar ingreso</button></div>
         <div class="history-toolbar"><div class="history-left"><span id="history-count" class="history-count">\u2014 movimientos</span><span class="history-note">M\xE1s recientes primero</span></div><div class="history-right"><button id="refresh-history" type="button" class="soft-button"><span class="native-refresh" aria-hidden="true"></span> Actualizar</button><button id="add-movement" type="button" class="solid-button">\uFF0B A\xF1adir gasto</button></div></div>
         <article class="table-panel"><div class="table-scroll"><table aria-label="Historial de movimientos financieros"><thead><tr><th>CONCEPTO / TIPO</th><th>FECHA</th><th>M\xC9TODO DE PAGO</th><th class="align-right">VALOR</th><th class="history-actions-head"><span class="sr-only">Acciones</span></th></tr></thead><tbody id="history-body"><tr><td colspan="5" class="empty-row">Cargando tus movimientos\u2026</td></tr></tbody></table></div><div class="history-bottom"><p id="history-status">Consultando historial\u2026</p><button id="load-more" type="button" class="soft-button" hidden>Cargar movimientos anteriores <span aria-hidden="true">\u2193</span></button></div></article>
         <p class="footnote">Los registros sin cuenta no se asignan autom\xE1ticamente a una cuenta bancaria. Las transferencias propias y los aportes de inversi\xF3n no se cuentan como consumo.</p>
+        <details class="bank-insights secondary-disclosure">
+          <summary>Gastos por entidad</summary>
+          <p id="bank-insights-status" role="status" aria-live="polite">Preparando informe de bancos\u2026</p>
+          <div id="bank-insights-list" class="bank-insights-list" data-private></div>
+        </details>
       </section>
       <section class="space" id="space-portfolio" data-space="portfolio" aria-labelledby="heading-portfolio" hidden>
-        <div class="intro-line"><span class="intro-index">03 \u2014 PORTAFOLIOS</span><span class="intro-right">INVERSI\xD3N / SOLO LECTURA</span></div>
-        <div class="page-intro"><p class="eyebrow">TUS ACTIVOS, EN CONTEXTO</p><h1 id="heading-portfolio">Construir tambi\xE9n <em>es medir.</em></h1><p>El lugar para ver aportes, rendimiento, posiciones y patrimonio, cuando existan fuentes verificadas.</p></div>
-        <article class="statement-card" id="portfolio-no-data"><div><span class="statement-kicker">PATRIMONIO VERIFICADO</span><h2>Sin valor disponible <span aria-hidden="true">\u2014</span></h2><p>No hay posiciones ni saldos sincronizados. Un gasto registrado no permite calcular tu patrimonio.</p></div><span class="statement-symbol" aria-hidden="true">\u25CC</span></article>
-        <div class="three-columns">
-          `+Et+`<article class="module" id="hapi-placeholder"><span class="module-no">01 / FUENTE</span><h3>Hapi</h3><p>Importaci\xF3n por extractos oficiales. A\xFAn no vinculada en esta PWA.</p><span class="state-pill">Sin datos conectados</span></article>
-          <article class="module"><span class="module-no">02 / FUENTE</span><h3>Binance</h3><p>Adaptador de solo lectura en el proyecto original. Sin credenciales productivas.</p><span class="state-pill">Sin datos conectados</span></article>
-          <article class="module"><span class="module-no">03 / FUENTE</span><h3>Interactive Brokers</h3><p>Adaptador preparado. La consulta real exige autorizaci\xF3n verificada.</p><span class="state-pill">Sin datos conectados</span></article>
-        </div>
-        <div class="guidance"><span class="guidance-mark" aria-hidden="true"><span class="native-arrow" aria-hidden="true"></span></span><div><h3>El sistema original sigue aqu\xED.</h3><p>Los modelos de posiciones, aportes netos, dividendos, costo base y rentabilidad se conservan en el repositorio. Todav\xEDa no se alimentan de fuentes autorizadas en este entorno.</p></div><button class="soft-button" data-view="imports" type="button">Explorar importaci\xF3n</button></div>
+        <div class="page-intro compact-intro"><h1 id="heading-portfolio">Portafolio</h1></div>
+        `+Et+`
+        <p class="hapi-unavailable">Hapi no est\xE1 habilitado en este entorno.</p>
       </section>
       <section class="space" id="space-plan" data-space="plan" aria-labelledby="heading-plan" hidden>
-        <div class="intro-line"><span class="intro-index">04 \u2014 PLAN</span><span class="intro-right">OBSERVACIONES / NO PRON\xD3STICOS</span></div>
-        <div class="page-intro"><p class="eyebrow">CONOCE TUS H\xC1BITOS</p><h1 id="heading-plan">Poner intenci\xF3n <em>a cada gasto.</em></h1><p>Lecturas basadas en tu historial, sin presupuestos inventados ni compromisos financieros autom\xE1ticos.</p></div>
-        <div class="three-columns">
-          <article class="module"><span class="module-no">GASTOS / MES ACTUAL</span><strong id="plan-month" data-private class="module-value">\u2014</strong><p>El total registrado hasta hoy, no tu gasto bancario completo.</p></article>
-          <article class="module"><span class="module-no">D\xCDAS CON GASTOS / MES</span><strong id="plan-days" class="module-value">\u2014</strong><p>D\xEDas en los que a\xF1adiste al menos un movimiento.</p></article>
-          <article class="module"><span class="module-no">PROMEDIO DIARIO REGISTRADO</span><strong id="plan-average" data-private class="module-value">\u2014</strong><p>Distribuido entre los d\xEDas transcurridos este mes.</p></article>
-        </div>
+        <div class="page-intro compact-intro"><h1 id="heading-plan">Plan</h1></div>
         <section class="budget-section" aria-labelledby="budgets-heading">
  <div class="budget-heading"><div><span class="micro-label">PLAN \xB7 CONTROL PERSONAL</span><h2 id="budgets-heading">Tus l\xEDmites <em>de gasto.</em></h2><p>Establece hasta cu\xE1nto te propones gastar. Calculamos todo con los movimientos que registraste en COP, incluyendo el Atajo del iPhone. Semana: lunes a domingo. No incluye movimientos bancarios a\xFAn no conectados.</p></div><span class="state-pill">4 per\xEDodos independientes</span></div>
  <div id="budget-cards" class="budget-grid"><article class="budget-card" data-budget-period="day">
@@ -1870,6 +1831,13 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
  <p id="budget-message" role="status" aria-live="polite" class="budget-message">Consultando tus presupuestos\u2026</p>
  <p class="budget-note">Recibir\xE1s avisos dentro de FinanzasOSS al llegar al 80 % o alcanzar el l\xEDmite. Nunca bloquearemos un registro real por superar una meta. Los l\xEDmites no transfieren dinero ni tienen acceso a bancos.</p>
  </section>
+        <details class="plan-stats secondary-disclosure">
+          <summary>Actividad de gasto del mes</summary>
+          <dl>
+            <div><dt>D\xEDas con gastos</dt><dd id="plan-days">\u2014</dd></div>
+            <div><dt>Promedio por d\xEDa transcurrido</dt><dd id="plan-average" data-private>\u2014</dd></div>
+          </dl>
+        </details>
         <section class="module intelligent-categories" aria-labelledby="ai-categories-heading">
           <div><span class="module-no">CATEGOR\xCDAS / INTELIGENCIA FINANCIERA</span>
             <h2 id="ai-categories-heading">Entiende <em>tus gastos.</em></h2>
@@ -1953,6 +1921,19 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
 </div>
 <details class="settings-advanced">
   <summary>Avanzado</summary>
+  <details class="bank-insights secondary-disclosure">
+    <summary>Simular rendimientos y cashback</summary>
+    <p class="budget-note">Introduce tu tasa y el valor de las compras elegibles para estimar el beneficio.</p>
+ <div class="benefits-grid">
+  <label>Saldo a comparar (COP) <input id="benefit-balance" type="number" min="0" max="100000000000" step="1000" inputmode="numeric" placeholder="Ej. 2000000" autocomplete="off"></label>
+  <label>Tasa efectiva anual (%) <input id="benefit-ea" type="number" min="0" max="100" step=".01" inputmode="decimal" placeholder="Seg\xFAn tu app" autocomplete="off"></label>
+  <label>D\xEDas de comparaci\xF3n <input id="benefit-days" type="number" min="1" max="365" step="1" value="30" inputmode="numeric"></label>
+  <label>Compras elegibles (COP) <input id="benefit-purchases" type="number" min="0" max="100000000000" step="1000" inputmode="numeric" placeholder="Solo las elegibles" autocomplete="off"></label>
+  <label>Cashback aplicable (%) <input id="benefit-cashback" type="number" min="0" max="50" step=".1" inputmode="decimal" placeholder="Ej. 5" autocomplete="off"></label>
+ </div>
+ <div class="benefits-results"><div>Intereses estimados <strong id="benefit-interest" data-private>\u2014</strong></div><div>Cashback estimado <strong id="benefit-rewards" data-private>\u2014</strong></div></div>
+ <p class="budget-note">No se registran ingresos en FinanzasOSS con este simulador. La tasa E.A. se convierte al plazo indicado; puede cambiar y estar sujeta a requisitos, retenciones o impuestos. El cashback real depende del comercio, MCC, topes y condiciones de la promoci\xF3n.</p>
+  </details>
   <div class="setting-row app-setting"><div><h3>Prueba de notificaciones</h3><p id="push-test-feedback" class="app-setting-status" role="status" aria-live="polite">Activa las notificaciones en este dispositivo para enviar una prueba.</p></div>
   <button id="push-test" type="button" class="soft-button" disabled>Enviar aviso de prueba</button></div>
 <div class="setting-row app-setting qa-setting">
@@ -1979,7 +1960,6 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   <button type="button" id="reset-open" class="danger-button">Restablecer movimientos y saldos <span class="native-arrow" aria-hidden="true"></span></button>
 </div></div>
       </section>
-      <footer class="site-footer"><span>F\xB7 FINANZASOSS <i> / </i> ESTUDIO FINANCIERO</span><span>ACCESO PRIVADO \xB7 STAGING \xB7 COLOMBIA</span></footer>
     </main>
   </div>
   <nav class="mobile-nav" aria-label="Navegaci\xF3n m\xF3vil">
@@ -1991,18 +1971,14 @@ var L="@cf/qwen/qwen3.8-27b",K={reasoning_effort:"low",temperature:.1,stream:!1}
   </nav>
 </div>
 <dialog id="more-dialog" class="more-dialog" aria-labelledby="more-heading">
-<div class="more-top"><div><span class="micro-label">NAV / FINANZASOSS</span><h2 id="more-heading">Explorar <em>espacios.</em></h2></div><button type="button" id="close-more" class="icon-button" aria-label="Cerrar navegaci\xF3n">\xD7</button></div>
+<div class="more-top"><h2 id="more-heading">M\xE1s</h2><button type="button" id="close-more" class="icon-button" aria-label="Cerrar navegaci\xF3n">\xD7</button></div>
 <div class="more-links">
-<button type="button" data-view="today"><span>01</span>Hoy <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="movement"><span>02</span>Movimientos <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="portfolio"><span>03</span>Portafolios <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="plan"><span>04</span>Plan <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="map"><span>05</span>Mapa financiero <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="imports"><span>06</span>Importar <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="connections"><span>07</span>Saldos <b><span class="native-arrow" aria-hidden="true"></span></b></button>
-<button type="button" data-view="settings"><span>08</span>Ajustes <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="plan">Plan <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="map">Mapa financiero <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="imports">Importar <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="connections">Saldos <b><span class="native-arrow" aria-hidden="true"></span></b></button>
+<button type="button" data-view="settings">Ajustes <b><span class="native-arrow" aria-hidden="true"></span></b></button>
 </div>
-<p class="more-foot">Un mismo espacio, todos tus movimientos.</p>
 </dialog>
 
 <dialog id="v41-decision-dialog" class="v41-review-dialog" aria-labelledby="v41-decision-title">
@@ -3365,6 +3341,19 @@ dialog[open]{touch-action:pan-y}
 .settings-advanced[open]>summary{border-bottom:1px solid var(--rule)}
 #balance-list .balance-account>.soft-button+.soft-button{margin-top:6px}
 #hapi-report-label{font-weight:750}
+
+.page-intro.compact-intro{padding:18px 0 16px}
+.compact-intro h1{font-size:clamp(29px,4.5vw,44px);letter-spacing:-.035em}
+#space-today .compact-intro{padding-bottom:10px}
+.movement-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:none}
+.secondary-disclosure>summary{cursor:pointer;font-weight:700}
+.secondary-disclosure[open]>summary{margin-bottom:10px}
+.plan-stats{margin:12px 0 18px}
+.plan-stats dl{display:grid;gap:8px;margin:0}
+.plan-stats dl div{display:flex;justify-content:space-between;gap:12px}
+.plan-stats dd{margin:0;font-variant-numeric:tabular-nums}
+.more-links button{grid-template-columns:minmax(0,1fr) auto}
+#hapi-deposits[data-hapi-enabled="true"]+.hapi-unavailable{display:none}
 `;var mt=`(() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -4510,13 +4499,9 @@ document.addEventListener("finanzasoss:movement-saved",()=>void renderBankReport
       .reduce((sum,x)=>sum+Number(x.minor),0);
     byId("income-total").textContent=amountCOP(overview.incomeMinor||0);
     byId("income-month").textContent=amountCOP(incomeMonth);
-    byId("plan-month").textContent=amountCOP(month);
     byId("plan-days").textContent=String(days.size).padStart(2,"0");
     byId("plan-average").textContent=amountCOP(month/Math.max(1,monthElapsed));
     byId("map-total").textContent=amountCOP(total);
-    byId("hero-status").textContent=overview.movementCount===0?
-      "Tu historial est\xE1 listo para recibir el primer gasto" :
-      new Intl.NumberFormat("es-CO").format(overview.movementCount)+" movimientos consultados en privado";
     const sumByMethod = new Map();
     all.forEach((x)=>sumByMethod.set(x.method,(sumByMethod.get(x.method)||0)+Number(x.minor)));
     const targets=byId("map-targets");
