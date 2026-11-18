@@ -181,7 +181,7 @@ const COP=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimum
 assert.deepEqual(visible.map(x=>[x.name,x.body,x.data.url,x.tag]),[
  ["Gasto registrado",COP.format(25000)+" · Transporte","/dashboard#movement",undefined],
  ["Ingreso registrado",COP.format(150000)+" · Venta","/dashboard#movement",undefined],
- ["Gasto registrado",COP.format(100)+" · Un pago de un concepto realmente demasiado exten…","/dashboard#movement",undefined],
+ ["Gasto registrado",COP.format(100)+" · Un pago de un concepto realmente demasiado exte…","/dashboard#movement",undefined],
  ["FinanzasOSS","Gasto registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Ingreso registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Aviso de prueba de FinanzasOSS.","/dashboard#movement",undefined],
