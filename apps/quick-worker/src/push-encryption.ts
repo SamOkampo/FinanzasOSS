@@ -9,7 +9,7 @@ async function hkdf(key: CryptoKey, salt: Uint8Array, info: Uint8Array, bits: nu
   return crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt, info }, key, bits);
 }
 
-export async function encryptPushReceipt(p256dh: string, auth: string, receipt: "expense" | "income" | "test"): Promise<ArrayBuffer> {
+export async function encryptPushReceipt(p256dh: string, auth: string, receipt: string): Promise<ArrayBuffer> {
   const recipient = fromBase64Url(p256dh);
   const recipientKey = await crypto.subtle.importKey("raw", recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
   const sender = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
