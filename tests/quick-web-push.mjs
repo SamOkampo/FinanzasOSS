@@ -100,6 +100,8 @@ function decryptReceipt(body){
   assert.equal(message.at(-1),2);
   return message.subarray(0,-1).toString();
 }
+const expenseNotice=JSON.stringify({kind:"expense",amountMinor:500000,concept:"Prueba privada"});
+const incomeNotice=JSON.stringify({kind:"income",amountMinor:500000,concept:"Prueba privada"});
 const received=[];
 const providerErrors=[];
 let failDelivery=false;
@@ -130,7 +132,7 @@ try{
   assert.equal((await call("/api/quick/shortcut/income","POST",direct,service,opts)).status,201);
   assert.equal((await call("/api/quick/shortcut/income","POST",direct,service,opts)).status,200);
   assert.equal((await call("/api/quick/studio/income","POST",{...movement,amount:"0"})).status,422);
-  assert.deepEqual(received,["expense","income","expense","income"]);
+  assert.deepEqual(received,[expenseNotice,incomeNotice,expenseNotice,incomeNotice]);
   // The response is queued before the server delivers, so the device can leave the app.
   const waitUntil=[];
   const testReq=new Request(base+"/api/quick/push/test",{method:"POST",
@@ -146,17 +148,17 @@ try{
     const test=await handleQuickRequest(testReq,env,{...ownerA,waitUntil:task=>waitUntil.push(task)});
     assert.equal(test.status,202);
     assert.deepEqual(await test.json(),{scheduled:true,delaySeconds:10});
-    assert.deepEqual(received,["expense","income","expense","income"]);
+    assert.deepEqual(received,[expenseNotice,incomeNotice,expenseNotice,incomeNotice]);
     assert.equal(waitUntil.length,1);
     sendAfterLeaving();
     assert.equal((await waitUntil[0]).status,200);
   }finally{globalThis.setTimeout=realTimer;}
-  assert.deepEqual(received,["expense","income","expense","income","test"]);
+  assert.deepEqual(received,[expenseNotice,incomeNotice,expenseNotice,incomeNotice,"test"]);
   failDelivery=true;
   const another={...movement,clientEntryId:"push-provider-unavailable"};
   assert.equal((await call("/api/quick/studio/income","POST",another)).status,201,"Delivery failures must not roll back entries");
   assert.equal((await call("/api/quick/studio/income","POST",another)).status,200);
-  assert.deepEqual(received,["expense","income","expense","income","test","income"]);
+  assert.deepEqual(received,[expenseNotice,incomeNotice,expenseNotice,incomeNotice,"test",incomeNotice]);
   assert.deepEqual(providerErrors,[]);
 }finally{globalThis.fetch=originalFetch;}
 
@@ -167,11 +169,21 @@ assert.doesNotThrow(()=>new Function(sw));
 const handlers=new Map(), visible=[];
 new Function("self",sw)({addEventListener:(type,listener)=>handlers.set(type,listener),
  registration:{showNotification:(name,options)=>visible.push({name,...options})}});
-for(const kind of ["expense","income","test",null])handlers.get("push")({data:kind===null?null:{text:()=>kind},waitUntil:()=>{}});
+const noticeExamples=[
+ JSON.stringify({kind:"expense",amountMinor:2500000,concept:"Transporte"}),
+ JSON.stringify({kind:"income",amountMinor:15000000,concept:"Venta"}),
+ "expense","income","test",null,JSON.stringify({kind:"expense",amountMinor:-1,concept:"No se debe mostrar"}),
+];
+for(const payload of noticeExamples)
+ handlers.get("push")({data:payload===null?null:{text:()=>payload},waitUntil:()=>{}});
+const COP=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0,maximumFractionDigits:2});
 assert.deepEqual(visible.map(x=>[x.name,x.body,x.data.url,x.tag]),[
+ ["FinanzasOSS","Acabas de registrar "+COP.format(25000)+" en Transporte.","/dashboard#movement",undefined],
+ ["FinanzasOSS","Acabas de registrar "+COP.format(150000)+" en Venta.","/dashboard#movement",undefined],
  ["FinanzasOSS","Gasto registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Ingreso registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Aviso de prueba de FinanzasOSS.","/dashboard#movement",undefined],
+ ["FinanzasOSS","Revisa los pendientes de tu perfil en FinanzasOSS.","/dashboard#plan","finanzasoss-finance-review"],
  ["FinanzasOSS","Revisa los pendientes de tu perfil en FinanzasOSS.","/dashboard#plan","finanzasoss-finance-review"],
 ]);
 const html=await (await handleQuickRequest(new Request(base+"/dashboard"),env,ownerA)).text();

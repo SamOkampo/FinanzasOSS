@@ -225,13 +225,13 @@ export async function sendOwnerCategoryQuestion(
 }
 
 async function sendDeviceNotice(env:QuickWorkerEnv,device:{endpoint:string;p256dh?:string|null;auth_secret?:string|null},
- receipt:"income"|"expense"|"test",now=Date.now(),send:typeof fetch=fetch):Promise<Response>{
+ receipt:"income"|"expense"|"test",now=Date.now(),send:typeof fetch=fetch,payload:string=receipt):Promise<Response>{
  let stage="prepare";
  try{
   const endpoint=endpointOf(device.endpoint);
   const [token,body]=await Promise.all([
    jwt(env,new URL(endpoint).origin,now),
-   device.p256dh&&device.auth_secret?encryptPushReceipt(device.p256dh,device.auth_secret,receipt):undefined,
+   device.p256dh&&device.auth_secret?encryptPushReceipt(device.p256dh,device.auth_secret,payload):undefined,
   ]);
   stage="provider";
   const result=await send(endpoint,{method:"POST",redirect:"manual",headers:{
@@ -247,7 +247,26 @@ async function sendDeviceNotice(env:QuickWorkerEnv,device:{endpoint:string;p256d
  }
 }
 
-async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expense"|"income"){
+type MovementDetails={amount_minor:number;concept:string|null};
+
+// Use persisted amounts and concepts, scoped to the authenticated owner.
+async function movementPayload(env:QuickWorkerEnv,owner:string,entryId:string,
+ receipt:"expense"|"income"):Promise<string>{
+ const income=receipt==="income";
+ const query=env.DB.prepare(income?
+   "SELECT amount_minor,concept FROM quick_income_entries WHERE owner_id=? AND id=? LIMIT 1":
+   "SELECT amount_minor,merchant AS concept FROM quick_shortcut_expenses WHERE owner_id=? AND id=? AND deleted_at IS NULL "+
+   "UNION ALL SELECT amount_minor,merchant AS concept FROM quick_manual_entries "+
+   "WHERE owner_id=? AND id=? AND deleted_at IS NULL LIMIT 1");
+ const row=await (income?query.bind(owner,entryId):query.bind(owner,entryId,owner,entryId))
+   .first<MovementDetails>();
+ const concept=typeof row?.concept==="string"?
+   row.concept.replace(/[\u0000-\u001f\u007f-\u009f]/g," ").trim().slice(0,120).trim():"";
+ if(!row||!Number.isSafeInteger(row.amount_minor)||row.amount_minor<=0||!concept)return receipt;
+ return JSON.stringify({kind:receipt,amountMinor:row.amount_minor,concept});
+}
+
+async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expense"|"income",payload:string=receipt){
  const devices=await env.DB.prepare(
   "SELECT endpoint_hash,endpoint,p256dh,auth_secret FROM quick_push_subscriptions " +
   "WHERE owner_id=? AND p256dh IS NOT NULL AND auth_secret IS NOT NULL ORDER BY created_at LIMIT 5"
@@ -255,7 +274,7 @@ async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expe
  if(!devices.results.length)console.info({event:"finanzasoss_push_delivery",receipt,outcome:"no_ready_device"});
  await Promise.all(devices.results.map(async device=>{
   try{
-   const result=await sendDeviceNotice(env,device,receipt);
+   const result=await sendDeviceNotice(env,device,receipt,Date.now(),fetch,payload);
    if(result.status===404||result.status===410){
     await env.DB.prepare("DELETE FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=? "+
       "AND p256dh=? AND auth_secret=? RETURNING endpoint_hash")
@@ -270,7 +289,15 @@ export async function notifyCreatedMovement(
 ):Promise<Response>{
  // Only the request that inserted the row returns 201. A replay or edit must not send again.
  if(response.status===201&&movementPushConfigured(env)){
-  const delivery=sendMovementReceipt(env,owner,receipt).catch(()=>{
+  const delivery=(async()=>{
+   let payload:string=receipt;
+   try{
+    const created=await response.clone().json() as {entryId?:unknown};
+    if(typeof created.entryId==="string")
+     payload=await movementPayload(env,owner,created.entryId,receipt);
+   }catch{ /* Notification formatting must not roll back financial writes. */ }
+   await sendMovementReceipt(env,owner,receipt,payload);
+  })().catch(()=>{
    console.warn({event:"finanzasoss_push_delivery",receipt,outcome:"subscription_lookup_failed"});
   });
   if(ctx.waitUntil)ctx.waitUntil(delivery);
