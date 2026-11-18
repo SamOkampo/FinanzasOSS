@@ -172,14 +172,16 @@ new Function("self",sw)({addEventListener:(type,listener)=>handlers.set(type,lis
 const noticeExamples=[
  JSON.stringify({kind:"expense",amountMinor:2500000,concept:"Transporte"}),
  JSON.stringify({kind:"income",amountMinor:15000000,concept:"Venta"}),
+ JSON.stringify({kind:"expense",amountMinor:10000,concept:"Un pago de un concepto realmente demasiado extenso para caber completo en notificaciones"}),
  "expense","income","test",null,JSON.stringify({kind:"expense",amountMinor:-1,concept:"No se debe mostrar"}),
 ];
 for(const payload of noticeExamples)
  handlers.get("push")({data:payload===null?null:{text:()=>payload},waitUntil:()=>{}});
 const COP=new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0,maximumFractionDigits:2});
 assert.deepEqual(visible.map(x=>[x.name,x.body,x.data.url,x.tag]),[
- ["FinanzasOSS","Acabas de registrar "+COP.format(25000)+" en Transporte.","/dashboard#movement",undefined],
- ["FinanzasOSS","Acabas de registrar "+COP.format(150000)+" en Venta.","/dashboard#movement",undefined],
+ ["Gasto registrado",COP.format(25000)+" · Transporte","/dashboard#movement",undefined],
+ ["Ingreso registrado",COP.format(150000)+" · Venta","/dashboard#movement",undefined],
+ ["Gasto registrado",COP.format(100)+" · Un pago de un concepto realmente demasiado exte…","/dashboard#movement",undefined],
  ["FinanzasOSS","Gasto registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Ingreso registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Aviso de prueba de FinanzasOSS.","/dashboard#movement",undefined],
