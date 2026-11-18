@@ -20,12 +20,28 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 // Intentionally NO fetch event handler; every request uses the native browser network stack.
 self.addEventListener("push", (event) => {
-  // Receipts identify only the kind of entry. Empty assistant pushes keep their normal behavior.
-  const receipt=event.data?.text();
+  // Detail is encrypted in Web Push; legacy one-word and empty pushes still work.
+  const message=event.data?.text()||"";
+  let receipt=message,detail=null;
+  try{
+    const parsed=JSON.parse(message);
+    if(parsed&&(parsed.kind==="expense"||parsed.kind==="income")&&
+       Number.isSafeInteger(parsed.amountMinor)&&parsed.amountMinor>0&&
+       typeof parsed.concept==="string"&&parsed.concept.trim().length>0&&
+       parsed.concept.length<=120){
+      receipt=parsed.kind;detail=parsed;
+    }
+  }catch{ /* Legacy or empty push. */ }
   const movement=receipt==="expense"||receipt==="income";
+  const body=detail?
+    "Acabas de registrar "+new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",
+      minimumFractionDigits:0,maximumFractionDigits:2}).format(detail.amountMinor/100)+
+    " en "+detail.concept.trim()+".":
+    receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":
+    receipt==="test"?"Aviso de prueba de FinanzasOSS.":
+      "Revisa los pendientes de tu perfil en FinanzasOSS.";
   event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":receipt==="test"?"Aviso de prueba de FinanzasOSS.":
-      "Revisa los pendientes de tu perfil en FinanzasOSS.",
+    body,
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
     ...(movement||receipt==="test"?{data:{url:"/dashboard#movement"}}:{
