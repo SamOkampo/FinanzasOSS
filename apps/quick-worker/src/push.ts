@@ -1,6 +1,7 @@
-// FinanzasOSS: owner-isolated, opt-in, empty-payload Web Push (staging only).
+// FinanzasOSS: owner-isolated, opt-in Web Push (staging only).
 // Sensitive endpoints are never returned to clients other than their own browser's PushManager.
-import type {QuickD1,QuickWorkerEnv} from "./index.js";
+import type {QuickD1,QuickWorkerContext,QuickWorkerEnv} from "./index.js";
+import {encryptPushReceipt} from "./push-encryption.js";
 const encoder=new TextEncoder();
 const providers=new Set(["fcm.googleapis.com","updates.push.services.mozilla.com",
   "push.services.mozilla.com","web.push.apple.com"]);
@@ -47,14 +48,32 @@ function enabled(env:QuickWorkerEnv):boolean{
 export function categoryPushConfigured(env:QuickWorkerEnv):boolean{
   return enabled(env)&&env.ALLOW_CATEGORY_PUSH_SEND==="true";
 }
+function movementPushConfigured(env:QuickWorkerEnv):boolean{
+  return enabled(env)&&env.ALLOW_MOVEMENT_PUSH_SEND==="true";
+}
 export function pushConfig(env:QuickWorkerEnv):Response{
   return reply({enabled:enabled(env),publicKey:enabled(env)?env.VAPID_PUBLIC_KEY:null,
-    dailyTime:"20:30",timezone:"America/Bogota",deliveryEnabled:env.ALLOW_PUSH_SEND==="true"});
+    dailyTime:"20:30",timezone:"America/Bogota",deliveryEnabled:env.ALLOW_PUSH_SEND==="true",
+    movementDeliveryEnabled:movementPushConfigured(env)});
+}
+function subscriptionKeys(value:unknown){
+  if(value===undefined)return null;
+  const {p256dh,auth}=strict(value,["p256dh","auth"]);
+  if(typeof p256dh!=="string"||!/^B[A-Za-z0-9_-]{86}$/.test(p256dh)||
+     typeof auth!=="string"||!/^[A-Za-z0-9_-]{22}$/.test(auth))
+    throw new PushInputError("Invalid push encryption keys");
+  return {p256dh,auth};
+}
+async function saveSubscriptionKeys(db:QuickD1,owner:string,hash:string,keys:NonNullable<ReturnType<typeof subscriptionKeys>>){
+  await db.prepare("UPDATE quick_push_subscriptions SET p256dh=?,auth_secret=? " +
+    "WHERE owner_id=? AND endpoint_hash=? AND (p256dh IS NOT ? OR auth_secret IS NOT ?) RETURNING endpoint_hash")
+    .bind(keys.p256dh,keys.auth,owner,hash,keys.p256dh,keys.auth).first();
 }
 export async function subscribe(db:QuickD1,owner:string,env:QuickWorkerEnv,body:unknown):Promise<Response>{
   if(!enabled(env))return reply({error:"Notifications not configured"},503);
-  const obj=strict(body,["endpoint","confirmed"]);
+  const obj=strict(body,["endpoint","confirmed","keys"]);
   if(obj.confirmed!==true)throw new PushInputError("Explicit opt-in required");
+  const keys=subscriptionKeys(obj.keys);
   const endpoint=endpointOf(obj.endpoint),hash=await digest(endpoint);
   const existing=await db.prepare("SELECT endpoint_hash FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=?")
     .bind(owner,hash).first<{endpoint_hash:string}>();
@@ -64,14 +83,17 @@ export async function subscribe(db:QuickD1,owner:string,env:QuickWorkerEnv,body:
   await db.prepare("INSERT INTO quick_push_subscriptions(owner_id,endpoint_hash,endpoint,created_at) "+
     "VALUES(?,?,?,?) ON CONFLICT(owner_id,endpoint_hash) DO UPDATE SET endpoint=excluded.endpoint "+
     "RETURNING endpoint_hash").bind(owner,hash,endpoint,new Date().toISOString()).first();
+  if(keys)await saveSubscriptionKeys(db,owner,hash,keys);
   return reply({subscribed:true,replayed:!!existing},existing?200:201);
 }
 export async function subscriptionStatus(db:QuickD1,owner:string,body:unknown):Promise<Response>{
-  const obj=strict(body,["endpoint"]);
+  const obj=strict(body,["endpoint","keys"]);
   const hash=await digest(endpointOf(obj.endpoint));
+  const keys=subscriptionKeys(obj.keys);
   const found=await db.prepare("SELECT endpoint_hash FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=?")
     .bind(owner,hash).first<{endpoint_hash:string}>();
-  return reply({registered:Boolean(found)});
+  if(found&&keys)await saveSubscriptionKeys(db,owner,hash,keys);
+  return reply({registered:Boolean(found),movementReady:Boolean(found&&keys)});
 }
 export async function unsubscribe(db:QuickD1,owner:string,body:unknown):Promise<Response>{
   const obj=strict(body,["endpoint"]);
@@ -193,4 +215,38 @@ export async function sendOwnerCategoryQuestion(
    }catch{ /* No notification failure can affect financial data. */ }
  }
  return {accepted,configured:true};
+}
+
+async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expense"|"income"){
+ const devices=await env.DB.prepare(
+  "SELECT endpoint_hash,endpoint,p256dh,auth_secret FROM quick_push_subscriptions " +
+  "WHERE owner_id=? AND p256dh IS NOT NULL AND auth_secret IS NOT NULL ORDER BY created_at LIMIT 5"
+ ).bind(owner).all<{endpoint_hash:string;endpoint:string;p256dh:string;auth_secret:string}>();
+ await Promise.all(devices.results.map(async device=>{
+  try{
+   const endpoint=endpointOf(device.endpoint);
+   const [token,body]=await Promise.all([
+    jwt(env,new URL(endpoint).origin,Date.now()),encryptPushReceipt(device.p256dh,device.auth_secret,receipt),
+   ]);
+   const result=await fetch(endpoint,{method:"POST",redirect:"error",headers:{
+    Authorization:"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
+    "Content-Encoding":"aes128gcm","Content-Type":"application/octet-stream",TTL:"600",Urgency:"normal",
+   },body});
+   if(result.status===404||result.status===410){
+    await env.DB.prepare("DELETE FROM quick_push_subscriptions WHERE owner_id=? AND endpoint_hash=? "+
+      "AND p256dh=? AND auth_secret=? RETURNING endpoint_hash")
+      .bind(owner,device.endpoint_hash,device.p256dh,device.auth_secret).first();
+   }
+  }catch{ /* A push failure must never be treated as a failed ledger write. */ }
+ }));
+}
+
+export function notifyCreatedMovement(
+ response:Response,env:QuickWorkerEnv,ctx:QuickWorkerContext,owner:string,receipt:"expense"|"income",
+):Response{
+ // Only the request that inserted the row returns 201. A replay or edit must not send again.
+ if(response.status===201&&movementPushConfigured(env)&&ctx.waitUntil){
+  ctx.waitUntil(sendMovementReceipt(env,owner,receipt).catch(()=>{}));
+ }
+ return response;
 }

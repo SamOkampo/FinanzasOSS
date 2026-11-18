@@ -1,4 +1,5 @@
 import { runCategoryAutomation } from "./category-automation.js";
+import { notifyCreatedMovement } from "./push.js";
 // Personal iPhone Shortcut endpoint. Deliberately disabled without explicit flags.
 // Requires Cloudflare Access Service Auth at the edge AND a separate, revocable device token.
 import type { QuickD1, QuickWorkerEnv, QuickWorkerContext } from "./index.js";
@@ -216,7 +217,8 @@ export async function shortcutExpense(
   data.paymentMethod = normalizeShortcutPaymentMethod(data.paymentMethod);
   data.amount = normalizeShortcutAmount(data.amount);
   data.bankLabel = normalizeShortcutBank(data.bankLabel, data.paymentMethod);
-  const response=await saveAccountlessExpense(env.DB, owner, data);
+  const response=await saveAccountlessExpense(env.DB,owner,data);
+  if(data.movementType!=="debt_repayment")notifyCreatedMovement(response,env,ctx,owner,"expense");
   if(response.status===201){
     try{
       const created=await response.clone().json() as {entryId?:string};
