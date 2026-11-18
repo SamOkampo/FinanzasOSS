@@ -17,9 +17,35 @@ const TOKEN_RE = /^fosq_[0-9a-f]{64}$/;
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const METHODS = new Set(["cash", "debit_card", "credit_card", "bank_transfer", "digital_wallet", "other"]);
 const BANK_METHODS = new Set(["debit_card", "credit_card", "bank_transfer"]);
+const METHOD_LABELS = new Map([
+  ["efectivo", "cash"], ["tarjeta debito", "debit_card"], ["tarjeta de debito", "debit_card"],
+  ["tarjeta credito", "credit_card"], ["tarjeta de credito", "credit_card"],
+  ["transferencia", "bank_transfer"], ["transferencia bancaria", "bank_transfer"],
+  ["billetera digital", "digital_wallet"], ["otro", "other"],
+]);
+const NO_BANK_LABELS = new Set(["", "no aplica", "n/a", "sin banco", "efectivo"]);
+const SHORTCUT_MESSAGES = {
+  access_required: "El atajo necesita la autorización de Cloudflare Access.",
+  shortcuts_disabled: "El registro desde Atajos está desactivado.",
+  device_token_missing: "Falta el token del dispositivo en el encabezado Authorization del atajo.",
+  device_token_inactive: "El token del atajo está vencido, revocado o es incorrecto.",
+  invalid_body: "En Obtener contenido de URL, usa POST con cuerpo JSON y revisa sus campos.",
+  invalid_amount: "Ingresa un monto positivo en pesos colombianos, por ejemplo 12000.",
+  invalid_method: "Revisa el método de pago asignado en el menú del atajo.",
+  invalid_category: "Revisa la categoría de ingreso asignada en el menú del atajo.",
+  invalid_bank: "Revisa el banco o billetera. Para efectivo deja ese campo vacío.",
+  invalid_entry_id: "Asigna el UUID generado por Atajos al campo clientEntryId.",
+  invalid_concept: "Revisa el concepto del movimiento. Debe ser texto de hasta 120 caracteres.",
+  wrong_endpoint: "Usa /api/quick/shortcut/income para ingresos y /api/quick/shortcut/expense para gastos.",
+  invalid_request: "Revisa los campos del atajo antes de volver a enviar el movimiento.",
+  internal_error: "El servidor no pudo procesar el registro. Consulta Movimientos antes de reintentar.",
+} as const;
+export type ShortcutErrorCode = keyof typeof SHORTCUT_MESSAGES;
 
 export class ShortcutInputError extends Error {
-  constructor(message: string, readonly status = 422) { super(message); }
+  constructor(message: string, readonly status = 422, readonly code: ShortcutErrorCode = "invalid_request") {
+    super(message);
+  }
 }
 
 function reply(body: unknown, status = 200): Response {
@@ -34,35 +60,35 @@ function reply(body: unknown, status = 200): Response {
 }
 function strict(body: unknown, allowed: readonly string[]): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new ShortcutInputError("JSON object required");
+    throw new ShortcutInputError("JSON object required", 422, "invalid_body");
   }
   const obj = body as Record<string, unknown>;
   if (Object.keys(obj).some((k) => !allowed.includes(k))) {
-    throw new ShortcutInputError("Unsupported field");
+    throw new ShortcutInputError("Unsupported field", 422, "invalid_body");
   }
   return obj;
 }
-function requiredText(input: unknown, max: number, label: string): string {
-  if (typeof input !== "string") throw new ShortcutInputError(label + " must be text");
+function requiredText(input: unknown, max: number, label: string, code?: ShortcutErrorCode): string {
+  if (typeof input !== "string") throw new ShortcutInputError(label + " must be text", 422, code);
   const normalized = input.trim();
   if (!normalized || normalized.length > max || /[\u0000-\u001f\u007f]/.test(normalized)) {
-    throw new ShortcutInputError(label + " is invalid");
+    throw new ShortcutInputError(label + " is invalid", 422, code);
   }
   return normalized;
 }
-function optionalText(input: unknown, max: number, label: string): string | null {
+function optionalText(input: unknown, max: number, label: string, code?: ShortcutErrorCode): string | null {
   if (input === null || input === undefined || input === "") return null;
-  return requiredText(input, max, label);
+  return requiredText(input, max, label, code);
 }
 async function json(request: Request): Promise<unknown> {
   if (request.headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
-    throw new ShortcutInputError("Content-Type must be application/json", 415);
+    throw new ShortcutInputError("Content-Type must be application/json", 415, "invalid_body");
   }
   const len = Number(request.headers.get("Content-Length") ?? "0");
-  if (!Number.isFinite(len) || len < 0 || len > 4096) throw new ShortcutInputError("Body too large", 413);
+  if (!Number.isFinite(len) || len < 0 || len > 4096) throw new ShortcutInputError("Body too large", 413, "invalid_body");
   const raw = await request.text();
-  if (raw.length > 4096) throw new ShortcutInputError("Body too large", 413);
-  try { return JSON.parse(raw); } catch { throw new ShortcutInputError("Invalid JSON"); }
+  if (raw.length > 4096) throw new ShortcutInputError("Body too large", 413, "invalid_body");
+  try { return JSON.parse(raw); } catch { throw new ShortcutInputError("Invalid JSON", 422, "invalid_body"); }
 }
 function uniqueToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -127,35 +153,69 @@ export async function authenticatedShortcutOwner(
   // A Cloudflare Access *Service Auth* policy must validate the separate
   // CF-Access-Client-Id/Secret headers. Never configure a Bypass policy here.
   if (!env.ACCESS_AUD || ctx.access?.aud !== env.ACCESS_AUD) {
-    throw new ShortcutInputError("Cloudflare Access required",401);
+    throw new ShortcutInputError("Cloudflare Access required", 401, "access_required");
   }
   if (env.ALLOW_WRITES !== "true" || env.ALLOW_SHORTCUT_WRITES !== "true") {
-    throw new ShortcutInputError("Direct shortcuts disabled",503);
+    throw new ShortcutInputError("Direct shortcuts disabled", 503, "shortcuts_disabled");
   }
-  const auth = request.headers.get("Authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (!TOKEN_RE.test(token)) throw new ShortcutInputError("Device authorization required",401);
+  const auth = request.headers.get("Authorization")?.trim() ?? "";
+  const token = /^Bearer[ \t]+([^\s]+)$/i.exec(auth)?.[1] ?? "";
+  if (!TOKEN_RE.test(token)) throw new ShortcutInputError("Device authorization required", 401, "device_token_missing");
   const row = await env.DB.prepare(
     "SELECT owner_id FROM quick_shortcut_devices WHERE token_hash=? AND revoked_at IS NULL " +
     "AND expires_at>? LIMIT 1",
   ).bind(await digestToken(token), new Date().toISOString()).first<{ owner_id: string }>();
-  if (!row) throw new ShortcutInputError("Device authorization expired or revoked",401);
+  if (!row) throw new ShortcutInputError("Device authorization expired or revoked", 401, "device_token_inactive");
 
   return row.owner_id;
 }
-export async function parseShortcutJson(request:Request):Promise<unknown> { return json(request); }
+export async function parseShortcutJson(request: Request, flow: "income" | "expense"): Promise<unknown> {
+  if (request.method !== "POST") throw new ShortcutInputError("Use POST", 405, "invalid_body");
+  const payload = await json(request);
+  const foreignField = flow === "income" ? "movementType" : "incomeCategory";
+  if (payload && typeof payload === "object" && Object.hasOwn(payload, foreignField)) {
+    throw new ShortcutInputError("Fields for the other shortcut", 422, "wrong_endpoint");
+  }
+  return payload;
+}
+
+export function shortcutOption(value: unknown, labels: ReadonlyMap<string, string>): unknown {
+  if (typeof value !== "string") return value;
+  const option = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+  return labels.get(option) ?? option;
+}
 
 export function normalizeShortcutPaymentMethod(method: unknown): unknown {
-  // The iPhone menu can return its Spanish label instead of the API code.
-  return typeof method === "string" && method.trim().toLowerCase() === "efectivo" ? "cash" : method;
+  return shortcutOption(method, METHOD_LABELS);
+}
+
+export function normalizeShortcutAmount(value: unknown): unknown {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value !== "string") return value;
+  const amount = value.trim().replace(/^(?:COP\s*\$?|\$)\s*/i, "");
+  // A dot is a thousands separator only in full three-digit groups. Keep the
+  // established ungrouped dot-decimal API and accept the Colombian comma.
+  if (/^[1-9]\d{0,2}(?:\.\d{3})+(?:,\d{1,2})?$/.test(amount)) {
+    return amount.replace(/\./g, "").replace(",", ".");
+  }
+  return /^\d+,\d{1,2}$/.test(amount) ? amount.replace(",", ".") : amount;
+}
+
+export function normalizeShortcutBank(value: unknown, method: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const bank = value.trim();
+  if ((method === "cash" || method === "other") && NO_BANK_LABELS.has(bank.toLowerCase())) return null;
+  return bank;
 }
 
 export async function shortcutExpense(
   request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
 ): Promise<Response> {
   const owner = await authenticatedShortcutOwner(request,env,ctx);
-  const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
+  const data = strict(await parseShortcutJson(request, "expense"), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
   data.paymentMethod = normalizeShortcutPaymentMethod(data.paymentMethod);
+  data.amount = normalizeShortcutAmount(data.amount);
+  data.bankLabel = normalizeShortcutBank(data.bankLabel, data.paymentMethod);
   const response=await saveAccountlessExpense(env.DB, owner, data);
   if(response.status===201){
     try{
@@ -177,8 +237,8 @@ export async function browserExpense(db: QuickD1, owner: string, body: unknown):
 async function saveAccountlessExpense(
   db: QuickD1, owner: string, data: Record<string, unknown>,
 ): Promise<Response> {
-  const key = requiredText(data.clientEntryId, 96, "clientEntryId");
-  if (!ID_RE.test(key)) throw new ShortcutInputError("Invalid clientEntryId");
+  const key = requiredText(data.clientEntryId, 96, "clientEntryId", "invalid_entry_id");
+  if (!ID_RE.test(key)) throw new ShortcutInputError("Invalid clientEntryId", 422, "invalid_entry_id");
   // Old iPhone shortcuts remain valid. A new explicit choice lets the user
   // distinguish repayment of borrowed money from consumption without changing
   // the append-only SQLite table or inventing a lender.
@@ -186,18 +246,19 @@ async function saveAccountlessExpense(
   if (movementType !== "expense" && movementType !== "auto" && movementType !== "debt_repayment") {
     throw new ShortcutInputError("Unsupported movementType");
   }
-  const rawConcept = requiredText(data.concept, 120, "Concept");
+  const rawConcept = requiredText(data.concept, 120, "Concept", "invalid_concept");
   const concept = movementType === "debt_repayment" &&
     !/^pago de pr[eé]stamo(?:[ :]|$)/i.test(rawConcept)
     ? "Pago de préstamo: " + rawConcept : rawConcept;
-  if (concept.length > 120) throw new ShortcutInputError("Concept is too long");
-  if (typeof data.amount !== "string") throw new ShortcutInputError("Amount must be text");
+  if (concept.length > 120) throw new ShortcutInputError("Concept is too long", 422, "invalid_concept");
+  if (typeof data.amount !== "string") throw new ShortcutInputError("Amount must be text", 422, "invalid_amount");
   const method = data.paymentMethod;
-  if (typeof method !== "string" || !METHODS.has(method)) throw new ShortcutInputError("Invalid payment method");
-  const bankLabel = optionalText(data.bankLabel, 80, "Bank");
-  if ((requiresBank(method) && !bankLabel) || (!requiresBank(method) && bankLabel !== null)) {
-    throw new ShortcutInputError("Bank is required for cards/transfers only");
-  }
+  if (typeof method !== "string" || !METHODS.has(method)) throw new ShortcutInputError("Invalid payment method", 422, "invalid_method");
+  const bankLabel = optionalText(data.bankLabel, 80, "Bank", "invalid_bank");
+  if (requiresBank(method) && !bankLabel)
+    throw new ShortcutInputError("Bank is required for cards and transfers", 422, "invalid_bank");
+  if ((method === "cash" || method === "other") && bankLabel !== null)
+    throw new ShortcutInputError("Cash and other payments do not have a bank", 422, "invalid_bank");
 
 
   // Do not require, infer or secretly create an account: the user explicitly
@@ -245,11 +306,15 @@ async function saveAccountlessExpense(
 }
 
 
-export function shortcutFailure(error: unknown): Response {
-  if (error instanceof ShortcutInputError) return reply({ error: error.message }, error.status);
-  // Do not leak financial payload, hashed token, SQL errors or D1 internals.
-  if (error instanceof Error && /^(Amount |occurredAt |Classification |Payment method |clientEntryId |Only explicitly supported currencies|merchant |bankLabel |tenantId |actorId )/.test(error.message)) {
-    return reply({ error: "Invalid financial entry" }, 422);
-  }
-  return reply({ error: "Unable to process request" }, 500);
+export function shortcutFailure(error: unknown, flow: "income" | "expense"): Response {
+  const invalid = error instanceof ShortcutInputError ? error : undefined;
+  const invalidAmount = error instanceof Error && error.message.startsWith("Amount ");
+  const code = invalid?.code ?? (invalidAmount ? "invalid_amount" : "internal_error");
+  const status = invalid?.status ?? (invalidAmount ? 422 : 500);
+  const reference = crypto.randomUUID();
+  // Only fixed codes and a generated reference. Never log headers, amounts, or input text.
+  console.warn({ event: "finanzasoss_shortcut_rejected", flow, code, status, reference });
+  const response = reply({ error: invalid?.message ?? (invalidAmount ? "Invalid financial entry" : "Unable to process request"), code, message: SHORTCUT_MESSAGES[code], reference }, status);
+  if (status === 405) response.headers.set("Allow", "POST");
+  return response;
 }
