@@ -20,19 +20,24 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 // Intentionally NO fetch event handler; every request uses the native browser network stack.
 self.addEventListener("push", (event) => {
-  // Empty payload only. Do not reveal any amount, bank or account on locked screens.
+  // Receipts identify only the kind of entry. Empty assistant pushes keep their normal behavior.
+  const receipt=event.data?.text();
+  const movement=receipt==="expense"||receipt==="income";
   event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:"Revisa los pendientes de tu perfil en FinanzasOSS.",
+    body:receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":
+      "Revisa los pendientes de tu perfil en FinanzasOSS.",
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
-    tag:"finanzasoss-finance-review",
-    data:{url:"/dashboard#plan"},
+    ...(movement?{data:{url:"/dashboard#movement"}}:{
+      tag:"finanzasoss-finance-review",data:{url:"/dashboard#plan"},
+    }),
   }));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const section=event.notification.data?.url==="/dashboard#qwen"?"#qwen":"#plan";
+    const url=event.notification.data?.url;
+    const section=url==="/dashboard#movement"?"#movement":url==="/dashboard#qwen"?"#qwen":"#plan";
     const target=new URL("/dashboard"+section,self.location.origin).href;
     const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});
     for(const window of windows) {

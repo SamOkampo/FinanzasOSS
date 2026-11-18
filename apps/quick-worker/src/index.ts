@@ -22,7 +22,7 @@ import { studioCapabilities } from "./studio-capabilities.js";
 import { readBudgets, writeBudget, BudgetInputError } from "./spending-limits.js";
 import { changeMovement, MovementInputError } from "./movement-edit.js";
 import { prepareReset, confirmReset, ResetInputError } from "./studio-reset.js";
-import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, PushInputError } from "./push.js";
+import { pushConfig, subscribe, unsubscribe, subscriptionStatus, sendDailyReminders, sendOwnerTestPush, notifyCreatedMovement, PushInputError } from "./push.js";
 import { previewStatement, commitStatement, StatementInputError } from "./statement-csv.js";
 import { previewReconciliationV41, ReconcileInputError } from "./statement-reconcile-v41.js";
 import { discardStatementDraft, openStatementDraft, saveStatementDraft } from "./statement-review-drafts.js";
@@ -67,6 +67,7 @@ export interface QuickWorkerEnv {
   readonly ALLOW_RESET_WRITES?: string;
   readonly ALLOW_PUSH_SUBSCRIPTIONS?: string;
   readonly ALLOW_PUSH_SEND?: string;
+  readonly ALLOW_MOVEMENT_PUSH_SEND?: string;
   readonly ALLOW_CATEGORY_PUSH_SEND?: string;
   readonly ALLOW_DAILY_REMINDERS?: string;
   readonly VAPID_PUBLIC_KEY?: string;
@@ -92,6 +93,7 @@ export interface QuickWorkerEnv {
   };
 }
 export interface QuickWorkerContext {
+  waitUntil?(task:Promise<unknown>):void;
   readonly access?: {
     readonly aud?: string;
     getIdentity(): Promise<{ user_uuid?: string; id?: string; email?: string } | null>;
@@ -378,7 +380,8 @@ export async function handleQuickRequest(
     try {
       if(flow === "expense")return await shortcutExpense(request, env, ctx);
       const owner=await authenticatedShortcutOwner(request,env,ctx);
-      return await saveIncome(env.DB,owner,await parseShortcutJson(request,flow),false);
+      return notifyCreatedMovement(await saveIncome(env.DB,owner,await parseShortcutJson(request,flow),false),
+        env,ctx,owner,"income");
     } catch (error) { return shortcutFailure(error,flow); }
   }
   const owner = await principal(ctx, env);
@@ -522,11 +525,18 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/v41/hapi/credit") return await confirmHapiCredit(env.DB,owner,data);
       if (pathname === "/api/quick/v41/hapi/portfolio") return await saveHapiPortfolio(env.DB,owner,data);
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
-      if (pathname === "/api/quick/entries") return await categorizedResponse(
-        await confirmEntry(env.DB, owner, data),env.DB,owner,env,"manual");
-      if (pathname === "/api/quick/studio/expense") return await categorizedResponse(
-        await browserExpense(env.DB, owner, data),env.DB,owner,env,"accountless");
-      if (pathname === "/api/quick/studio/income") return await saveIncome(env.DB,owner,data,true);
+      if (pathname === "/api/quick/entries") {
+        const result=await confirmEntry(env.DB,owner,data);
+        if((data as JsonRecord).classification==="expense")notifyCreatedMovement(result,env,ctx,owner,"expense");
+        return await categorizedResponse(result,env.DB,owner,env,"manual");
+      }
+      if (pathname === "/api/quick/studio/expense") {
+        const result=await browserExpense(env.DB,owner,data);
+        if((data as JsonRecord).movementType!=="debt_repayment")notifyCreatedMovement(result,env,ctx,owner,"expense");
+        return await categorizedResponse(result,env.DB,owner,env,"accountless");
+      }
+      if (pathname === "/api/quick/studio/income") return notifyCreatedMovement(
+        await saveIncome(env.DB,owner,data,true),env,ctx,owner,"income");
       if (pathname === "/api/quick/balances/verify") return await saveVerifiedBalance(env.DB,owner,data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
