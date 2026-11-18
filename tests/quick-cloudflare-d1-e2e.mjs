@@ -279,14 +279,14 @@ assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").g
 // Bank and card payments are recorded by method + optional bank alone.
 // No corresponding bank, wallet or card account is required or even looked up.
 const withoutAccount = { ...shortcutDraft, clientEntryId: "ios-no-account-00001",
-  paymentMethod: "debit_card", bankLabel: "Nequi de prueba" };
+  paymentMethod: "Tarjeta débito", bankLabel: "Nequi de prueba" };
 assert.equal((await direct(withoutAccount, deviceToken)).status, 201);
 assert.equal((await direct({ ...withoutAccount, clientEntryId: "ios-credit-card-00001",
   paymentMethod: "credit_card", bankLabel: "Banco ficticio" }, deviceToken)).status, 201);
 assert.equal((await direct({ ...withoutAccount, clientEntryId: "ios-bank-transfer-0001",
   paymentMethod: "bank_transfer", bankLabel: "Bancolombia de prueba" }, deviceToken)).status, 201);
 assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-wallet-expense-001",
-  paymentMethod: "digital_wallet" }, deviceToken)).status, 201);
+  paymentMethod: "Billetera digital", bankLabel: "Billetera de prueba" }, deviceToken)).status, 201);
 assert.equal((await direct({ ...shortcutDraft, clientEntryId: "ios-other-expense-001",
   paymentMethod: "other" }, deviceToken)).status, 201);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM quick_manual_accounts").get().n, 2);
@@ -324,13 +324,13 @@ assert.equal(noAccountsYet.body.accounts.length, 0);
 const cTokenResult = await call("/api/quick/shortcut/enroll", "POST",
   { label: "iPhone de prueba C", confirmed: true }, C, { env: shortcutEnv });
 assert.equal(cTokenResult.status, 201);
-const cashFromMenu = { ...shortcutDraft, clientEntryId: "ios-accountless-owner-01", paymentMethod: "Efectivo", bankLabel: "" };
+const cashFromMenu = { ...shortcutDraft, clientEntryId: "ios-accountless-owner-01", amount: 25000, paymentMethod: "Efectivo", bankLabel: "Sin banco" };
 assert.equal((await direct({ ...cashFromMenu, paymentMethod: "Tarjeta desconocida" }, cTokenResult.body.token, C)).status, 422);
 assert.equal((await direct({ ...cashFromMenu, bankLabel: "Banco de prueba" }, cTokenResult.body.token, C)).status, 422);
 const cDirect = await direct(cashFromMenu, cTokenResult.body.token, C);
 assert.equal(cDirect.status, 201);
 for (const paymentMethod of ["cash", "  EFECTIVO  "]) {
-  const retry = await direct({ ...cashFromMenu, paymentMethod }, cTokenResult.body.token, C);
+  const retry = await direct({ ...cashFromMenu, amount: "$25.000", paymentMethod, bankLabel: null }, cTokenResult.body.token, C);
   assert.deepEqual(retry, { status: 200, body: { entryId: cDirect.body.entryId, replayed: true } });
 }
 assert.equal((await call("/api/quick/accounts", "GET", undefined, C)).body.accounts.length, 0);

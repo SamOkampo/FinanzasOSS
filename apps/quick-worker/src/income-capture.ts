@@ -1,11 +1,19 @@
 // Genuine money received (income), never a negative expense or internal transfer.
 // Owner identity is supplied by Cloudflare Access (browser) or existing device token (Shortcut).
 import type { QuickD1 } from "./index.js";
-import { normalizeShortcutPaymentMethod, ShortcutInputError } from "./shortcut-direct.js";
+import { amountToMinorUnits } from "../../../packages/finance-core/src/quick-entry.js";
+import { normalizeShortcutAmount, normalizeShortcutBank, normalizeShortcutPaymentMethod, shortcutOption,
+  ShortcutInputError, type ShortcutErrorCode } from "./shortcut-direct.js";
 
 const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const METHODS = new Set(["cash","bank_transfer","digital_wallet","other"]);
 const CATEGORIES = new Set(["payment","salary","sales","commission","interest","refund","other"]);
+const CATEGORY_LABELS = new Map([
+  ["pago recibido", "payment"], ["salario", "salary"], ["venta", "sales"], ["ventas", "sales"],
+  ["comision", "commission"], ["comisiones", "commission"], ["intereses ganados", "interest"],
+  ["intereses", "interest"], ["devolucion", "refund"], ["devoluciones", "refund"],
+  ["otros ingresos", "other"], ["otro", "other"],
+]);
 type StoredIncome = {
   id:string; amount_minor:number; currency:string; concept:string;
   bank_label:string|null; payment_method:string; income_category:string;
@@ -18,38 +26,39 @@ function reply(body:unknown,status=200):Response {
   }});
 }
 function object(body:unknown,allowed:string[]):Record<string,unknown> {
-  if(!body || typeof body!=="object" || Array.isArray(body))throw new ShortcutInputError("Expected JSON object");
+  if(!body || typeof body!=="object" || Array.isArray(body))throw new ShortcutInputError("Expected JSON object",422,"invalid_body");
   const o=body as Record<string,unknown>;
-  if(Object.keys(o).some(x=>!allowed.includes(x)))throw new ShortcutInputError("Unsupported income field");
+  if(Object.keys(o).some(x=>!allowed.includes(x)))throw new ShortcutInputError("Unsupported income field",422,"invalid_body");
   return o;
 }
-function text(value:unknown,max:number,name:string):string {
-  if(typeof value!=="string")throw new ShortcutInputError(name+" must be text");
+function text(value:unknown,max:number,name:string,code:ShortcutErrorCode):string {
+  if(typeof value!=="string")throw new ShortcutInputError(name+" must be text",422,code);
   const clean=value.trim();
   if(clean.length<1||clean.length>max||/[\u0000-\u001f\u007f]/.test(clean))
-    throw new ShortcutInputError(name+" is invalid");
+    throw new ShortcutInputError(name+" is invalid",422,code);
   return clean;
 }
 function fields(body:unknown,requiresConfirmation:boolean) {
   const d=object(body,["clientEntryId","amount","concept","paymentMethod","bankLabel","incomeCategory",...(requiresConfirmation?["confirmed"]:[])]);
   if(requiresConfirmation && d.confirmed!==true)throw new ShortcutInputError("Confirm income before saving");
-  const key=text(d.clientEntryId,96,"clientEntryId");
-  if(!KEY_RE.test(key))throw new ShortcutInputError("Invalid clientEntryId");
-  const amount=text(d.amount,10,"Amount");
-  if(!/^[1-9][0-9]{0,9}$/.test(amount) || Number(amount)>10000000000)
-    throw new ShortcutInputError("Amount must be a positive integer in COP");
-  const minor=Number(amount)*100;
-  if(!Number.isSafeInteger(minor)||minor>1000000000000)throw new ShortcutInputError("Amount outside allowed range");
-  const concept=text(d.concept,120,"Concept");
+  const key=text(d.clientEntryId,96,"clientEntryId","invalid_entry_id");
+  if(!KEY_RE.test(key))throw new ShortcutInputError("Invalid clientEntryId",422,"invalid_entry_id");
+  const amount=requiresConfirmation?text(d.amount,10,"Amount","invalid_amount"):normalizeShortcutAmount(d.amount);
+  if(requiresConfirmation && !/^[1-9][0-9]{0,9}$/.test(amount as string))
+    throw new ShortcutInputError("Amount must be a positive integer in COP",422,"invalid_amount");
+  const minor=Number(amountToMinorUnits(amount));
+  const concept=text(d.concept,120,"Concept","invalid_concept");
   const method=requiresConfirmation?d.paymentMethod:normalizeShortcutPaymentMethod(d.paymentMethod);
-  if(typeof method!=="string"||!METHODS.has(method))throw new ShortcutInputError("Unsupported receiving method");
-  const category=d.incomeCategory===undefined?"payment":d.incomeCategory;
-  if(typeof category!=="string"||!CATEGORIES.has(category))throw new ShortcutInputError("Unsupported income category");
-  const bankLabel=d.bankLabel==null||d.bankLabel===""?null:text(d.bankLabel,80,"Bank");
+  if(typeof method!=="string"||!METHODS.has(method))throw new ShortcutInputError("Unsupported receiving method",422,"invalid_method");
+  const categoryOption=requiresConfirmation?d.incomeCategory:shortcutOption(d.incomeCategory,CATEGORY_LABELS);
+  const category=categoryOption===undefined||(!requiresConfirmation&&(categoryOption===null||categoryOption===""))?"payment":categoryOption;
+  if(typeof category!=="string"||!CATEGORIES.has(category))throw new ShortcutInputError("Unsupported income category",422,"invalid_category");
+  const bank=requiresConfirmation?d.bankLabel:normalizeShortcutBank(d.bankLabel,method);
+  const bankLabel=bank==null||bank===""?null:text(bank,80,"Bank","invalid_bank");
   if((method==="bank_transfer"||method==="digital_wallet")&&!bankLabel)
-    throw new ShortcutInputError("Choose the receiving bank or wallet");
+    throw new ShortcutInputError("Choose the receiving bank or wallet",422,"invalid_bank");
   if((method==="cash"||method==="other")&&bankLabel)
-    throw new ShortcutInputError("Cash and other receipts do not have a bank");
+    throw new ShortcutInputError("Cash and other receipts do not have a bank",422,"invalid_bank");
   return {key,minor,concept,method,category,bankLabel};
 }
 export async function saveIncome(db:QuickD1,owner:string,body:unknown,confirmed:boolean):Promise<Response> {

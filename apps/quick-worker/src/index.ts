@@ -373,13 +373,13 @@ export async function handleQuickRequest(
     return respond({ error: "Not found" }, 404);
   }
   // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
-  if ((pathname === "/api/quick/shortcut/expense" || pathname === "/api/quick/shortcut/income") &&
-      request.method === "POST") {
+  if (pathname === "/api/quick/shortcut/expense" || pathname === "/api/quick/shortcut/income") {
+    const flow = pathname.endsWith("/income") ? "income" : "expense";
     try {
-      if(pathname === "/api/quick/shortcut/expense")return await shortcutExpense(request, env, ctx);
+      if(flow === "expense")return await shortcutExpense(request, env, ctx);
       const owner=await authenticatedShortcutOwner(request,env,ctx);
-      return await saveIncome(env.DB,owner,await parseShortcutJson(request),false);
-    } catch (error) { return shortcutFailure(error); }
+      return await saveIncome(env.DB,owner,await parseShortcutJson(request,flow),false);
+    } catch (error) { return shortcutFailure(error,flow); }
   }
   const owner = await principal(ctx, env);
   if (!owner) {

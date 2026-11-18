@@ -24,7 +24,7 @@ const env={DB:db,ACCESS_AUD:"income-test-aud",ALLOW_WRITES:"true",ALLOW_SHORTCUT
 const owner=id=>({access:{aud:env.ACCESS_AUD,async getIdentity(){return {user_uuid:id};}}});
 async function call(path,method="GET",body=null,identity=owner(A),options={}){
  const req=new Request(base+path,{method,headers:{
-   ...(method==="POST"?{"Content-Type":"application/json",Origin:options.origin??base}:{}),
+   ...(method==="POST"?{"Content-Type":options.contentType??"application/json",...(options.authorization?{}:{Origin:options.origin??base})}:{}),
    ...(options.authorization?{Authorization:options.authorization}:{}),
  },...(method==="POST"?{body:JSON.stringify(body)}:{})});
  const res=await handleQuickRequest(req,env,identity);
@@ -50,21 +50,39 @@ const enroll=await call("/api/quick/shortcut/enroll","POST",{label:"iPhone test"
 assert.equal(enroll.status,201);
 assert.ok(enroll.body.token.startsWith("fosq_"));
 const authorization="Bearer "+enroll.body.token;
-const shortcutIncome={clientEntryId:"ios-income-cash-20261114",amount:"12000",
- concept:"Pago en efectivo",paymentMethod:"Efectivo",bankLabel:"",incomeCategory:"payment"};
+const shortcutIncome={clientEntryId:"ios-income-cash-20261114",amount:12000,
+ concept:"Pago en efectivo",paymentMethod:"Efectivo",bankLabel:"No aplica",incomeCategory:"Pago recibido"};
 assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A))).status,401);
 assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,{access:{aud:"bad",getIdentity:async()=>({user_uuid:A})}},{authorization})).status,401);
 const cashIncome=await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A),{authorization});
 assert.equal(cashIncome.status,201);
 assert.equal(cashIncome.body.direction,"credit");
 assert.equal(cashIncome.body.kind,"income");
-for(const paymentMethod of ["cash","  EFECTIVO  "]){
- const replay=await call("/api/quick/shortcut/income","POST",{...shortcutIncome,paymentMethod,bankLabel:null},owner(A),{authorization});
+for(const [paymentMethod,amount] of [["cash","12000"],["  EFECTIVO  ","COP $ 12.000,00"]]){
+ const replay=await call("/api/quick/shortcut/income","POST",{...shortcutIncome,paymentMethod,amount,bankLabel:null,incomeCategory:"payment"},owner(A),{authorization});
  assert.equal(replay.status,200);
  assert.equal(replay.body.entryId,cashIncome.body.entryId);
  assert.equal(replay.body.replayed,true);
 }
-assert.equal((await call("/api/quick/shortcut/income","POST",{...shortcutIncome,bankLabel:"No aplica"},owner(A),{authorization})).status,422);
+const incomePath="/api/quick/shortcut/income";
+for(const [patch,code] of [
+ [{bankLabel:"Banco de prueba"},"invalid_bank"], [{paymentMethod:"Tarjeta crédito"},"invalid_method"],
+ [{amount:"1,234"},"invalid_amount"], [{incomeCategory:"Desconocida"},"invalid_category"],
+ [{clientEntryId:""},"invalid_entry_id"], [{concept:""},"invalid_concept"],
+ [{movementType:"debt_repayment"},"wrong_endpoint"], [{ownerId:B},"invalid_body"],
+]){
+ const invalid=await call(incomePath,"POST",{...shortcutIncome,...patch},owner(A),{authorization});
+ assert.equal(invalid.status,422);
+ assert.equal(invalid.body.code,code);
+ assert.match(invalid.body.reference,/^[0-9a-f-]{36}$/);
+ assert.equal(typeof invalid.body.message,"string");
+}
+assert.equal((await call(incomePath,"GET",null,owner(A),{authorization})).status,405);
+assert.equal((await call(incomePath,"POST",shortcutIncome,owner(A),{authorization,contentType:"text/plain"})).status,415);
+assert.equal((await call("/api/quick/shortcut/expense","POST",shortcutIncome,owner(A),{authorization})).body.code,"wrong_endpoint");
+assert.equal((await call(incomePath,"POST",shortcutIncome,owner(A),{authorization:"Bearer fosq_"+"0".repeat(64)})).body.code,"device_token_inactive");
+const unexpectedOwner=await call("/api/quick/dashboard/movements","GET",null,owner(B));
+assert.equal(unexpectedOwner.body.entries.length,0);
 // A real payment received in a statement must keep its immutable source row and amount.
 sql.prepare("INSERT INTO quick_statement_credits(id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,economic_purpose) VALUES(?,?,?,?,?,?,?,?,?,?)")
  .run("dddddddd-dddd-4ddd-8ddd-dddddddddddd",A,"plata-previous-payment-10168",1016800,"COP",
