@@ -150,6 +150,11 @@ export async function shortcutExpense(
 ): Promise<Response> {
   const owner = await authenticatedShortcutOwner(request,env,ctx);
   const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
+  // The iPhone menu can return its Spanish label instead of the API code.
+  const method = data.paymentMethod;
+  if (typeof method === "string" && method.trim().toLowerCase() === "efectivo") {
+    data.paymentMethod = "cash";
+  }
   const response=await saveAccountlessExpense(env.DB, owner, data);
   if(response.status===201){
     try{
