@@ -7,7 +7,7 @@ const sql=new DatabaseSync(":memory:");
 for(const file of [
  "0001_quick_d1","0002_shortcut_devices","0003_accountless_shortcut_expenses",
  "0004_staging_reset_challenges","0005_scoped_reset_confirmation","0006_push_subscriptions",
- "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test","0010_categories_ai"
+ "0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test","0010_categories_ai","0011_category_auto_questions","0012_statement_credits","0013_income_capture"
 ])sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+file+".sql",import.meta.url),"utf8"));
 const db={
  prepare(query){let args=[];return {query,get args(){return args},bind(...x){args=x;return this;},
@@ -28,7 +28,7 @@ for(const [id,owner,concept,minor,day] of [
 let calls=0,externalContent="";
 const env={DB:db,ACCESS_AUD:"test-two-users",ALLOW_WRITES:"true",
  ALLOW_AI_SUGGESTIONS:"true",AI:{async run(model,data){
-  assert.equal(model,"@cf/qwen/qwen3-30b-a3b-fp8");calls++;
+  assert.equal(model,"@cf/qwen/qwen3.8-27b");calls++;
   externalContent=JSON.stringify(data);return {response:'{"suggestions":[{"index":0,"category":"Pagos y transferencias","subcategory":"Pagos a terceros"}]}'};}
  }};
 const base="https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
