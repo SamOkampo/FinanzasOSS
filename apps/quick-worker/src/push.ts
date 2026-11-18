@@ -234,7 +234,7 @@ async function sendDeviceNotice(env:QuickWorkerEnv,device:{endpoint:string;p256d
    device.p256dh&&device.auth_secret?encryptPushReceipt(device.p256dh,device.auth_secret,receipt):undefined,
   ]);
   stage="provider";
-  const result=await send(endpoint,{method:"POST",redirect:"error",headers:{
+  const result=await send(endpoint,{method:"POST",redirect:"manual",headers:{
    Authorization:"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
    ...(body?{"Content-Encoding":"aes128gcm","Content-Type":"application/octet-stream"}:{}),
    TTL:receipt==="test"?"3600":"600",Urgency:"high",
