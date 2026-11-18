@@ -110,7 +110,7 @@ try{
       assert.equal(url,endpoint,"Only the writer's device receives the notification");
       assert.equal(init.headers["Content-Encoding"],"aes128gcm");
       assert.equal(init.headers.Urgency,"high");
-      assert.equal(init.redirect,"error");
+      assert.equal(init.redirect,"manual");
       received.push(decryptReceipt(init.body));
     }catch(error){providerErrors.push(error);}
     if(failDelivery)throw new Error("Synthetic network failure");
