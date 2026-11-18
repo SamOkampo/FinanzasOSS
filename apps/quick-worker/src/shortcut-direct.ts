@@ -218,7 +218,7 @@ export async function shortcutExpense(
   data.amount = normalizeShortcutAmount(data.amount);
   data.bankLabel = normalizeShortcutBank(data.bankLabel, data.paymentMethod);
   const response=await saveAccountlessExpense(env.DB,owner,data);
-  if(data.movementType!=="debt_repayment")notifyCreatedMovement(response,env,ctx,owner,"expense");
+  if(data.movementType!=="debt_repayment")await notifyCreatedMovement(response,env,ctx,owner,"expense");
   if(response.status===201){
     try{
       const created=await response.clone().json() as {entryId?:string};

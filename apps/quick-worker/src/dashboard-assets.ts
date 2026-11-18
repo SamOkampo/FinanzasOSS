@@ -24,11 +24,11 @@ self.addEventListener("push", (event) => {
   const receipt=event.data?.text();
   const movement=receipt==="expense"||receipt==="income";
   event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":
+    body:receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":receipt==="test"?"Aviso de prueba de FinanzasOSS.":
       "Revisa los pendientes de tu perfil en FinanzasOSS.",
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
-    ...(movement?{data:{url:"/dashboard#movement"}}:{
+    ...(movement||receipt==="test"?{data:{url:"/dashboard#movement"}}:{
       tag:"finanzasoss-finance-review",data:{url:"/dashboard#plan"},
     }),
   }));
