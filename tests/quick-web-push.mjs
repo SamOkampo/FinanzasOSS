@@ -109,6 +109,7 @@ try{
     try{
       assert.equal(url,endpoint,"Only the writer's device receives the notification");
       assert.equal(init.headers["Content-Encoding"],"aes128gcm");
+      assert.equal(init.headers.Urgency,"high");
       assert.equal(init.redirect,"error");
       received.push(decryptReceipt(init.body));
     }catch(error){providerErrors.push(error);}
@@ -130,9 +131,26 @@ try{
   assert.equal((await call("/api/quick/shortcut/income","POST",direct,service,opts)).status,200);
   assert.equal((await call("/api/quick/studio/income","POST",{...movement,amount:"0"})).status,422);
   assert.deepEqual(received,["expense","income","expense","income"]);
-  const test=await call("/api/quick/push/test","POST",{endpoint,confirmed:true});
-  assert.equal(test.status,200);
-  assert.equal(test.body.providerAccepted,true);
+  // The response is queued before the server delivers, so the device can leave the app.
+  const waitUntil=[];
+  const testReq=new Request(base+"/api/quick/push/test",{method:"POST",
+    headers:{"Content-Type":"application/json",Origin:base},
+    body:JSON.stringify({endpoint,confirmed:true,inBackground:true})});
+  const realTimer=globalThis.setTimeout;
+  let sendAfterLeaving;
+  try{
+    globalThis.setTimeout=(callback,delay,...args)=>{
+      if(delay!==10000)return realTimer(callback,delay,...args);
+      sendAfterLeaving=()=>callback(...args);
+    };
+    const test=await handleQuickRequest(testReq,env,{...ownerA,waitUntil:task=>waitUntil.push(task)});
+    assert.equal(test.status,202);
+    assert.deepEqual(await test.json(),{scheduled:true,delaySeconds:10});
+    assert.deepEqual(received,["expense","income","expense","income"]);
+    assert.equal(waitUntil.length,1);
+    sendAfterLeaving();
+    assert.equal((await waitUntil[0]).status,200);
+  }finally{globalThis.setTimeout=realTimer;}
   assert.deepEqual(received,["expense","income","expense","income","test"]);
   failDelivery=true;
   const another={...movement,clientEntryId:"push-provider-unavailable"};
