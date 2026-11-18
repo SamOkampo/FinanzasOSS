@@ -130,11 +130,15 @@ try{
   assert.equal((await call("/api/quick/shortcut/income","POST",direct,service,opts)).status,200);
   assert.equal((await call("/api/quick/studio/income","POST",{...movement,amount:"0"})).status,422);
   assert.deepEqual(received,["expense","income","expense","income"]);
+  const test=await call("/api/quick/push/test","POST",{endpoint,confirmed:true});
+  assert.equal(test.status,200);
+  assert.equal(test.body.providerAccepted,true);
+  assert.deepEqual(received,["expense","income","expense","income","test"]);
   failDelivery=true;
   const another={...movement,clientEntryId:"push-provider-unavailable"};
   assert.equal((await call("/api/quick/studio/income","POST",another)).status,201,"Delivery failures must not roll back entries");
   assert.equal((await call("/api/quick/studio/income","POST",another)).status,200);
-  assert.deepEqual(received,["expense","income","expense","income","income"]);
+  assert.deepEqual(received,["expense","income","expense","income","test","income"]);
   assert.deepEqual(providerErrors,[]);
 }finally{globalThis.fetch=originalFetch;}
 
@@ -145,10 +149,11 @@ assert.doesNotThrow(()=>new Function(sw));
 const handlers=new Map(), visible=[];
 new Function("self",sw)({addEventListener:(type,listener)=>handlers.set(type,listener),
  registration:{showNotification:(name,options)=>visible.push({name,...options})}});
-for(const kind of ["expense","income",null])handlers.get("push")({data:kind===null?null:{text:()=>kind},waitUntil:()=>{}});
+for(const kind of ["expense","income","test",null])handlers.get("push")({data:kind===null?null:{text:()=>kind},waitUntil:()=>{}});
 assert.deepEqual(visible.map(x=>[x.name,x.body,x.data.url,x.tag]),[
  ["FinanzasOSS","Gasto registrado.","/dashboard#movement",undefined],
  ["FinanzasOSS","Ingreso registrado.","/dashboard#movement",undefined],
+ ["FinanzasOSS","Aviso de prueba de FinanzasOSS.","/dashboard#movement",undefined],
  ["FinanzasOSS","Revisa los pendientes de tu perfil en FinanzasOSS.","/dashboard#plan","finanzasoss-finance-review"],
 ]);
 const html=await (await handleQuickRequest(new Request(base+"/dashboard"),env,ownerA)).text();

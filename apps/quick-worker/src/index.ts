@@ -380,7 +380,7 @@ export async function handleQuickRequest(
     try {
       if(flow === "expense")return await shortcutExpense(request, env, ctx);
       const owner=await authenticatedShortcutOwner(request,env,ctx);
-      return notifyCreatedMovement(await saveIncome(env.DB,owner,await parseShortcutJson(request,flow),false),
+      return await notifyCreatedMovement(await saveIncome(env.DB,owner,await parseShortcutJson(request,flow),false),
         env,ctx,owner,"income");
     } catch (error) { return shortcutFailure(error,flow); }
   }
@@ -527,15 +527,15 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/accounts") return await createAccount(env.DB, owner, data);
       if (pathname === "/api/quick/entries") {
         const result=await confirmEntry(env.DB,owner,data);
-        if((data as JsonRecord).classification==="expense")notifyCreatedMovement(result,env,ctx,owner,"expense");
+        if((data as JsonRecord).classification==="expense")await notifyCreatedMovement(result,env,ctx,owner,"expense");
         return await categorizedResponse(result,env.DB,owner,env,"manual");
       }
       if (pathname === "/api/quick/studio/expense") {
         const result=await browserExpense(env.DB,owner,data);
-        if((data as JsonRecord).movementType!=="debt_repayment")notifyCreatedMovement(result,env,ctx,owner,"expense");
+        if((data as JsonRecord).movementType!=="debt_repayment")await notifyCreatedMovement(result,env,ctx,owner,"expense");
         return await categorizedResponse(result,env.DB,owner,env,"accountless");
       }
-      if (pathname === "/api/quick/studio/income") return notifyCreatedMovement(
+      if (pathname === "/api/quick/studio/income") return await notifyCreatedMovement(
         await saveIncome(env.DB,owner,data,true),env,ctx,owner,"income");
       if (pathname === "/api/quick/balances/verify") return await saveVerifiedBalance(env.DB,owner,data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
