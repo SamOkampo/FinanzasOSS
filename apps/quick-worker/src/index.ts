@@ -543,7 +543,7 @@ export async function handleQuickRequest(
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
       if (pathname === "/api/quick/push/status") return await subscriptionStatus(env.DB, owner, data);
-      if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB, owner, env, data);
+      if (pathname === "/api/quick/push/test") return await sendOwnerTestPush(env.DB,owner,env,data,Date.now(),fetch,ctx);
       if (pathname === "/api/quick/import/preview") return await previewStatement(env.DB, owner, data);
       if (pathname === "/api/quick/v41/reconcile/draft") return await saveStatementDraft(env.DB,owner,data);
       if (pathname === "/api/quick/v41/reconcile/draft/discard") return await discardStatementDraft(env.DB,owner,data);

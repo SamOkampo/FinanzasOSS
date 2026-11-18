@@ -155,11 +155,13 @@ export async function sendDailyReminders(env:QuickWorkerEnv,now=Date.now(),
 
 export async function sendOwnerTestPush(
  db:QuickD1,owner:string,env:QuickWorkerEnv,body:unknown,
- now=Date.now(),send:typeof fetch=fetch,
+ now=Date.now(),send:typeof fetch=fetch,ctx?:QuickWorkerContext,
 ):Promise<Response>{
  if(!enabled(env))return reply({error:"Push is not configured"},503);
- const obj=strict(body,["endpoint","confirmed"]);
+ const obj=strict(body,["endpoint","confirmed","inBackground"]);
  if(obj.confirmed!==true)throw new PushInputError("Explicit test confirmation required");
+ if(obj.inBackground!==undefined&&typeof obj.inBackground!=="boolean")throw new PushInputError("Invalid test mode");
+ if(obj.inBackground&&!ctx?.waitUntil)return reply({error:"La prueba en segundo plano no está disponible."},503);
  const endpoint=endpointOf(obj.endpoint),hash=await digest(endpoint);
  const keyColumns=movementPushConfigured(env)?", p256dh, auth_secret":"";
  const row=await db.prepare("SELECT endpoint"+keyColumns+" FROM quick_push_subscriptions "+
@@ -171,7 +173,8 @@ export async function sendOwnerTestPush(
  const claimed=await db.prepare("UPDATE quick_push_subscriptions SET last_test_at=? "+
   "WHERE owner_id=? AND endpoint_hash=? AND (last_test_at IS NULL OR last_test_at<=?) "+
   "RETURNING endpoint_hash").bind(stamp,owner,hash,cutoff).first<{endpoint_hash:string}>();
- if(!claimed)return reply({error:"Wait 10 minutes between tests"},429);
+ if(!claimed)return reply({error:"Espera 10 minutos entre avisos de prueba."},429);
+ const deliver=async()=>{
  try{
    const result=await sendDeviceNotice(env,row,"test",now,send);
    if(result.status===404||result.status===410){
@@ -185,6 +188,13 @@ export async function sendOwnerTestPush(
  }catch{
    return reply({error:"FinanzasOSS no pudo enviar el aviso al proveedor de notificaciones."},502);
  }
+ };
+ if(obj.inBackground&&ctx?.waitUntil){
+  const delaySeconds=10;
+  ctx.waitUntil(new Promise<void>(resolve=>setTimeout(resolve,delaySeconds*1000)).then(deliver));
+  return reply({scheduled:true,delaySeconds},202);
+ }
+ return await deliver();
 }
 
 /** Deliver a privacy-preserving empty Push to at most five subscribed devices per owner. */
@@ -227,7 +237,7 @@ async function sendDeviceNotice(env:QuickWorkerEnv,device:{endpoint:string;p256d
   const result=await send(endpoint,{method:"POST",redirect:"error",headers:{
    Authorization:"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
    ...(body?{"Content-Encoding":"aes128gcm","Content-Type":"application/octet-stream"}:{}),
-   TTL:receipt==="test"?"3600":"600",Urgency:"normal",
+   TTL:receipt==="test"?"3600":"600",Urgency:"high",
   },...(body?{body}:{})});
   console.info({event:"finanzasoss_push_delivery",receipt,outcome:result.ok?"accepted":"rejected",status:result.status});
   return result;
