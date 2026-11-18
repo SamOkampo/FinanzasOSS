@@ -51,11 +51,19 @@ assert.equal(enroll.status,201);
 assert.ok(enroll.body.token.startsWith("fosq_"));
 const authorization="Bearer "+enroll.body.token;
 const shortcutIncome={clientEntryId:"ios-income-cash-20261114",amount:"12000",
- concept:"Pago en efectivo",paymentMethod:"cash",bankLabel:null,incomeCategory:"payment"};
+ concept:"Pago en efectivo",paymentMethod:"Efectivo",bankLabel:"",incomeCategory:"payment"};
 assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A))).status,401);
 assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,{access:{aud:"bad",getIdentity:async()=>({user_uuid:A})}},{authorization})).status,401);
-assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A),{authorization})).status,201);
-assert.equal((await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A),{authorization})).body.replayed,true);
+const cashIncome=await call("/api/quick/shortcut/income","POST",shortcutIncome,owner(A),{authorization});
+assert.equal(cashIncome.status,201);
+assert.equal(cashIncome.body.direction,"credit");
+assert.equal(cashIncome.body.kind,"income");
+for(const paymentMethod of ["cash","  EFECTIVO  "]){
+ const replay=await call("/api/quick/shortcut/income","POST",{...shortcutIncome,paymentMethod,bankLabel:null},owner(A),{authorization});
+ assert.equal(replay.status,200);
+ assert.equal(replay.body.entryId,cashIncome.body.entryId);
+ assert.equal(replay.body.replayed,true);
+}
 assert.equal((await call("/api/quick/shortcut/income","POST",{...shortcutIncome,bankLabel:"No aplica"},owner(A),{authorization})).status,422);
 // A real payment received in a statement must keep its immutable source row and amount.
 sql.prepare("INSERT INTO quick_statement_credits(id,owner_id,client_entry_id,amount_minor,currency,occurred_at,merchant,bank_label,kind,economic_purpose) VALUES(?,?,?,?,?,?,?,?,?,?)")
@@ -75,7 +83,11 @@ const entries=(await call("/api/quick/dashboard/movements")).body.entries;
 assert.equal(entries.length,4);
 assert.equal(entries.filter(x=>x.economic_purpose==="income").length,3);
 assert.ok(entries.every(x=>x.direction==="credit"));
-assert.equal(entries.find(x=>x.source==="income"&&x.payment_method==="cash").bank_label,null);
+const cashMovement=entries.find(x=>x.id===cashIncome.body.entryId);
+assert.equal(cashMovement.source,"income");
+assert.equal(cashMovement.payment_method,"cash");
+assert.equal(cashMovement.amount_minor,"1200000");
+assert.equal(cashMovement.bank_label,null);
 assert.equal(entries.find(x=>x.source==="statement_credit"&&x.kind==="income").subcategory,"Pago recibido");
 assert.ok(!JSON.stringify(entries).includes(B));
 assert.match(DASH_HTML,/id="income-dialog"/);

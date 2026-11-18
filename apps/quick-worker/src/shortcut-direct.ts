@@ -145,16 +145,17 @@ export async function authenticatedShortcutOwner(
 }
 export async function parseShortcutJson(request:Request):Promise<unknown> { return json(request); }
 
+export function normalizeShortcutPaymentMethod(method: unknown): unknown {
+  // The iPhone menu can return its Spanish label instead of the API code.
+  return typeof method === "string" && method.trim().toLowerCase() === "efectivo" ? "cash" : method;
+}
+
 export async function shortcutExpense(
   request: Request, env: QuickWorkerEnv, ctx: QuickWorkerContext,
 ): Promise<Response> {
   const owner = await authenticatedShortcutOwner(request,env,ctx);
   const data = strict(await json(request), ["clientEntryId", "amount", "concept", "paymentMethod", "bankLabel", "movementType"]);
-  // The iPhone menu can return its Spanish label instead of the API code.
-  const method = data.paymentMethod;
-  if (typeof method === "string" && method.trim().toLowerCase() === "efectivo") {
-    data.paymentMethod = "cash";
-  }
+  data.paymentMethod = normalizeShortcutPaymentMethod(data.paymentMethod);
   const response=await saveAccountlessExpense(env.DB, owner, data);
   if(response.status===201){
     try{

@@ -1,7 +1,7 @@
 // Genuine money received (income), never a negative expense or internal transfer.
 // Owner identity is supplied by Cloudflare Access (browser) or existing device token (Shortcut).
 import type { QuickD1 } from "./index.js";
-import { ShortcutInputError } from "./shortcut-direct.js";
+import { normalizeShortcutPaymentMethod, ShortcutInputError } from "./shortcut-direct.js";
 
 const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const METHODS = new Set(["cash","bank_transfer","digital_wallet","other"]);
@@ -41,7 +41,7 @@ function fields(body:unknown,requiresConfirmation:boolean) {
   const minor=Number(amount)*100;
   if(!Number.isSafeInteger(minor)||minor>1000000000000)throw new ShortcutInputError("Amount outside allowed range");
   const concept=text(d.concept,120,"Concept");
-  const method=d.paymentMethod;
+  const method=requiresConfirmation?d.paymentMethod:normalizeShortcutPaymentMethod(d.paymentMethod);
   if(typeof method!=="string"||!METHODS.has(method))throw new ShortcutInputError("Unsupported receiving method");
   const category=d.incomeCategory===undefined?"payment":d.incomeCategory;
   if(typeof category!=="string"||!CATEGORIES.has(category))throw new ShortcutInputError("Unsupported income category");
