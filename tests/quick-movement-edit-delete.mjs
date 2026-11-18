@@ -88,6 +88,24 @@ const noAccess=await call(change,"POST",edit,{});
 assert.equal(noAccess.status,401);
 const noWrite=await call(change,"POST",mEdit,owner(A),{env:{...env,ALLOW_WRITES:"false"}});
 assert.equal(noWrite.status,503);
+
+// Reviewed statement imports use deterministic v41 IDs in the same expense ledger.
+const importedId="v41_"+"a".repeat(64);
+sql.prepare("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?)")
+ .run(importedId,A,"v41_"+"b".repeat(64),13600,"COP","debit_card","purchase","2026-10-19T17:00:00.000Z","Cargo importado","Banco ficticio");
+const imported=(await call("/api/quick/dashboard/movements")).data.entries.find(x=>x.id===importedId);
+assert.equal(imported.source,"accountless");
+const removeImported={operation:"delete",source:imported.source,id:imported.id,expectedRevision:imported.revision,confirmed:true};
+assert.equal((await call(change,"POST",{...removeImported,id:importedId.slice(0,-1)})).status,422);
+assert.equal((await call(change,"POST",{...removeImported,source:"manual"})).status,422);
+assert.equal((await call(change,"POST",removeImported,owner(B))).status,404);
+const importedRemoval=await call(change,"POST",removeImported);
+assert.equal(importedRemoval.status,200);
+assert.equal(importedRemoval.data.deleted,true);
+assert.ok(sql.prepare("SELECT deleted_at FROM quick_shortcut_expenses WHERE id=?").get(importedId).deleted_at);
+assert.equal((await call("/api/quick/dashboard/movements")).data.entries.some(x=>x.id===importedId),false);
+assert.equal(String((await call(overview)).data.daily.reduce((sum,x)=>sum+Number(x.minor),0)),"3500");
+
 // All browser source assets are authenticated and parseable.
 for(const path of ["/movement-editor.js","/dashboard.js","/studio.js"]){
  const source=await handleQuickRequest(new Request(base+path),env,owner(A));
