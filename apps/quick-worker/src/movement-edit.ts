@@ -25,8 +25,11 @@ function validBody(data:unknown):Body {
     throw new MovementInputError("Invalid operation");
   if(d.source!=="manual"&&d.source!=="accountless")
     throw new MovementInputError("Invalid movement source");
-  if(typeof d.id!=="string"||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id))
+  if(typeof d.id!=="string"||!(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id)||
+    // Reviewed statement debits have deterministic IDs in the accountless ledger.
+    (d.source==="accountless"&&/^v41_[0-9a-f]{64}$/.test(d.id))
+  ))
     throw new MovementInputError("Invalid movement ID");
   if(typeof d.expectedRevision!=="number"||!Number.isSafeInteger(d.expectedRevision)||
     d.expectedRevision<0||d.expectedRevision>100000000)
