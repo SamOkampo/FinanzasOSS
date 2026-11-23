@@ -188,6 +188,11 @@ assert.deepEqual((await request("inbox")).body.noticeHours,hours);
 assert.equal((await request("inbox",null,B)).body.noticeSchedule,"20:00");
 await worker.scheduled({cron:ASSISTANT_HOURLY_CRON,scheduledTime:Date.parse("2026-11-23T04:00:00Z")},env);
 assert.equal(sql.prepare("SELECT last_day FROM quick_agent_notice_settings WHERE owner_id=?").get(A).last_day,"2026-11-20");
+// Snoozing above uses the real execution clock, while the digest below
+// deliberately uses a fixed November 2026 clock. Expire that synthetic
+// snooze explicitly so the test does not change outcome after Nov 22.
+sql.prepare("UPDATE quick_agent_alert_state SET snoozed_until=? WHERE owner_id=? AND alert_key=?")
+ .run("2026-11-22T00:00:00.000Z",A,"hapi:hapi-test-alert");
 await sendAssistantDigest(env,Date.parse("2026-11-23T12:00:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-23T12:00:00Z"),dispatch);
 assert.deepEqual(delivered,[A,A,A],"The deferred 07:00 Bogotá digest sends once");
