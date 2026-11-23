@@ -274,13 +274,13 @@ export async function assistantCreditDue(db:QuickD1,owner:string,raw:unknown):Pr
 export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sendOwnerCategoryQuestion):Promise<void> {
   if(!categoryPushConfigured(env))return;
   const day=localDay(now),hour=Number(bogotaHour.format(new Date(now)));
-  const ownerRows=await env.DB.prepare("SELECT s.owner_id,s.last_fingerprint FROM quick_agent_notice_settings s "+
+  const ownerRows=await env.DB.prepare("SELECT s.owner_id,s.last_fingerprint,s.last_day FROM quick_agent_notice_settings s "+
     "LEFT JOIN quick_agent_notice_hours h ON h.owner_id=s.owner_id "+
     "WHERE s.enabled=1 AND COALESCE(h.delivery_hour,?)=? AND COALESCE(s.last_day,'')<? "+
     "AND EXISTS(SELECT 1 FROM quick_push_subscriptions p WHERE p.owner_id=s.owner_id) "+
     "ORDER BY COALESCE(s.last_day,''),s.owner_id LIMIT 10").bind(defaultNoticeHour,hour,day)
-    .all<{owner_id:string;last_fingerprint:string|null}>();
-  for(const {owner_id:owner,last_fingerprint:previous} of ownerRows.results){
+    .all<{owner_id:string;last_fingerprint:string|null;last_day:string|null}>();
+  for(const {owner_id:owner,last_fingerprint:previous,last_day:previousDay} of ownerRows.results){
     const rules=await readAlertRules(env.DB,owner);
     if(env.ALLOW_V41_REVIEW_DRAFTS!=="true"){rules.possible_duplicate=false;rules.import_unreviewed=false;}
     if(env.ALLOW_V41_TRANSFER_LINKS!=="true")rules.unmatched_internal_transfer=false;
@@ -301,7 +301,20 @@ export async function sendAssistantDigest(env:QuickWorkerEnv,now:number,send=sen
       .bind(day,owner,day,owner,defaultNoticeHour,hour).first();
     if(!claimed)continue;
     const shouldSend=alerts.length>0||newCategories.length>0&&(previous!==fingerprint||old.length>0);
-    if(shouldSend&&!(await send(env.DB,owner,env,now)).accepted)continue;
+    if(shouldSend){
+      let accepted=false;
+      try{accepted=Boolean((await send(env.DB,owner,env,now)).accepted);}
+      catch{ /* Do not lose pending notices when the provider throws. */ }
+      if(!accepted){
+        // The initial last_day update is a same-day claim. If the provider
+        // rejected or threw, release it so the hourly cron may retry.
+        // Keeping the previous day prevents duplicate delivery after success.
+        await env.DB.prepare("UPDATE quick_agent_notice_settings SET last_day=? "+
+          "WHERE owner_id=? AND last_day=? AND enabled=1 RETURNING owner_id")
+          .bind(previousDay,owner,day).first();
+        continue;
+      }
+    }
     await markAlertsNotified(env.DB,owner,[...alerts,...newCategories],new Date(now).toISOString());
     await env.DB.prepare("UPDATE quick_agent_notice_settings SET last_fingerprint=? "+
       "WHERE owner_id=? AND last_day=? AND enabled=1 RETURNING owner_id").bind(fingerprint,owner,day).first();
