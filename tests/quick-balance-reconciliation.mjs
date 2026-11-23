@@ -42,6 +42,16 @@ assert.equal((await call("/api/quick/balances/verify","POST",{...first,amount:"5
 assert.equal((await call("/api/quick/balances/verify","POST",{...first,asOf:new Date(Date.now()+24*3600000).toISOString()})).status,422);
 assert.equal((await call("/api/quick/balances/verify","POST",first)).status,201);
 assert.equal((await call("/api/quick/balances/verify","POST",first)).body.replayed,true);
+// Invalid idempotency replay must never manufacture a new bank/account.
+const accountCountBeforeConflict=sql.prepare("SELECT COUNT(*) AS n FROM quick_balance_accounts WHERE owner_id=?").get(A).n;
+const conflictingAccount={...first,bankLabel:"Banco fantasma de prueba"};
+assert.equal((await call("/api/quick/balances/verify","POST",conflictingAccount)).status,409);
+assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM quick_balance_accounts WHERE owner_id=?").get(A).n,
+ accountCountBeforeConflict,"Rejected duplicate key must not create a phantom account");
+assert.equal((await call("/api/quick/balances")).body.accounts.some(x=>x.label==="Banco fantasma de prueba"),false);
+assert.equal((await call("/api/quick/balances/verify","POST",{...first,bankLabel:"PLATA PAY"})).body.replayed,true,
+ "Case-insensitive label should preserve balance replay behavior");
+
 assert.equal((await call("/api/quick/balances/verify","POST",{...first,amount:"100001"})).status,409);
 assert.equal((await call("/api/quick/balances/verify","POST",{...first,bankLabel:"PLATA PAY",accountType:"credit",requestKey:"balance-different-kind-001"})).status,409);
 const p=(query,values)=>sql.prepare(query).run(...values);
