@@ -39,6 +39,21 @@ function payload(body:unknown):{bankLabel:string;accountType:string;requestKey:s
 }
 export async function saveVerifiedBalance(db:QuickD1,owner:string,body:unknown):Promise<Response>{
  const d=payload(body);
+ // A replay or conflicting request key must be resolved BEFORE inserting an
+ // account. Otherwise an invalid replay with a different bank creates a
+ // phantom balance account even though the request returns HTTP 409.
+ const prior=await db.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at "+
+  "FROM quick_balance_snapshots WHERE owner_id=? AND request_key=? LIMIT 1")
+  .bind(owner,d.requestKey).first<SqlSnapshot>();
+ if(prior){
+  const originalAccount=await db.prepare("SELECT id,owner_id,bank_label,account_type,currency "+
+   "FROM quick_balance_accounts WHERE owner_id=? AND bank_label=? COLLATE NOCASE LIMIT 1")
+   .bind(owner,d.bankLabel).first<SqlAccount>();
+  if(!originalAccount||originalAccount.account_type!==d.accountType||
+     prior.account_id!==originalAccount.id||prior.amount_minor!==d.amountMinor||prior.as_of!==d.asOf)
+    return response({error:"El identificador ya corresponde a otro saldo."},409);
+  return response({snapshotId:prior.id,replayed:true,source:"user_verified"});
+ }
  await db.prepare("INSERT INTO quick_balance_accounts(id,owner_id,bank_label,account_type) VALUES(?,?,?,?) "+
   "ON CONFLICT(owner_id,bank_label) DO NOTHING RETURNING id")
   .bind(crypto.randomUUID(),owner,d.bankLabel,d.accountType).first();
@@ -48,19 +63,20 @@ export async function saveVerifiedBalance(db:QuickD1,owner:string,body:unknown):
  if(!account)throw new BalanceInputError("No se pudo verificar la cuenta.",503);
  if(account.account_type!==d.accountType)throw new BalanceInputError(
   "Esta entidad ya está registrada con otro tipo de cuenta; no se combinan saldos y deudas.",409);
- const prior=await db.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at "+
-  "FROM quick_balance_snapshots WHERE owner_id=? AND request_key=? LIMIT 1")
-  .bind(owner,d.requestKey).first<SqlSnapshot>();
- if(prior){
-  if(prior.account_id!==account.id||prior.amount_minor!==d.amountMinor||prior.as_of!==d.asOf)
-    return response({error:"El identificador ya corresponde a otro saldo."},409);
-  return response({snapshotId:prior.id,replayed:true,source:"user_verified"});
- }
  const row=await db.prepare("INSERT INTO quick_balance_snapshots("+
   "id,owner_id,account_id,request_key,amount_minor,as_of) VALUES(?,?,?,?,?,?) "+
   "ON CONFLICT DO NOTHING RETURNING id")
   .bind(crypto.randomUUID(),owner,account.id,d.requestKey,d.amountMinor,d.asOf).first<{id:string}>();
- if(!row)return response({error:"Ya existe otro saldo con esa hora, o el envío se duplicó. Revisa antes de reintentar."},409);
+ if(!row){
+  // Another concurrent request may have won after the initial replay check.
+  // Confirm that the winning snapshot has the same details before replaying.
+  const winner=await db.prepare("SELECT id,account_id,request_key,amount_minor,as_of,created_at "+
+    "FROM quick_balance_snapshots WHERE owner_id=? AND request_key=? LIMIT 1")
+    .bind(owner,d.requestKey).first<SqlSnapshot>();
+  if(winner&&winner.account_id===account.id&&winner.amount_minor===d.amountMinor&&winner.as_of===d.asOf)
+   return response({snapshotId:winner.id,replayed:true,source:"user_verified"});
+  return response({error:"Ya existe otro saldo con esa hora, o el envío se duplicó. Revisa antes de reintentar."},409);
+ }
  return response({snapshotId:row.id,replayed:false,source:"user_verified"},201);
 }
 async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<string,Flow>>{
