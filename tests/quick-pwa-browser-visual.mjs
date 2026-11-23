@@ -149,6 +149,11 @@ try{
    const urlBefore=page.url();
    const dialogOpen=await page.evaluate(()=>[...document.querySelectorAll("dialog")].some(x=>x.open));
    assert.equal(dialogOpen,false);
+   // Diagnostics live inside the collapsed "Avanzado" disclosure.
+   // Open it as a real user would before checking the visible control.
+   await page.locator("details.settings-advanced > summary").click();
+   assert.equal(await page.locator("#qa-run").isVisible(),true,
+    browser.name+" "+layout.name+" advanced diagnostic must be reachable");
    await page.locator("#qa-run").click();
    await page.locator("#qa-report").waitFor({state:"attached"});
    const safeReport=await page.locator("#qa-report").inputValue();
