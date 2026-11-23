@@ -17,8 +17,8 @@
 3. Crear la versión candidata **sin trafico** con `POST .../workers/scripts/{script}/versions`, `bindings_inherit=strict`, y verificar hashes y bindings; conservar el ID previo.
 4. Validar que `GET .../deployments` sigue asignando el 100 % a la versión anterior.
 5. Solo cuando haya autorización de publicar staging, hacer **canary limitado** mediante `POST .../deployments` con porcentajes explícitos; observar excepciones por versión y no inferir «sin fallos» si no hay tráfico significativo.
-6. Promocionar al 100 % únicamente tras verificar el canary, operaciones esenciales y ausencia de regresiones. Verificar el SHA-256 de la versión activa con `GET .../content/v2`.
-7. Ante aumento de errores, rutas ausentes o saldos incorrectos, ejecutar `POST .../deployments` con `versions:[{version_id: previous_version_id,percentage:100}]`. Confirmar nuevamente estado y SHA-256.
+6. Promocionar al 100 % únicamente tras verificar el canary, operaciones esenciales y ausencia de regresiones. Verificar el **ID de versión que recibe tráfico** con `GET .../deployments`. Para verificar el paquete, utilizar el SHA-256 del artefacto revisado previo a subir y los metadatos inmutables (`GET .../versions/{version_id}`). **No inferir el SHA de la versión activa desde `GET .../content/v2`**: cuando existe un upload nuevo sin tráfico, ese endpoint puede devolver el contenido más recientemente subido en vez del contenido asociado al deployment activo.
+7. Ante aumento de errores, rutas ausentes o saldos incorrectos, ejecutar `POST .../deployments` con `versions:[{version_id: previous_version_id,percentage:100}]`. Confirmar por `GET .../deployments` que el 100 % volvió al ID previo; contrastar ese ID con la metadata/etag del backup de versión previo. El checksum de `GET .../content/v2` por sí solo NO prueba la reversión.
 8. Registrar los resultados, commit, paquete, Worker version y responsables en la incidencia de beta de GitHub.
 
 **Restricciones:** nunca se usa `PUT /workers/scripts/{script}` directamente para una promoción sin posibilidad de rollback. No desactivar Cloudflare Access, no recrear bindings, no exponer tokens ni capturar contenido financiero en logs. Si la reversión no está verificada, detener la publicación y no afirmar disponibilidad plena. La validación final depende de iPhone y Android reales.
@@ -29,3 +29,7 @@
 - Git blob SHA1: `8e381b5a23c22c9cc7813bd475d545a78d1ae128`.
 - Versión anterior: `6491cfa6-5f71-49b9-bc55-b444e4b33cb7`.
 - Candidata sin tráfico: `8c5b5b19-b2a7-4ce6-b6e6-aef5e70f4c89`.
+
+## Hallazgo de la prueba de canary (23-nov-2026)
+
+Se verificó en la cuenta de staging que, al subir `8c5b5b19-b2a7-4ce6-b6e6-aef5e70f4c89` sin tráfico, `GET .../deployments` mantenía 100 % en `6491cfa6-5f71-49b9-bc55-b444e4b33cb7`, mientras que `GET .../content/v2` devolvía el SHA-256 de la versión **nueva**, `ee8e24ea5b7da35d1137d98afba8e209e7e4b4f2a8bfb715e920a4d76443af8e`. El guard de canary abortó de forma segura sin cambios de tráfico, lo que motivó esta aclaración. Nunca comparar el endpoint de contenido como si fuera prueba de porcentaje activo.
