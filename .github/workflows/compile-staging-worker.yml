@@ -1,0 +1,40 @@
+name: Reviewable staging worker bundle
+
+on:
+  push:
+    branches: [feature/studio-on-device-ios-qa-20261028]
+    paths:
+      - 'apps/quick-worker/src/**'
+      - 'packages/**'
+      - 'scripts/build-quick-worker.mjs'
+      - 'package-lock.json'
+      - 'apps/quick-worker/migrations/**'
+      - 'package.json'
+      - '.github/workflows/compile-staging-worker.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    if: github.repository == 'SamOkampo/FinanzasOSS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run lint && npm run typecheck
+      - name: Compile standalone Cloudflare Worker (no deployment)
+        run: |
+          npm run build:quick-worker -- apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          test -s apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+      # Read-only preflight. The Reviewed Staging Bundle workflow is the ONLY
+      # job allowed to persist .staging-compiled on the QA branch.
+      # Two writers previously raced and caused non-fast-forward push failures.
+      - name: Assert source-tracked staging artifact is not modified
+        run: |
+          test -s apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs
+          git status --short -- apps/quick-worker/.staging-compiled/finanzasoss-worker.mjs

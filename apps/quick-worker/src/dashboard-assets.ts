@@ -20,19 +20,43 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 // Intentionally NO fetch event handler; every request uses the native browser network stack.
 self.addEventListener("push", (event) => {
-  // Empty payload only. Do not reveal any amount, bank or account on locked screens.
-  event.waitUntil(self.registration.showNotification("FinanzasOSS", {
-    body:"¿Registraste tus gastos de hoy?",
+  // Detail is encrypted in Web Push; legacy one-word and empty pushes still work.
+  const message=event.data?.text()||"";
+  let receipt=message,detail=null;
+  try{
+    const parsed=JSON.parse(message);
+    if(parsed&&(parsed.kind==="expense"||parsed.kind==="income")&&
+       Number.isSafeInteger(parsed.amountMinor)&&parsed.amountMinor>0&&
+       typeof parsed.concept==="string"&&parsed.concept.trim().length>0&&
+       parsed.concept.length<=120){
+      receipt=parsed.kind;detail=parsed;
+    }
+  }catch{ /* Legacy or empty push. */ }
+  const movement=receipt==="expense"||receipt==="income";
+  const concept=detail?detail.concept.trim().replace(/\\s+/g," "):"";
+  const preview=concept.length>48?concept.slice(0,47).trimEnd()+"…":concept;
+  const body=detail?
+    new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",
+      minimumFractionDigits:0,maximumFractionDigits:2}).format(detail.amountMinor/100)+" · "+preview:
+    receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":
+    receipt==="test"?"Aviso de prueba de FinanzasOSS.":
+      "Revisa los pendientes de tu perfil en FinanzasOSS.";
+  const title=detail?(receipt==="expense"?"Gasto registrado":"Ingreso registrado"):"FinanzasOSS";
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
     icon:"/dashboard-icon-180.png",
     badge:"/dashboard-icon-180.png",
-    tag:"finanzasoss-daily",
-    data:{url:"/dashboard#movement"},
+    ...(movement||receipt==="test"?{data:{url:"/dashboard#movement"}}:{
+      tag:"finanzasoss-finance-review",data:{url:"/dashboard#plan"},
+    }),
   }));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const target=new URL("/dashboard#movement",self.location.origin).href;
+    const url=event.notification.data?.url;
+    const section=url==="/dashboard#movement"?"#movement":url==="/dashboard#qwen"?"#qwen":"#plan";
+    const target=new URL("/dashboard"+section,self.location.origin).href;
     const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});
     for(const window of windows) {
       if(new URL(window.url).origin===self.location.origin){

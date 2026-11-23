@@ -72,7 +72,7 @@ function optionalText(value: unknown, label: string, maxLength: number): string 
   return requiredText(value, label, maxLength);
 }
 
-function amountToMinorUnits(value: unknown): bigint {
+export function amountToMinorUnits(value: unknown): bigint {
   // Canonical input is an ungrouped major-unit decimal, e.g. "25000" or "25000.50".
   // Never parse locale separators or use floating point for financial amounts.
   if (typeof value !== "string" || !/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,2})?$/.test(value)) {

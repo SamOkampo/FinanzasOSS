@@ -11,11 +11,15 @@ import {BUDGET_JS} from "../dist/apps/quick-worker/src/dashboard-budgets-js.js";
 import {MOVEMENT_EDITOR_JS} from "../dist/apps/quick-worker/src/dashboard-movement-editor-js.js";
 import {IMPORT_JS} from "../dist/apps/quick-worker/src/dashboard-import-js.js";
 import {INSIGHTS_JS} from "../dist/apps/quick-worker/src/dashboard-insights-js.js";
+import {DEVICE_QA_JS} from "../dist/apps/quick-worker/src/dashboard-device-qa-js.js";
+import {CLOSE_REPORTS_CSS,CLOSE_REPORTS_JS} from "../dist/apps/quick-worker/src/dashboard-close-reports.js";
 const assets={
- "/dashboard":DASH_HTML,"/dashboard.css":DASH_CSS,"/dashboard.js":DASH_JS,
+ "/dashboard":DASH_HTML,"/dashboard.css":DASH_CSS+CLOSE_REPORTS_CSS,"/dashboard.js":DASH_JS,
+ "/reports.js":CLOSE_REPORTS_JS,
  "/studio.js":STUDIO_JS,"/budgets.js":BUDGET_JS,
  "/movement-editor.js":MOVEMENT_EDITOR_JS,"/statement-import.js":IMPORT_JS,
  "/insights.js":INSIGHTS_JS,
+ "/device-qa.js":DEVICE_QA_JS,
 };
 const entries=[
  {id:"aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa",account_id:null,amount_minor:"129000",
@@ -31,6 +35,7 @@ const responses={
  "/api/quick/profile":{email:"test@example.invalid",profile:"personal"},
  "/api/quick/dashboard/overview":{timezone:"America/Bogota",currency:"COP",movementCount:2,
  excludedUsd:0,transfersAndInvestments:0,truncated:false,
+ incomeDaily:[],categoryDaily:[],
  daily:[{day:"2026-10-27",method:"digital_wallet",minor:"129000",count:1},
  {day:"2026-10-27",method:"debit_card",minor:"3000000",count:1}]},
  "/api/quick/dashboard/movements":{page:0,hasMore:false,entries},
@@ -80,7 +85,8 @@ const assertFits=async(page,width,label)=>{
    ".table-panel",".table-scroll",".connections-grid",".connection",
    ".import-studio",".import-options",".category-list",".category-entry",
    ".category-select-row",".flow-panel",".more-dialog[open]",
-   ".expense-dialog[open]",".reset-dialog[open]",".mobile-nav"];
+   ".expense-dialog[open]",".reset-dialog[open]",".mobile-nav",
+   ".close-reports",".close-day",".close-tile",".close-story-tiles"];
   const items=[];
   for(const selector of sel)for(const el of document.querySelectorAll(selector)){
    if(el.closest("[hidden]")||getComputedStyle(el).display==="none")continue;
@@ -108,6 +114,20 @@ try{
   page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(12000);
   page.on("pageerror",error=>errors.push(layout.name+": "+error.message));
   await page.goto(output("/dashboard"),{waitUntil:"networkidle"});
+  // Verify the same already-deployed story UI can open on a small iPhone.
+  // The dataset is synthetic, the browser has no remote financial access.
+  if(layout.width===393){
+   await page.waitForFunction(()=>document.getElementById("close-reports")?.hidden===false);
+   assert.equal(await page.locator("#close-reports").isVisible(),true,
+    browser.name+" reports must be visible after overview loads");
+   await page.locator('.close-month[data-close-period="month"]').click();
+   assert.equal(await page.locator("#close-story").evaluate(el=>el.open),true,
+    browser.name+" monthly story opens full screen");
+   assert.ok((await page.locator("#close-story-period").textContent())?.length>0);
+   await page.locator("#close-story-exit").click();
+   assert.equal(await page.locator("#close-story").evaluate(el=>el.open),false);
+   await assertFits(page,layout.width,browser.name+" recovered reports");
+  }
   for(const name of screens){
    if(name!=="today"){
     if(layout.width<=980){
@@ -140,6 +160,38 @@ try{
     browser.name+" "+layout.name+" dark theme");
   await assertFits(page,layout.width,browser.name+" "+layout.name+" dark settings");
   await page.locator("#theme-setting").click();
+  // The on-device diagnostic must scan every section without changing
+  // the active view, polluting browser history, or collecting private data.
+  if(layout.width===393){
+   const previousHash=await page.evaluate(()=>location.hash);
+   const urlBefore=page.url();
+   const dialogOpen=await page.evaluate(()=>[...document.querySelectorAll("dialog")].some(x=>x.open));
+   assert.equal(dialogOpen,false);
+   // Diagnostics live inside the collapsed "Avanzado" disclosure.
+   // Open it as a real user would before checking the visible control.
+   await page.locator("details.settings-advanced > summary").click();
+   assert.equal(await page.locator("#qa-run").isVisible(),true,
+    browser.name+" "+layout.name+" advanced diagnostic must be reachable");
+   await page.locator("#qa-run").click();
+   await page.locator("#qa-report").waitFor({state:"attached"});
+   const safeReport=await page.locator("#qa-report").inputValue();
+   const parsed=JSON.parse(safeReport);
+   assert.equal(parsed.result.sectionsInspected,8);
+   assert.equal(parsed.screens.length,8);
+   assert.equal(parsed.result.sectionsWithPossibleOverflow,0,
+    browser.name+" diagnostic unexpected overflow "+safeReport);
+   assert.equal(parsed.device.viewportCSSpx.width,layout.width);
+   for(const secret of ["Refrigerio","Daviplata","test@example.invalid","129000","3000000"])
+    assert.equal(safeReport.includes(secret),false,"Diagnostic disclosed private data");
+   assert.equal(page.url(),urlBefore);
+   assert.equal(await page.evaluate(()=>location.hash),previousHash);
+   assert.equal(await page.locator("#space-settings").evaluate(el=>el.hidden),false);
+   assert.equal(await page.locator("#qa-copy").isDisabled(),false);
+   await page.locator("#qa-keyboard-input").focus();
+   await page.locator("#qa-keyboard-input").fill("prueba");
+   assert.equal(await page.locator("#qa-keyboard-input").inputValue(),"prueba");
+   await assertFits(page,layout.width,browser.name+" QA diagnostic");
+  }
   // Reset dialog must fit even at 320px; no reset action or server write.
   await page.locator("#reset-open").click();
   assert.equal(await page.locator("#reset-dialog").evaluate(el=>el.open),true);

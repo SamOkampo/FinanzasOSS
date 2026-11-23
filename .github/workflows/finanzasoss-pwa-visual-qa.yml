@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/studio-native-mobile-qa-20261028
+      - feature/studio-on-device-ios-qa-20261028
     paths:
       - .github/workflows/finanzasoss-pwa-visual-qa.yml
       - apps/quick-worker/src/**
@@ -25,7 +26,7 @@ jobs:
           node-version: 22
       - name: Build typed Worker frontend with repository dependencies
         run: |
-          npm install -g typescript@5.8.3
+          npm ci
           npm run lint
           npm run typecheck
           npm run build

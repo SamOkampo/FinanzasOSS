@@ -8,6 +8,12 @@ for(const n of ["0001_quick_d1","0002_shortcut_devices","0003_accountless_shortc
   "0006_push_subscriptions","0007_spending_limits","0008_movement_edit_soft_delete","0009_push_test"]){
  sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/"+n+".sql",import.meta.url),"utf8"));
 }
+sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/0012_statement_credits.sql", import.meta.url),"utf8"));
+sql.exec(readFileSync(new URL("../apps/quick-worker/migrations/0013_income_capture.sql", import.meta.url),"utf8"));
+// Dashboard economic summaries read per-user confirmations when present.
+sql.exec("CREATE TABLE quick_movement_categories (owner_id TEXT NOT NULL, source TEXT NOT NULL, movement_id TEXT NOT NULL, category TEXT NOT NULL, subcategory TEXT NOT NULL, classification_source TEXT NOT NULL)");
+// Optional AI classifications are joined read-only in expense reports.
+sql.exec("CREATE TABLE quick_auto_categories (owner_id TEXT, source TEXT, movement_id TEXT,category TEXT,subcategory TEXT,confidence REAL,needs_review INTEGER)");
 const db={prepare(q){let args=[];return {bind(...v){args=v;return this;},
  async first(){return sql.prepare(q).get(...args)??null;},
  async all(){return {results:sql.prepare(q).all(...args)};}}}};
@@ -82,6 +88,24 @@ const noAccess=await call(change,"POST",edit,{});
 assert.equal(noAccess.status,401);
 const noWrite=await call(change,"POST",mEdit,owner(A),{env:{...env,ALLOW_WRITES:"false"}});
 assert.equal(noWrite.status,503);
+
+// Reviewed statement imports use deterministic v41 IDs in the same expense ledger.
+const importedId="v41_"+"a".repeat(64);
+sql.prepare("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,?,?,?,?,?,?)")
+ .run(importedId,A,"v41_"+"b".repeat(64),13600,"COP","debit_card","purchase","2026-10-19T17:00:00.000Z","Cargo importado","Banco ficticio");
+const imported=(await call("/api/quick/dashboard/movements")).data.entries.find(x=>x.id===importedId);
+assert.equal(imported.source,"accountless");
+const removeImported={operation:"delete",source:imported.source,id:imported.id,expectedRevision:imported.revision,confirmed:true};
+assert.equal((await call(change,"POST",{...removeImported,id:importedId.slice(0,-1)})).status,422);
+assert.equal((await call(change,"POST",{...removeImported,source:"manual"})).status,422);
+assert.equal((await call(change,"POST",removeImported,owner(B))).status,404);
+const importedRemoval=await call(change,"POST",removeImported);
+assert.equal(importedRemoval.status,200);
+assert.equal(importedRemoval.data.deleted,true);
+assert.ok(sql.prepare("SELECT deleted_at FROM quick_shortcut_expenses WHERE id=?").get(importedId).deleted_at);
+assert.equal((await call("/api/quick/dashboard/movements")).data.entries.some(x=>x.id===importedId),false);
+assert.equal(String((await call(overview)).data.daily.reduce((sum,x)=>sum+Number(x.minor),0)),"3500");
+
 // All browser source assets are authenticated and parseable.
 for(const path of ["/movement-editor.js","/dashboard.js","/studio.js"]){
  const source=await handleQuickRequest(new Request(base+path),env,owner(A));
@@ -104,7 +128,8 @@ const renderMethod=new Function("document","LABELS","x","concept","kind",
   dashboardJs.slice(snippetStart,snippetEnd)+"\nreturn {desc,method};");
 const node=tag=>({tag,children:[],textContent:"",className:"",
  append(...items){this.children.push(...items);},
- appendChild(item){this.children.push(item);}});
+ appendChild(item){this.children.push(item);},
+ setAttribute(name,value){this[name]=value;},addEventListener(){}});
 const doc={createElement:node};
 const labels={cash:"Efectivo",debit_card:"Tarjeta débito",credit_card:"Tarjeta crédito",
  bank_transfer:"Transferencia",digital_wallet:"Billetera digital",other:"Otro"};
@@ -114,10 +139,11 @@ for(const [code,name] of Object.entries(labels)){
  assert.equal(method.children.length,2,"Method cell visibly stacks method then bank");
  assert.equal(method.children[0].textContent,name,"Method label must show payment type");
  assert.equal(method.children[1].textContent,"Banco: Bancolombia","Bank must be visibly labelled beside payment method");
- assert.equal(desc.children.length,2,"Bank no longer hidden below the concept");
+ assert.equal(desc.children.length,3,"Category and subcategory now appear under each concept");
+ assert.equal(desc.children[2].children[0].textContent,"Pendiente de clasificar");
 }
 const noBank=renderMethod(doc,labels,{payment_method:"cash",bank_label:null},node("div"),node("small"));
-assert.equal(noBank.desc.children.length,2,"No invented bank on cash payments");
+assert.equal(noBank.desc.children.length,3,"Classification stays visible even without bank");
 assert.equal(noBank.method.children[0].textContent,"Efectivo");
 assert.equal(noBank.method.children.length,1,"No bank row when bank is absent");
 console.log("Edit/delete: owner-scoped soft deletion, revisions, ledger totals, UI, CSRF passed");
