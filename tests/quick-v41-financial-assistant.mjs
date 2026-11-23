@@ -196,10 +196,24 @@ sql.prepare("UPDATE quick_agent_alert_state SET snoozed_until=? WHERE owner_id=?
 await sendAssistantDigest(env,Date.parse("2026-11-23T12:00:00Z"),dispatch);
 await sendAssistantDigest(env,Date.parse("2026-11-23T12:00:00Z"),dispatch);
 assert.deepEqual(delivered,[A,A,A],"The deferred 07:00 Bogotá digest sends once");
+// A newly pending synthetic alert makes this day's digest eligible.
+// Provider rejection and exceptions must release the claim for same-day retry.
+sql.prepare("INSERT INTO quick_hapi_deposits(id,owner_id,request_key,bank_label,debited_on,cop_minor) "+
+ "VALUES(?,?,?,?,?,?)").run("hapi-push-retry",A,"retry-key","Banco Ficticio","2026-11-23",100000);
+const retryTime=Date.parse("2026-11-24T12:00:00Z");
+const lastNoticeDay=()=>sql.prepare("SELECT last_day FROM quick_agent_notice_settings WHERE owner_id=?").get(A).last_day;
+await sendAssistantDigest(env,retryTime,async()=>({accepted:0}));
+assert.equal(lastNoticeDay(),"2026-11-23","Rejected push must not consume the day's delivery opportunity");
+await sendAssistantDigest(env,retryTime,async()=>{throw new Error("Synthetic push provider timeout");});
+assert.equal(lastNoticeDay(),"2026-11-23","Thrown provider error must also permit retry");
+await sendAssistantDigest(env,retryTime,dispatch);
+await sendAssistantDigest(env,retryTime,dispatch);
+assert.deepEqual(delivered,[A,A,A,A],"Successful retry sends exactly once");
+assert.equal(lastNoticeDay(),"2026-11-24");
 assert.equal((await request("preferences",{...schedule,enabled:false,hours:{digestHour:8,quietStart:null,quietEnd:null}})).status,200);
 assert.equal((await request("inbox")).body.noticeSchedule,"08:00");
 await sendAssistantDigest(env,Date.parse("2026-11-24T13:00:00Z"),dispatch);
-assert.deepEqual(delivered,[A,A,A],"Opt-out stops scheduled push");
+assert.deepEqual(delivered,[A,A,A,A],"Opt-out stops scheduled push");
 const observed=(await request("inbox")).body.alerts.find(x=>x.rule==="unreconciled_balance");
 const ack={key:observed.key,fingerprint:observed.fingerprint};
 assert.equal((await request("acknowledge",ack,B)).status,409);
