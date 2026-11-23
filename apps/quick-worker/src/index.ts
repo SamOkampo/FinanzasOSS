@@ -2,6 +2,7 @@ import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js"
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
 import { DASH_HTML } from "./dashboard-html.js";
+import { CLOSE_REPORTS_CSS, CLOSE_REPORTS_JS } from "./dashboard-close-reports.js";
 import { DASH_CSS } from "./dashboard-css.js";
 import { DASH_JS } from "./dashboard-js.js";
 import { INCOME_JS } from "./dashboard-income-js.js";
@@ -369,7 +370,7 @@ export async function handleQuickRequest(
     "/", "/quick.css", "/quick.js", "/dashboard", "/dashboard.css", "/dashboard.js",
     "/dashboard.webmanifest", "/dashboard-icon.svg", "/dashboard-icon-180.png",
     "/dashboard-sw.js", "/studio.js", "/income.js", "/balances.js", "/bank-benefits.js", "/mobile-input.js", "/budgets.js", "/movement-editor.js", "/statement-import.js", "/document-inspect.js", "/statement-pdf-worker.js", "/statement-pdf-engine.wasm", "/statement-pdf-renderer.mjs", "/statement-pdf-render-worker.mjs", "/review-confirm-v41.js", "/insights.js", "/device-qa.js",
-    "/assistant.js", "/hapi.js", "/transfer-links.js",
+    "/assistant.js", "/hapi.js", "/transfer-links.js", "/reports.js",
   ]).has(pathname);
   if (!isUiPath && !pathname.startsWith("/api/quick/")) {
     return respond({ error: "Not found" }, 404);
@@ -435,12 +436,13 @@ export async function handleQuickRequest(
         .replace('data-hapi-activity="false"','data-hapi-activity="'+String(env.ALLOW_V41_HAPI==="true"&&env.ALLOW_V41_HAPI_ACTIVITY==="true")+'"')
         .replace('data-hapi-enabled="false"','data-hapi-enabled="'+String(env.ALLOW_V41_HAPI==="true")+'"'),"text/html");
     }
-    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS+ASSISTANT_CSS, "text/css");
+    if (pathname === "/dashboard.css") return respondAsset(DASH_CSS+ASSISTANT_CSS+CLOSE_REPORTS_CSS, "text/css");
     if (pathname === "/assistant.js") {
       return env.ALLOW_V41_ASSISTANT==="true"?respondAsset(ASSISTANT_JS,"application/javascript"):
         respondAsset("", "application/javascript");
     }
     if (pathname === "/transfer-links.js") return respondAsset(TRANSFER_LINKS_JS,"application/javascript");
+    if (pathname === "/reports.js") return respondAsset(CLOSE_REPORTS_JS,"application/javascript");
     if (pathname === "/hapi.js") return respondAsset(env.ALLOW_V41_HAPI==="true"?HAPI_JS:"","application/javascript");
     if (pathname === "/dashboard.js") return respondAsset(DASH_JS, "application/javascript");
     if (pathname === "/bank-benefits.js") return respondAsset(BANK_BENEFITS_JS, "application/javascript");
