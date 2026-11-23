@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "product": "FinanzasOSS",
+  "environment": "staging",
+  "source_repository": "SamOkampo/FinanzasOSS",
+  "source_branch": "feature/studio-on-device-ios-qa-20261028",
+  "source_pr": 237,
+  "reviewed_merge_commit": "36088ede6eaf5bbfdb88e167ffa7f5d3881e32d4",
+  "reviewed_github_ci_run": 45134209446,
+  "reviewed_browser_qa_run": 45134453598,
+  "artifact": {
+    "file_name": "finanzasoss-quick-worker.mjs",
+    "sha256": "ee8e24ea5b7da35d1137d98afba8e209e7e4b4f2a8bfb715e920a4d76443af8e",
+    "git_blob_sha1": "8e381b5a23c22c9cc7813bd475d545a78d1ae128",
+    "bytes": 5429836,
+    "required_markers": [
+      "/reports.js",
+      "Tus cierres",
+      "/api/quick/shortcut/income",
+      "/api/quick/dashboard/overview",
+      "/api/quick/balances/verify"
+    ]
+  },
+  "cloudflare": {
+    "script": "finanzasoss-quick-staging",
+    "previous_version_id": "6491cfa6-5f71-49b9-bc55-b444e4b33cb7",
+    "candidate_version_id": "8c5b5b19-b2a7-4ce6-b6e6-aef5e70f4c89",
+    "expected_binding_count": 24
+  },
+  "notes": "Verified source-derived candidate only. No rollout or external beta authorization implied."
+}

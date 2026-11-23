@@ -1,0 +1,44 @@
+name: FinanzasOSS Reviewed Staging Release Gate
+
+on:
+  push:
+    branches: [feature/studio-on-device-ios-qa-20261028]
+    paths:
+      - '.github/workflows/finanzasoss-reviewed-release-gate.yml'
+      - 'releases/finanzasoss-staging-2026-11-23.json'
+      - 'scripts/verify-staging-artifact.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reviewed-staging-release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audited-release:
+    if: github.repository == 'SamOkampo/FinanzasOSS' && github.ref == 'refs/heads/feature/studio-on-device-ios-qa-20261028'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm test
+      - name: Rebuild the reviewed Worker without uploading to Cloudflare
+        run: |
+          npm run build:quick-worker -- /tmp/finanzasoss-reviewed-release.mjs
+          test -s /tmp/finanzasoss-reviewed-release.mjs
+      - name: Fail closed on artifact checksum or source drift
+        run: |
+          node scripts/verify-staging-artifact.mjs /tmp/finanzasoss-reviewed-release.mjs releases/finanzasoss-staging-2026-11-23.json
+      - name: Upload QA-verified artifact for approved staging rollout
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finanzasoss-reviewed-staging-release
+          path: /tmp/finanzasoss-reviewed-release.mjs
+          retention-days: 7
+          if-no-files-found: error
