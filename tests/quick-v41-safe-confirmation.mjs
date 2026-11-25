@@ -163,5 +163,22 @@ assert.equal((await call("/api/quick/v41/reconcile/history",B)).body.count,0);
 assert.equal((await call("/api/quick/v41/reconcile/confirm",B,{...corrected,expectedDigest:invalidPreview.body.reviewDigest,confirmed:true,decisions:[{index:0,action:"import"}]})).status,409);
 assert.equal((await call("/api/quick/v41/reconcile/history",B)).body.count,0);
 console.log("v42.2 statement correction preview: no writes, recomputed digest, stale confirmation blocked");
+// A repeated bank amount is not a duplicated purchase; only the read is shared.
+let candidateQueries=0,activeQueries=0,maxActive=0;
+const counted={...store,prepare(query){
+ const stmt=store.prepare(query);
+ if(!query.includes("AS source,merchant AS label")&&!query.includes("AS source,concept AS label"))return stmt;
+ const all=stmt.all;
+ stmt.all=async()=>{candidateQueries++;activeQueries++;maxActive=Math.max(maxActive,activeQueries);
+  try{await Promise.resolve();return await all.call(stmt);}finally{activeQueries--;}};
+ return stmt;
+}};
+const {previewReconciliationV41}=await import("../dist/apps/quick-worker/src/statement-reconcile-v41.js");
+const many={...input,rows:Array.from({length:12},(_,i)=>({Fecha:"2026-11-20",Concepto:"Compra "+i,Importe:String(200+(i%6)),Tipo:"debit",Referencia:"PERF-"+i}))};
+const perf=await (await previewReconciliationV41(counted,B,many)).json();
+assert.equal(perf.rows.length,12);assert.deepEqual(perf.rows.map(x=>x.index),Array.from({length:12},(_,i)=>i));
+assert.equal(candidateQueries,6);assert.ok(maxActive<=5&&maxActive>1);
+assert.equal((await call("/api/quick/v41/reconcile/history",B)).body.count,0);
+console.log("v42.3 statement lookup reuse and bounded concurrency passed");
 sqlDb.close();
 console.log("v41 confirmations: approval gate, exact-match binding, idempotency, transfers, pending credits, audit and owner isolation PASSED");
