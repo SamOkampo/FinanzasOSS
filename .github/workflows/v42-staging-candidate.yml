@@ -24,10 +24,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45652454052 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
-          grep -Fx 'success 59f017b3479fbf90538963de336e9bfdbfbfbe8f' /tmp/reviewed-run
-          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15040467915/zip > /tmp/worker.zip
-          echo '62fb30dc0343a9c96a92f306b05419e1ffc7ed7202f101f6604f06e897620e9d  /tmp/worker.zip' | sha256sum -c -
+          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45663843545 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
+          grep -Fx 'success 9afae4310d8c583229656ed5014a600a6532257a' /tmp/reviewed-run
+          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15046372955/zip > /tmp/worker.zip
+          echo '27e0163d11281b52f9994a4990a58bb582cedceec7d14d6a574c33d9241e42cc  /tmp/worker.zip' | sha256sum -c -
           unzip -p /tmp/worker.zip finanzasoss-quick-worker.mjs > /tmp/worker.mjs
           sha256sum /tmp/worker.mjs
           node --check /tmp/worker.mjs
@@ -63,7 +63,7 @@ jobs:
           if(bindingNames.length!==24||JSON.stringify(bindingNames)!==JSON.stringify(settings.bindings.map(x=>x.name).sort()))throw Error('Binding inventory changed');
           const listed=await api('/versions');
           const latest=(listed.items||listed)[0];
-          const expectedLatest='0a0e5303-9626-40ee-b742-3f8b5c01f607';
+          const expectedLatest='21188207-9e7e-479c-a738-bdab621653a4';
           if(latest.id!==expectedLatest)throw Error('Unexpected inheritance source; upload blocked');
           const inheritance=await api('/versions/'+expectedLatest);
           const comparable=x=>JSON.stringify(x.resources.bindings.map(y=>({name:y.name,type:y.type,id:y.id??y.database_id??null})).sort((a,b)=>a.name.localeCompare(b.name)));
@@ -74,7 +74,7 @@ jobs:
             compatibility_flags:settings.compatibility_flags||[],
             usage_model:settings.usage_model,
             bindings:settings.bindings.map(x=>({type:'inherit',name:x.name})),
-            annotations:{'workers/message':'v42.2 reviewed financial audit round two, no traffic','workers/commit_sha':'59f017b3479fbf90538963de336e9bfdbfbfbe8f'}
+            annotations:{'workers/message':'v42.2 reviewed statement corrector and Hapi rotation fix, no traffic','workers/commit_sha':'9afae4310d8c583229656ed5014a600a6532257a'}
           };
           const form=new FormData();
           form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
