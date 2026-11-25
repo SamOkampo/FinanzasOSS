@@ -613,6 +613,11 @@ export async function handleQuickRequest(
        if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/v42/reconcile/summary") {
+        const history = await env.DB.prepare("SELECT bank_label, snapshot_id, as_of, previous_as_of, previous_minor, verified_minor, net_minor, calculated_minor, difference_minor, status FROM quick_v42_reconciliation_history WHERE owner_id=? ORDER BY as_of DESC LIMIT 100").bind(owner).all<Record<string, unknown>>();
+        const candidates = await env.DB.prepare("SELECT bank_label, first_id, first_source, second_id, second_source, signed_minor, concept, first_at, second_at FROM quick_v42_duplicate_candidates WHERE owner_id=? ORDER BY first_at DESC LIMIT 100").bind(owner).all<Record<string, unknown>>();
+        return respond({history:history.results,duplicateCandidates:candidates.results,source:"user_verified",note:"Revisión orientativa; los posibles duplicados no se eliminan automáticamente."});
+      }
       if (pathname === "/api/quick/balances") return await verifiedBalances(env.DB,owner);
       if (pathname === "/api/quick/categories") return await categoryReview(env.DB, owner);
       if (pathname === "/api/quick/categories/automation/status")
