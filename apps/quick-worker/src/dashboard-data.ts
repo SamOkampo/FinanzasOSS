@@ -33,8 +33,10 @@ const incomeEntries = "SELECT owner_id,'income' AS source,id,NULL AS account_id,
 const baseMovementSql = accountBound + " UNION ALL " + accountFree + " UNION ALL " + statementCredits +
   " UNION ALL " + incomeEntries;
 async function movementProjection(db: QuickD1,owner:string){
-  const enabled=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v42_own_transfers'").first<{name:string}>();
-  const corrections=enabled?await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v421_transfer_audit'").first<{name:string}>():null;
+  // One schema lookup per projection rather than two sequential D1 calls.
+  const schema=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('quick_v42_own_transfers','quick_v421_transfer_audit')").all<{name:string}>();
+  const enabled=schema.results.some(row=>row.name==="quick_v42_own_transfers");
+  const corrections=enabled&&schema.results.some(row=>row.name==="quick_v421_transfer_audit");
   const transferRevision=corrections?"(SELECT COUNT(*) FROM quick_v421_transfer_audit a WHERE a.owner_id=quick_v42_own_transfers.owner_id AND a.transfer_id=quick_v42_own_transfers.id)":"0";
   const transferSql=" UNION ALL SELECT owner_id,'own_transfer',id,NULL,amount_minor,'COP','bank_transfer','transfer',occurred_at,from_bank_label || ' → ' || to_bank_label,from_bank_label,"+transferRevision+",'debit','transfer',NULL FROM quick_v42_own_transfers WHERE owner_id=?";
   const allMovementSql=baseMovementSql+(enabled?transferSql:"");
