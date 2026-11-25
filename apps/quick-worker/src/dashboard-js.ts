@@ -458,20 +458,20 @@ export const DASH_JS = `(() => {
       " movimiento(s) · más antiguos al final";
     $("load-more").hidden = !state.hasMore;
   }
-  async function fetchJson(url) {
-    let r;
+  async function fetchJson(url, controller = new AbortController()) {
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
-        headers: { Accept: "application/json" } });
-    } catch {
-      // On Safari, failed service-worker fetches used to bubble up as raw
-      // "FetchEvent.respondWith ... Load failed" errors.
-      throw new Error("No se pudieron cargar los datos. Comprueba tu conexión, abre la PWA desde Safari y toca Actualizar.");
-    }
-    if (r.status === 401 || r.status === 403) throw new Error(
-      "La sesión privada expiró. Abre esta página en Safari y vuelve a iniciar sesión con Cloudflare Access.");
-    if (!r.ok) throw new Error("No se pudieron consultar los datos (HTTP " + r.status + ").");
-    return await r.json();
+      const r = await fetch(url, { method: "GET", credentials: "same-origin", cache: "no-store",
+        signal: controller.signal, headers: { Accept: "application/json" } });
+      if (r.status === 401 || r.status === 403) throw new Error(
+        "La sesión privada expiró. Abre esta página en Safari y vuelve a iniciar sesión con Cloudflare Access.");
+      if (!r.ok) throw new Error("No se pudieron consultar los datos (HTTP " + r.status + ").");
+      return await r.json();
+    } catch(error) {
+      if(controller.signal.aborted)throw new Error("La consulta tardó demasiado. Toca Actualizar para reintentar.");
+      if(error instanceof TypeError)throw new Error("No se pudieron cargar los datos. Comprueba tu conexión y toca Actualizar.");
+      throw error;
+    } finally { clearTimeout(timer); }
   }
   function fail(error) {
     $("error").hidden = false;
@@ -484,43 +484,40 @@ export const DASH_JS = `(() => {
     if(loadingText) loadingText.textContent = message;
     content?.setAttribute("aria-busy", String(Boolean(message)));
   }
+  let historyGeneration=0, historyController=null;
   async function loadHistory(reset = false) {
-    if (state.loadingHistory) return;
-    state.loadingHistory = true;
-    const button = $("load-more");
-    button.disabled = true;
-    const page = reset ? 0 : state.page;
+    if (state.loadingHistory && !reset) return;
+    if(reset && historyController)historyController.abort();
+    const generation=++historyGeneration, controller=new AbortController();
+    historyController=controller;state.loadingHistory=true;
+    const button=$("load-more");button.disabled=true;
+    const page=reset?0:state.page;
     try {
-      const data = await fetchJson("/api/quick/dashboard/movements?page=" + page);
-      state.history = reset ? data.entries : [...state.history,...data.entries];
-      state.hasMore = Boolean(data.hasMore);
-      state.page = page + 1;
-      showHistory();
-    } catch (error) { fail(error); }
-    finally { state.loadingHistory = false; button.disabled = false; }
+      const data=await fetchJson("/api/quick/dashboard/movements?page="+page,controller);
+      if(generation!==historyGeneration)return;
+      if(!Array.isArray(data.entries))throw new Error("La respuesta del historial no es válida.");
+      state.history=reset?data.entries:[...state.history,...data.entries];
+      state.hasMore=Boolean(data.hasMore);state.page=page+1;showHistory();
+    } catch(error) { if(generation===historyGeneration)fail(error); }
+    finally { if(generation===historyGeneration){historyController=null;state.loadingHistory=false;button.disabled=false;} }
   }
   async function refresh() {
     if($("reload").disabled)return;
-    $("error").hidden = true;
-    $("reload").disabled = true;
-    showLoadState("Cargando tu resumen…");
+    $("error").hidden=true;$("reload").disabled=true;
+    showLoadState("Cargando tu resumen y movimientos…");
+    // Read-only independent requests can overlap. A failed summary does not
+    // prevent the history from loading; no user data is cached persistently.
+    const history=loadHistory(true);
     try {
-      const overview = await fetchJson("/api/quick/dashboard/overview");
-      if (overview.truncated) throw new Error("El historial supera el máximo de agregaciones permitido. Contacta soporte para una consulta completa.");
-      state.overview = overview;
-      renderDashboard();
-      // Transient, same-origin in-memory handoff for late-loaded Studio interactions.
-      // Never persisted in storage or a financial cache.
-      window.__finanzasossLatestOverview = overview;
-      document.dispatchEvent(new CustomEvent("finanzasoss:data", {detail:{overview}}));
-      if (overview.excludedUsd && $("testing")) {
-        $("testing").textContent = "ENTORNO STAGING · " + overview.excludedUsd +
-          " movimiento(s) en USD excluidos de totales COP; disponibles en el historial.";
-      }
-      showLoadState("Cargando tus movimientos…");
-      await loadHistory(true);
-    } catch (error) { fail(error); }
-    finally { showLoadState(""); $("reload").disabled = false; }
+      const overview=await fetchJson("/api/quick/dashboard/overview");
+      if(overview.truncated)throw new Error("El historial supera el máximo de agregaciones permitido. Contacta soporte para una consulta completa.");
+      state.overview=overview;renderDashboard();
+      window.__finanzasossLatestOverview=overview;
+      document.dispatchEvent(new CustomEvent("finanzasoss:data",{detail:{overview}}));
+      if(overview.excludedUsd&&$("testing"))$("testing").textContent="ENTORNO STAGING · "+overview.excludedUsd+
+        " movimiento(s) en USD excluidos de totales COP; disponibles en el historial.";
+    } catch(error){fail(error);}
+    finally{await history;showLoadState("");$("reload").disabled=false;}
   }
   document.querySelectorAll(".period-btn").forEach((button) => {
     button.addEventListener("click", () => {
