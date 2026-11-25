@@ -34,7 +34,9 @@ const baseMovementSql = accountBound + " UNION ALL " + accountFree + " UNION ALL
   " UNION ALL " + incomeEntries;
 async function movementProjection(db: QuickD1,owner:string){
   const enabled=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v42_own_transfers'").first<{name:string}>();
-  const transferSql=" UNION ALL SELECT owner_id,'own_transfer',id,NULL,amount_minor,'COP','bank_transfer','transfer',occurred_at,from_bank_label || ' → ' || to_bank_label,from_bank_label,0,'debit','transfer',NULL FROM quick_v42_own_transfers WHERE owner_id=?";
+  const corrections=enabled?await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v421_transfer_audit'").first<{name:string}>():null;
+  const transferRevision=corrections?"(SELECT COUNT(*) FROM quick_v421_transfer_audit a WHERE a.owner_id=quick_v42_own_transfers.owner_id AND a.transfer_id=quick_v42_own_transfers.id)":"0";
+  const transferSql=" UNION ALL SELECT owner_id,'own_transfer',id,NULL,amount_minor,'COP','bank_transfer','transfer',occurred_at,from_bank_label || ' → ' || to_bank_label,from_bank_label,"+transferRevision+",'debit','transfer',NULL FROM quick_v42_own_transfers WHERE owner_id=?";
   const allMovementSql=baseMovementSql+(enabled?transferSql:"");
   const classifiedMovements="SELECT m.*,"+quickEconomicGroupSql()+" AS economic_group FROM ("+allMovementSql+") m LEFT JOIN quick_movement_categories c ON c.owner_id=m.owner_id AND c.source=m.source AND c.movement_id=m.id LEFT JOIN quick_auto_categories a ON a.owner_id=m.owner_id AND a.source=m.source AND a.movement_id=m.id";
   const owners=enabled?[owner,owner,owner,owner,owner]:[owner,owner,owner,owner];
