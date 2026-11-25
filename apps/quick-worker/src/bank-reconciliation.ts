@@ -87,6 +87,8 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
  // cutoff day in range so the projection can identify these ambiguous rows.
  const rangeStart=new Date(Date.parse(from)-86400000).toISOString();
  const rangeEnd=new Date(Date.parse(through)+86400000).toISOString();
+  const transferTable=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v42_own_transfers'").first<{name:string}>();
+ const transferSql=transferTable?` UNION ALL SELECT from_bank_label,occurred_at,amount_minor,'debit',0,0 FROM quick_v42_own_transfers WHERE owner_id=? AND occurred_at BETWEEN ? AND ? UNION ALL SELECT to_bank_label,occurred_at,amount_minor,'credit',0,0 FROM quick_v42_own_transfers WHERE owner_id=? AND occurred_at BETWEEN ? AND ?`:"";
  const query=`
   WITH periods AS (
     SELECT json_extract(value,'$.id') id, lower(trim(json_extract(value,'$.label'))) label,
@@ -115,6 +117,7 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
     SELECT bank_label,occurred_at,amount_minor,'credit',1,0
     FROM quick_statement_credits
     WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP'
+    ${transferSql}
   ), candidates AS (
     SELECT p.id,m.amount_minor,m.direction,
       CASE WHEN p.estimated AND m.date_only THEN
@@ -132,7 +135,7 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
     SUM(CASE WHEN uncertain THEN 1 ELSE 0 END) uncertain_count
   FROM candidates GROUP BY id`;
  const bounds=[owner,rangeStart,rangeEnd] as const;
- const rows=await db.prepare(query).bind(JSON.stringify(windows),...bounds,...bounds,...bounds,...bounds).all<Flow>();
+ const rows=await db.prepare(query).bind(JSON.stringify(windows),...bounds,...bounds,...bounds,...bounds,...(transferTable?[...bounds,...bounds]:[])).all<Flow>();
  return new Map(rows.results.map(row=>[row.id,row]));
 }
 type VerifiedBalance = {
