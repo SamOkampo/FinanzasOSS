@@ -286,15 +286,57 @@ export const HAPI_JS = String.raw`
     }catch(error){status.textContent=error.message;}
     finally{busy=false;button.disabled=false;}
   });
-  function readPdf(file,kind){
+  function readPdfWorker(payload){
     return new Promise(resolve=>{
-      const worker=new Worker("/statement-pdf-worker.js?v=hapi-3");
+      let worker;
+      try{worker=new Worker("/statement-pdf-worker.js?v=hapi-4");}catch{resolve(null);return;}
       const timeout=setTimeout(()=>done(null),20000);
       function done(result){clearTimeout(timeout);worker.terminate();resolve(result);}
       worker.onmessage=event=>done(event.data);
       worker.onerror=()=>done(null);
-      worker.postMessage({file,kind});
+      worker.postMessage(payload);
     });
+  }
+  async function readAlignedHapi(file){
+    if(!file||file.size<5||file.size>4000000||!file.name.toLowerCase().endsWith(".pdf"))return null;
+    let loading=null,timer=null;
+    const extract=async()=>{
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.10");
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.10";
+      loading=engine.getDocument({data:new Uint8Array(await file.arrayBuffer()),useWasm:false,useWorkerFetch:false,
+        disableFontFace:true,useSystemFonts:true,enableXfa:false,isEvalSupported:false,verbosity:0});
+      const doc=await loading.promise;
+      if(doc.numPages>20)return null;
+      const pages=[];let size=0;
+      for(let n=1;n<=doc.numPages;n++){
+        const page=await doc.getPage(n),view=page.getViewport({scale:1}),data=await page.getTextContent();
+        const groups=[];
+        for(const item of data.items){
+          if(!("str" in item)||!item.str.trim())continue;
+          const t=engine.Util.transform(view.transform,item.transform);
+          // Exclude vertical side headings; use the page's actual rotation.
+          if(Math.abs(t[0])<Math.abs(t[1]))continue;
+          let group=groups.find(g=>Math.abs(g.y-t[5])<=2);
+          if(!group){group={y:t[5],items:[]};groups.push(group);}
+          group.items.push({x:t[4],text:item.str});
+        }
+        const text=groups.sort((a,b)=>a.y-b.y).map(g=>g.items.sort((a,b)=>a.x-b.x).map(x=>x.text).join(" ")).join("\n");
+        size+=text.length;if(size>500000)return null;pages.push(text);page.cleanup();
+      }
+      return await readPdfWorker({kind:"hapi-text",text:pages.join("\n")});
+    };
+    try{return await Promise.race([extract(),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),25000);})]);}
+    catch{return null;}
+    finally{clearTimeout(timer);if(loading)void loading.destroy().catch(()=>{});}
+  }
+  async function readPdf(file,kind){
+    // PDF.js handles rotated Apex documents whose text order LibPDF can corrupt.
+    // Both paths run entirely on the device; only the confirmed snapshot is saved.
+    if(kind==="hapi"){
+      const aligned=await readAlignedHapi(file);
+      if(aligned?.snapshot)return aligned;
+    }
+    return await readPdfWorker({file,kind});
   }
   const activityPanel=node("activity");
   if(activityPanel?.dataset.hapiActivity==="true")setupActivity();
