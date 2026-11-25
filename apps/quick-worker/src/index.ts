@@ -1,3 +1,5 @@
+import { saveOwnTransfer } from "./own-transfer-v42.js";
+import { notifyOwnTransfer } from "./push.js";
 import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js";
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
@@ -376,6 +378,12 @@ export async function handleQuickRequest(
     return respond({ error: "Not found" }, 404);
   }
   // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
+  if (pathname === "/api/quick/shortcut/transfer") {
+    try {
+      const owner=await authenticatedShortcutOwner(request,env,ctx);
+      return await notifyOwnTransfer(await saveOwnTransfer(env.DB,owner,await parseShortcutJson(request,"income")),env,ctx,owner);
+    } catch(error) { return shortcutFailure(error,"income"); }
+  }
   if (pathname === "/api/quick/shortcut/expense" || pathname === "/api/quick/shortcut/income") {
     const flow = pathname.endsWith("/income") ? "income" : "expense";
     try {
