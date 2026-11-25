@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { classifyQuickEconomicMovement } from "../dist/apps/quick-worker/src/economic-review.js";
+import { classifyQuickEconomicMovement, quickEconomicGroupSql } from "../dist/apps/quick-worker/src/economic-review.js";
 import { dashboardOverview } from "../dist/apps/quick-worker/src/dashboard-data.js";
 import { readBudgets } from "../dist/apps/quick-worker/src/spending-limits.js";
 import { categoryReview, ruleCategory } from "../dist/apps/quick-worker/src/categorization.js";
@@ -71,4 +71,23 @@ assert.equal(byGroup.investment_flow,"80000.00");
 assert.ok(review.entries.find(x=>x.id==="a3").economicNeedsReview);
 assert.equal(review.entries.find(x=>x.id==="a5").economicGroup,"expense");
 assert.ok(!review.entries.some(x=>x.id==="b1"));
+// v42.2: test identical classification for SQL reports, categories and budgets.
+const matrix=[
+ ["PAGO CRÉDITO","bank_transfer","debt_payment"],
+ ["Abono al crédito","bank_transfer","debt_payment"],
+ ["Pago tarjeta de crédito Nu","bank_transfer","debt_payment"],
+ ["Le pagué una deuda","bank_transfer","debt_payment"],
+ ["Pasé dinero a mi cuenta","bank_transfer","internal_transfer"],
+ ["Le pagué a un tercero","bank_transfer","review"],
+ ["Transferencia de prueba","bank_transfer","review"],
+ ["Transferencia de prueba","debit_card","expense"],
+ ["Transferencias múltiples","bank_transfer","expense"],
+ ["Compra con tarjeta de crédito","credit_card","expense"],
+];
+const projection=sql.prepare("SELECT "+quickEconomicGroupSql()+" AS economic_group FROM (SELECT ? merchant,? payment_method,'purchase' kind) m CROSS JOIN (SELECT NULL category,NULL subcategory) c CROSS JOIN (SELECT NULL category,NULL subcategory,NULL confidence,NULL needs_review) a");
+for(const [merchant,method,expected] of matrix){
+ assert.equal(kind(merchant,method),expected,merchant+" JS");
+ assert.equal(projection.get(merchant,method).economic_group,expected,merchant+" SQL");
+}
+console.log("v42.2 debt/transfer classification parity matrix passed");
 console.log("quick economic classification: debt, pending transfers, manual overrides, tenant isolation OK");

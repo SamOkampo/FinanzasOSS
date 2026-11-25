@@ -1,5 +1,5 @@
 import createQpdf, { type QpdfInstance } from "@neslinesli93/qpdf-wasm";
-import {readHapiActivityPdf,readHapiPdf} from "./hapi-statement-reader.js";
+import {readHapiActivityPdf,readHapiPdf,parseHapiReport} from "./hapi-statement-reader.js";
 import {readStatementPdf} from "./statement-pdf-layout.js";
 import {normalizeCOP} from "./statement-document-bridge-v41.js";
 
@@ -65,8 +65,16 @@ export async function openStatementPdf(file: File, password: string, wasmUrl: st
 }
 
 if (typeof self !== "undefined") {
-  self.onmessage = async (event: MessageEvent<{ file: File; password: string; enableVision?: boolean; kind?: "hapi" | "hapi-activity" }>) => {
+  self.onmessage = async (event: MessageEvent<{ file: File; password: string; enableVision?: boolean; kind?: "hapi" | "hapi-activity" | "hapi-text"; text?: string }>) => {
     const { file, password, enableVision, kind } = event.data;
+    if(kind==="hapi-text"){
+      // This is a browser worker, not a network endpoint. Text stays local.
+      try{
+        const text=event.data.text;
+        self.postMessage({snapshot:typeof text==="string"&&text.length<=500000?parseHapiReport(text):null});
+      }catch{self.postMessage({snapshot:null});}
+      return;
+    }
     if(kind==="hapi-activity"){
       self.postMessage({activity:await readHapiActivityPdf(file)});
       return;

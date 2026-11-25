@@ -25,23 +25,23 @@ self.addEventListener("push", (event) => {
   let receipt=message,detail=null;
   try{
     const parsed=JSON.parse(message);
-    if(parsed&&(parsed.kind==="expense"||parsed.kind==="income")&&
+    if(parsed&&(parsed.kind==="expense"||parsed.kind==="income"||parsed.kind==="transfer")&&
        Number.isSafeInteger(parsed.amountMinor)&&parsed.amountMinor>0&&
        typeof parsed.concept==="string"&&parsed.concept.trim().length>0&&
        parsed.concept.length<=120){
       receipt=parsed.kind;detail=parsed;
     }
   }catch{ /* Legacy or empty push. */ }
-  const movement=receipt==="expense"||receipt==="income";
+  const movement=receipt==="expense"||receipt==="income"||receipt==="transfer";
   const concept=detail?detail.concept.trim().replace(/\\s+/g," "):"";
   const preview=concept.length>48?concept.slice(0,47).trimEnd()+"…":concept;
   const body=detail?
     new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",
       minimumFractionDigits:0,maximumFractionDigits:2}).format(detail.amountMinor/100)+" · "+preview:
-    receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":
+    receipt==="expense"?"Gasto registrado.":receipt==="income"?"Ingreso registrado.":receipt==="transfer"?"Transferencia registrada.":
     receipt==="test"?"Aviso de prueba de FinanzasOSS.":
       "Revisa los pendientes de tu perfil en FinanzasOSS.";
-  const title=detail?(receipt==="expense"?"Gasto registrado":"Ingreso registrado"):"FinanzasOSS";
+  const title=detail?(receipt==="expense"?"Gasto registrado":receipt==="transfer"?"Transferencia registrada":"Ingreso registrado"):"FinanzasOSS";
   event.waitUntil(self.registration.showNotification(title, {
     body,
     icon:"/dashboard-icon-180.png",

@@ -1,0 +1,32 @@
+-- v42.2: historical eligibility matches COP bank/cash balance calculation.
+DROP VIEW IF EXISTS quick_v42_duplicate_candidates;
+DROP VIEW IF EXISTS quick_v42_reconciliation_history;
+DROP VIEW IF EXISTS quick_v42_reconciliation_movements;
+CREATE VIEW quick_v42_reconciliation_movements AS
+SELECT owner_id,id,'shortcut' AS source,CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END AS bank_label,occurred_at,-amount_minor AS signed_minor,merchant AS concept,kind,CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END AS account_scope,0 AS estimate_only
+FROM quick_shortcut_expenses WHERE deleted_at IS NULL AND currency='COP' AND kind='purchase' AND payment_method IN ('debit_card','bank_transfer','digital_wallet','cash') AND (bank_label IS NOT NULL OR payment_method='cash')
+UNION ALL SELECT owner_id,id,'manual',CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END,occurred_at,-amount_minor,merchant,kind,CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END,(kind<>'purchase')
+FROM quick_manual_entries WHERE deleted_at IS NULL AND currency='COP' AND payment_method IN ('debit_card','bank_transfer','digital_wallet','cash') AND (bank_label IS NOT NULL OR payment_method='cash')
+UNION ALL SELECT owner_id,id,'statement_credit',bank_label,occurred_at,amount_minor,merchant,kind,'deposit',0 FROM quick_statement_credits WHERE currency='COP'
+UNION ALL SELECT owner_id,id,'income',CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END,occurred_at,amount_minor,concept,income_category,CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END,0
+FROM quick_income_entries WHERE currency='COP' AND payment_method IN ('bank_transfer','digital_wallet','cash') AND (bank_label IS NOT NULL OR payment_method='cash')
+UNION ALL SELECT l.owner_id,l.id,'own_transfer',l.bank_label,l.occurred_at,l.signed_minor,t.from_bank_label || ' → ' || t.to_bank_label,'transfer',CASE WHEN lower(trim(l.bank_label))='efectivo' THEN 'cash' ELSE 'deposit' END,0 FROM quick_v42_own_transfer_legs l JOIN quick_v42_own_transfers t ON t.id=l.id AND t.owner_id=l.owner_id;
+CREATE VIEW quick_v42_reconciliation_history AS
+WITH ordered AS (SELECT s.*,a.bank_label,a.account_type,LAG(s.amount_minor) OVER (PARTITION BY s.owner_id,s.account_id ORDER BY s.as_of) AS previous_minor,LAG(s.as_of) OVER (PARTITION BY s.owner_id,s.account_id ORDER BY s.as_of) AS previous_as_of FROM quick_balance_snapshots s JOIN quick_balance_accounts a ON a.id=s.account_id AND a.owner_id=s.owner_id WHERE a.account_type='deposit' OR (a.account_type='cash' AND lower(trim(a.bank_label))='efectivo')),
+flows AS (SELECT o.*,COALESCE((SELECT SUM(m.signed_minor) FROM quick_v42_reconciliation_movements m WHERE m.owner_id=o.owner_id AND lower(trim(m.bank_label))=lower(trim(o.bank_label)) AND m.account_scope=o.account_type AND m.occurred_at>o.previous_as_of AND m.occurred_at<=o.as_of AND m.estimate_only=0),0) AS net_minor FROM ordered o)
+SELECT owner_id,account_id,bank_label,id AS snapshot_id,as_of,previous_as_of,previous_minor,amount_minor AS verified_minor,CASE WHEN previous_as_of IS NOT NULL THEN net_minor END AS net_minor,CASE WHEN previous_as_of IS NOT NULL THEN previous_minor+net_minor END AS calculated_minor,CASE WHEN previous_as_of IS NOT NULL THEN amount_minor-previous_minor-net_minor END AS difference_minor,CASE WHEN previous_as_of IS NULL THEN 'baseline' WHEN amount_minor=previous_minor+net_minor THEN 'balanced' ELSE 'review_required' END AS status FROM flows;
+-- Duplicate review is separate from deposit reconciliation: card purchases
+-- must remain reviewable even when they do not affect a deposit balance.
+CREATE VIEW quick_v42_duplicate_candidates AS
+WITH movements AS (
+ SELECT owner_id,id,source,bank_label,occurred_at,signed_minor,concept,account_scope FROM quick_v42_reconciliation_movements
+ UNION ALL SELECT owner_id,id,'shortcut',bank_label,occurred_at,-amount_minor,merchant,'credit'
+ FROM quick_shortcut_expenses WHERE deleted_at IS NULL AND currency='COP' AND payment_method='credit_card' AND bank_label IS NOT NULL
+ UNION ALL SELECT owner_id,id,'manual',bank_label,occurred_at,-amount_minor,merchant,'credit'
+ FROM quick_manual_entries WHERE deleted_at IS NULL AND currency='COP' AND payment_method='credit_card' AND bank_label IS NOT NULL
+)
+SELECT a.owner_id,a.bank_label,a.id AS first_id,a.source AS first_source,b.id AS second_id,b.source AS second_source,
+ a.signed_minor,a.concept,a.occurred_at AS first_at,b.occurred_at AS second_at
+FROM movements a JOIN movements b ON a.owner_id=b.owner_id AND lower(trim(a.bank_label))=lower(trim(b.bank_label))
+ AND a.account_scope=b.account_scope AND a.signed_minor=b.signed_minor AND lower(trim(a.concept))=lower(trim(b.concept))
+ AND abs(julianday(a.occurred_at)-julianday(b.occurred_at))<=1 AND (a.source||':'||a.id)<(b.source||':'||b.id);

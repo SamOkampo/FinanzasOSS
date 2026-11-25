@@ -531,6 +531,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     if(tableHelp)tableHelp.hidden=true;
     const task=new AbortController();
     visionReviewTask=task;
+    const reviewTimer=setTimeout(()=>{if(visionReviewTask===task){announce(visionReviewStatus,"La conciliación tardó demasiado. Puedes reintentar sin guardar movimientos.",true);task.abort();}},30000);
     updateVision();
     const input={
       rows:selected.map(row=>({
@@ -556,6 +557,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     }catch(error){
       if(!task.signal.aborted)announce(visionReviewStatus,error.message||"No se pudo preparar la conciliación.",true);
     }finally{
+      clearTimeout(reviewTimer);
       if(visionReviewTask===task){visionReviewTask=null;updateVision();}
     }
   });
@@ -565,6 +567,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     reset();
     const task=new AbortController();
     analysisTask=task;
+    const analysisTimer=setTimeout(()=>{if(analysisTask===task){announce(feedback,"El análisis excedió el tiempo de espera. Reintenta o utiliza la lectura local; no se guardaron movimientos.",true);task.abort();}},90000);
     updateButton();
     announce(feedback,"Analizando el extracto…");
     try{
@@ -632,6 +635,7 @@ export const DOCUMENT_INSPECT_JS = String.raw`
     }catch(e){
       if(!task.signal.aborted)announce(feedback,e instanceof Error?e.message:"No se pudo revisar el documento.",true);
     }finally{
+      clearTimeout(analysisTimer);
       if(analysisTask===task){analysisTask=null;updateButton();}
     }
   });

@@ -1,3 +1,5 @@
+import { saveOwnTransfer, changeOwnTransfer } from "./own-transfer-v42.js";
+import { notifyOwnTransfer } from "./push.js";
 import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js";
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
 import { QUICK_HTML, QUICK_CSS, QUICK_JS } from "./quick-ui.js";
@@ -376,6 +378,12 @@ export async function handleQuickRequest(
     return respond({ error: "Not found" }, 404);
   }
   // Separate bearer+Cloudflare Access service authentication, never a browser cookie.
+  if (pathname === "/api/quick/shortcut/transfer") {
+    try {
+      const owner=await authenticatedShortcutOwner(request,env,ctx);
+      return await notifyOwnTransfer(await saveOwnTransfer(env.DB,owner,await parseShortcutJson(request,"income")),env,ctx,owner);
+    } catch(error) { return shortcutFailure(error,"income"); }
+  }
   if (pathname === "/api/quick/shortcut/expense" || pathname === "/api/quick/shortcut/income") {
     const flow = pathname.endsWith("/income") ? "income" : "expense";
     try {
@@ -541,6 +549,7 @@ export async function handleQuickRequest(
         await saveIncome(env.DB,owner,data,true),env,ctx,owner,"income");
       if (pathname === "/api/quick/balances/verify") return await saveVerifiedBalance(env.DB,owner,data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/transfer/change") return await changeOwnTransfer(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
@@ -613,6 +622,11 @@ export async function handleQuickRequest(
        if (pathname === "/api/quick/accounts") return await listAccounts(env.DB, owner);
       if (pathname === "/api/quick/entries") return await listEntries(env.DB, owner);
       if (pathname === "/api/quick/dashboard/overview") return await dashboardOverview(env.DB, owner);
+      if (pathname === "/api/quick/v42/reconcile/summary") {
+        const history = await env.DB.prepare("SELECT bank_label, snapshot_id, as_of, previous_as_of, previous_minor, verified_minor, net_minor, calculated_minor, difference_minor, status FROM quick_v42_reconciliation_history WHERE owner_id=? ORDER BY as_of DESC LIMIT 100").bind(owner).all<Record<string, unknown>>();
+        const candidates = await env.DB.prepare("SELECT bank_label, first_id, first_source, second_id, second_source, signed_minor, concept, first_at, second_at FROM quick_v42_duplicate_candidates WHERE owner_id=? ORDER BY first_at DESC LIMIT 100").bind(owner).all<Record<string, unknown>>();
+        return respond({history:history.results,duplicateCandidates:candidates.results,source:"user_verified",note:"Revisión orientativa; los posibles duplicados no se eliminan automáticamente."});
+      }
       if (pathname === "/api/quick/balances") return await verifiedBalances(env.DB,owner);
       if (pathname === "/api/quick/categories") return await categoryReview(env.DB, owner);
       if (pathname === "/api/quick/categories/automation/status")

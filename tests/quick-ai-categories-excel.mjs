@@ -116,4 +116,19 @@ assert.match(page,/id="categories-list"/);assert.match(page,/Exportar Excel/);
 const js=await call("/insights.js");
 assert.equal(js.status,200);const code=await js.text();assert.doesNotThrow(()=>new Function(code));
 console.log("Qwen consent/redaction/quotas, isolated categories and valid owner-specific XLSX: OK");
+
+ // v42.2: the export includes all active movements but summarizes only COP expenses.
+ sql.exec(readFileSync(new URL("../docs/quick/v42-own-transfers.sql",import.meta.url),"utf8"));
+ sql.prepare("INSERT INTO quick_income_entries(id,owner_id,client_entry_id,amount_minor,occurred_at,concept,payment_method) VALUES(?,?,?,?,?,'AUDIT CASH INCOME','cash')").run(crypto.randomUUID(),ownerA,"export-audit-income-001",1000000,"2026-10-28T02:15:00.000Z");
+ sql.prepare("INSERT INTO quick_v42_own_transfers(id,owner_id,client_entry_id,amount_minor,from_bank_label,to_bank_label,occurred_at) VALUES(?,?,?,?,?,?,?)").run(crypto.randomUUID(),ownerA,"export-audit-transfer-001",123400,"Bancolombia","Daviplata","2026-10-28T17:00:00.000Z");
+ const allA=await zippedSheets(ownerA),allB=await zippedSheets(ownerB);
+ const moves=allA["xl/worksheets/sheet1.xml"],sum=allA["xl/worksheets/sheet2.xml"];
+ assert.match(moves,/AUDIT CASH INCOME/);assert.match(moves,/Bancolombia → Daviplata/);
+ assert.match(moves,/21:15/);assert.match(moves,/internal_transfer/);
+ assert.match(sum,/<v>30000<\/v>/);assert.doesNotMatch(sum,/<v>(4500|1234|10000)<\/v>/);
+ assert.doesNotMatch(JSON.stringify(allB),/AUDIT CASH INCOME|Bancolombia → Daviplata/);
+ const ov=await (await call("/api/quick/dashboard/overview")).json();
+ assert.equal(ov.incomeMinor,"1000000");assert.equal(ov.daily.reduce((a,x)=>a+Number(x.minor),0),3000000);
+ console.log("v42.2 XLSX movement completeness and economic parity passed");
+
 sql.close();

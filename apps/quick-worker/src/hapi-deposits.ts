@@ -154,7 +154,7 @@ export async function listHapiPortfolio(db:QuickD1,owner:string):Promise<Respons
     history:history.map(({asOf,cashMinor,marketValueMinor,totalMinor})=>({asOf,cashMinor,marketValueMinor,totalMinor}))});
 }
 export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Promise<Response>{
-  const data=input(raw,["asOf","cashUsd","positions","fx","confirmed"]);
+  const data=input(raw,["asOf","cashUsd","positions","fx","printedTotalUsd","confirmed"]);
   const asOf=date(data.asOf);
   const cashText=text(data.cashUsd,"el efectivo neto en USD",20);
   const cashMinor=cashText.startsWith("-")?-minor(cashText.slice(1),100000000000,true):minor(cashText,100000000000,true);
@@ -195,6 +195,15 @@ export async function saveHapiPortfolio(db:QuickD1,owner:string,raw:unknown):Pro
       ...(raw.assetType===undefined?{}:{assetType:raw.assetType}),
       ...(raw.costBasisUsd===undefined?{}:{costBasisMinor:String(minor(raw.costBasisUsd,100000000000,true))})};
   });
+  if(data.printedTotalUsd!==undefined){
+    const printed=text(data.printedTotalUsd,"el total impreso",20);
+    if(!/^-?(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(printed))return bad("El total impreso no es válido.");
+    const negative=printed.startsWith("-");
+    const [whole,dec=""]=printed.replace(/^-/,"").split(".");
+    const expected=(BigInt(whole!)*100n+BigInt(dec.padEnd(2,"0")))*(negative?-1n:1n);
+    const actual=positions.reduce((sum,p)=>sum+BigInt(p.marketValueMinor),BigInt(cashMinor));
+    if(expected!==actual)return bad("El efectivo y las posiciones no cuadran con el total impreso.");
+  }
   positions.sort((a,b)=>a.symbol.localeCompare(b.symbol,"en"));
   const encoded=JSON.stringify(positions);
   const saved=await db.prepare("INSERT INTO quick_hapi_portfolio_snapshots(id,owner_id,as_of,cash_minor,positions_json,fx_cop_per_usd,fx_source,fx_observed_at) "+

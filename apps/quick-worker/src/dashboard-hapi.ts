@@ -25,6 +25,8 @@ export const HAPI_HTML = `
     <form id="hapi-snapshot" class="assistant-fields" autocomplete="off">
       <label>Fecha del reporte <input id="hapi-asof" type="date" required></label>
       <label>Efectivo neto en USD <input id="hapi-cash" inputmode="decimal" required></label>
+      <label>Total del reporte en USD (verificación independiente) <input id="hapi-printed-total" inputmode="decimal" required></label>
+      <p id="hapi-total-check" class="budget-note" aria-live="polite"></p>
       <div id="hapi-position-fields" class="assistant-fields"></div>
       <button id="hapi-add-position" class="soft-button" type="button">Añadir posición</button>
       <details>
@@ -101,16 +103,22 @@ export const HAPI_JS = String.raw`
   if(!panel||panel.dataset.hapiEnabled!=="true")return;
   panel.hidden=false;
   const status=node("status"),origin=node("origin"),history=node("history"),out=node("out"),credit=node("credit");
-  let requestKey=crypto.randomUUID(),selected=null,busy=false,loading=false;
+  let requestKey=crypto.randomUUID(),selected=null,busy=false,loading=false,verifiedPdfTotal=null;
   const money=(minor,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(minor)/100);
   const amount=value=>value.trim().replace(",",".");
   async function request(path,body){
-    const response=await fetch("/api/quick/v41/hapi/"+path,{
-      credentials:"same-origin",cache:"no-store",...(body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(data.error||"No se pudo consultar Hapi.");
-    return data;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    try{
+      const response=await fetch("/api/quick/v41/hapi/"+path,{
+        credentials:"same-origin",cache:"no-store",signal:controller.signal,...(body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(data.error||"No se pudo consultar Hapi.");
+      return data;
+    }catch(error){
+      if(controller.signal.aborted)throw Error(body?"No se pudo confirmar la respuesta. Actualiza el portafolio antes de intentar guardar de nuevo.":"La consulta de Hapi tardó demasiado. Actualiza para reintentar.");
+      throw error;
+    }finally{clearTimeout(timer);}
   }
   function manualFields(){
     const manual=!origin.value;
@@ -118,6 +126,19 @@ export const HAPI_JS = String.raw`
     for(const input of node("manual").querySelectorAll("input"))input.disabled=!manual;
   }
   const positionFields=node("position-fields");
+  function usdMinor(raw){
+    const v=amount(raw);if(!/^-?(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/.test(v))return null;
+    const sign=v.startsWith("-")?-1n:1n;const [whole,dec=""]=v.replace(/^-/,"").split(".");return sign*(BigInt(whole)*100n+BigInt(dec.padEnd(2,"0")));
+  }
+  function checkTotal(){
+    const cash=usdMinor(node("cash").value),printed=usdMinor(node("printed-total").value);
+    const values=[...positionFields.querySelectorAll('input[name="marketValueUsd"]')].map(x=>usdMinor(x.value));
+    if(cash===null||printed===null||values.some(x=>x===null||x<0n)){node("total-check").textContent="Completa el efectivo, posiciones y total impreso para verificar el corte.";return false;}
+    const calculated=values.reduce((a,b)=>a+b,cash);
+    const valid=calculated===printed&&(verifiedPdfTotal===null||printed===verifiedPdfTotal);
+    node("total-check").textContent="Total calculado: "+money(calculated,"USD")+" · Diferencia: "+money(calculated-printed,"USD")+(valid?" · Cuadre exacto.":" · Revisa los valores contra el PDF.")+(verifiedPdfTotal!==null&&printed!==verifiedPdfTotal?" · El total impreso no coincide con el PDF leído.":"");return valid;
+  }
+  node("snapshot").addEventListener("input",event=>{if(event.target!==node("snapshot-confirm")){node("snapshot-confirm").checked=false;checkTotal();}});
   function addPosition(position){
     if(positionFields.children.length>=60)return;
     const field=document.createElement("fieldset");
@@ -141,7 +162,7 @@ export const HAPI_JS = String.raw`
     typeLabel.append(type);field.append(typeLabel);
     const remove=document.createElement("button");
     remove.className="soft-button";remove.type="button";remove.textContent="Quitar posición";
-    remove.addEventListener("click",()=>field.remove());
+    remove.addEventListener("click",()=>{field.remove();node("snapshot-confirm").checked=false;checkTotal();});
     field.append(remove);positionFields.append(field);
     if(!position)field.querySelector("input").focus();
   }
@@ -271,15 +292,60 @@ export const HAPI_JS = String.raw`
     }catch(error){status.textContent=error.message;}
     finally{busy=false;button.disabled=false;}
   });
-  function readPdf(file,kind){
+  function readPdfWorker(payload){
     return new Promise(resolve=>{
-      const worker=new Worker("/statement-pdf-worker.js?v=hapi-2");
+      let worker;
+      try{worker=new Worker("/statement-pdf-worker.js?v=hapi-4");}catch{resolve(null);return;}
       const timeout=setTimeout(()=>done(null),20000);
       function done(result){clearTimeout(timeout);worker.terminate();resolve(result);}
       worker.onmessage=event=>done(event.data);
       worker.onerror=()=>done(null);
-      worker.postMessage({file,kind});
+      worker.postMessage(payload);
     });
+  }
+  async function readAlignedHapi(file){
+    if(!file||file.size<5||file.size>4000000||!file.name.toLowerCase().endsWith(".pdf"))return null;
+    let loading=null,timer=null,cancelled=false;
+    const extract=async()=>{
+      const engine=await import("/statement-pdf-renderer.mjs?v=41.10");
+      engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.10";
+      if(cancelled)return null;
+      loading=engine.getDocument({data:new Uint8Array(await file.arrayBuffer()),useWasm:false,useWorkerFetch:false,
+        disableFontFace:true,useSystemFonts:true,enableXfa:false,isEvalSupported:false,verbosity:0});
+      const doc=await loading.promise;
+      if(cancelled||doc.numPages>20)return null;
+      const pages=[];let size=0;
+      for(let n=1;n<=doc.numPages;n++){
+        if(cancelled)return null;
+        const page=await doc.getPage(n),view=page.getViewport({scale:1}),data=await page.getTextContent();
+        if(cancelled){page.cleanup();return null;}
+        const groups=[];
+        for(const item of data.items){
+          if(!("str" in item)||!item.str.trim())continue;
+          const t=engine.Util.transform(view.transform,item.transform);
+          // Exclude vertical side headings; use the page's actual rotation.
+          if(Math.abs(t[0])<Math.abs(t[1]))continue;
+          let group=groups.find(g=>Math.abs(g.y-t[5])<=2);
+          if(!group){group={y:t[5],items:[]};groups.push(group);}
+          group.items.push({x:t[4],text:item.str});
+        }
+        const text=groups.sort((a,b)=>a.y-b.y).map(g=>g.items.sort((a,b)=>a.x-b.x).map(x=>x.text).join(" ")).join("\n");
+        size+=text.length;if(size>500000)return null;pages.push(text);page.cleanup();
+      }
+      return await readPdfWorker({kind:"hapi-text",text:pages.join("\n")});
+    };
+    try{return await Promise.race([extract(),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),25000);})]);}
+    catch{return null;}
+    finally{cancelled=true;clearTimeout(timer);if(loading)void loading.destroy().catch(()=>{});}
+  }
+  async function readPdf(file,kind){
+    // PDF.js handles rotated Apex documents whose text order LibPDF can corrupt.
+    // Both paths run entirely on the device; only the confirmed snapshot is saved.
+    if(kind==="hapi"){
+      const aligned=await readAlignedHapi(file);
+      if(aligned?.snapshot)return aligned;
+    }
+    return await readPdfWorker({file,kind});
   }
   const activityPanel=node("activity");
   if(activityPanel?.dataset.hapiActivity==="true")setupActivity();
@@ -438,7 +504,8 @@ export const HAPI_JS = String.raw`
       if(activityPanel.open)loadActivity().catch(error=>{notice.textContent=error.message;});
     });
   }
-  node("add-position").addEventListener("click",()=>addPosition());
+  node("add-position").addEventListener("click",()=>{addPosition();node("snapshot-confirm").checked=false;checkTotal();});
+  node("pdf-file").addEventListener("change",()=>{node("snapshot-confirm").checked=false;});
   node("pdf").addEventListener("submit",async event=>{
     event.preventDefault();
     if(busy)return;
@@ -449,18 +516,20 @@ export const HAPI_JS = String.raw`
     notice.textContent="Leyendo el reporte…";
     try{
       const snapshot=(await readPdf(file,"hapi"))?.snapshot;
-      if(!snapshot)throw Error("No se pudo verificar el corte de este PDF. Usa el reporte digital sin clave o ingresa los valores manualmente.");
+      if(!snapshot)throw Error("No se pudo cuadrar automáticamente el extracto. Revisa si está protegido, escaneado o tiene un formato distinto; puedes completar la revisión manual usando el total impreso.");
       node("asof").value=snapshot.asOf;node("cash").value=snapshot.cashUsd;
+      node("printed-total").value=snapshot.totalUsd;verifiedPdfTotal=usdMinor(snapshot.totalUsd);
       positionFields.replaceChildren();snapshot.positions.forEach(addPosition);
       node("snapshot-confirm").checked=false;
       form.reset();
-      notice.textContent="Corte preparado. Revisa el efectivo y las posiciones antes de guardar.";
+      checkTotal();notice.textContent="Corte preparado · "+snapshot.positions.length+" posiciones. Revisa el total impreso, el efectivo y las posiciones antes de guardar.";
     }catch(error){notice.textContent=error.message;}
     finally{busy=false;button.disabled=false;}
   });
   node("snapshot").addEventListener("submit",async event=>{
     event.preventDefault();
     if(busy||!node("snapshot-confirm").checked)return;
+    if(!checkTotal()){node("snapshot-confirm").checked=false;status.textContent="No se guardó: el corte no cuadra con el total impreso.";return;}
     busy=true;
     const form=event.currentTarget,button=form.querySelector("button[type=submit]");
     button.disabled=true;
@@ -470,8 +539,8 @@ export const HAPI_JS = String.raw`
       const asOf=node("asof").value,rate=amount(node("fx-rate").value),source=node("fx-source").value.trim(),time=node("fx-time").value;
       if((rate||source||time)&&!(rate&&source&&time))throw Error("Completa la tasa, la fuente y la hora para mostrar el equivalente en COP.");
       const fx=rate?{copPerUsd:rate,source,observedAt:new Date(asOf+"T"+time+":00-05:00").toISOString()}:undefined;
-      const data=await request("portfolio",{asOf,cashUsd:amount(node("cash").value),positions,fx,confirmed:true});
-      form.reset();positionFields.replaceChildren();
+      const data=await request("portfolio",{asOf,cashUsd:amount(node("cash").value),positions,fx,printedTotalUsd:amount(node("printed-total").value),confirmed:true});
+      form.reset();positionFields.replaceChildren();verifiedPdfTotal=null;checkTotal();
       renderPortfolio(await request("portfolio"));
       status.textContent="Corte del "+data.asOf+" guardado.";
     }catch(error){status.textContent=error.message;}

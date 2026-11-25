@@ -69,30 +69,26 @@ export function classifyQuickEconomicMovement(m: QuickEconomicMovement): QuickEc
  * with owner_id, source and movement_id. Strings are static SQL literals.
  */
 export function quickEconomicGroupSql(): string {
-  const t="lower(trim(coalesce(m.merchant,'')))";
-  const debt="("+[
-    `${t} LIKE 'pago de pr_stamo%'`, `${t} LIKE 'pago del pr_stamo%'`,
-    `${t} LIKE 'pago de credito%'`, `${t} LIKE 'pago de cr_dito%'`,
-    `${t} LIKE 'pago de tarjeta de cr_dito%'`, `${t} LIKE 'pago de tarjeta de credito%'`,
-    `${t} LIKE 'abono a pr_stamo%'`, `${t} LIKE 'abono al pr_stamo%'`,
-    `${t} LIKE 'cuota de pr_stamo%'`, `${t} LIKE 'pague%pr_stamo%'`,
-    `(${t} LIKE '%devolv%' AND (${t} LIKE '%pr_stamo%' OR ${t} LIKE '%deuda%' OR ${t} LIKE '%prestado%'))`
-  ].join(" OR ")+")";
-  const own="("+[
-    `${t} LIKE '%entre mis cuentas%'`, `${t} LIKE '%a mi otra cuenta%'`,
-    `${t} LIKE '%de mi cuenta a mi%'`, `${t} LIKE '%a mi cuenta de%'`,
-    `${t} LIKE '%a mi plata%'`,
-    `${t} LIKE '%de mi bancolombia a plata%'`,
-    `${t} LIKE '%de mi bancolombia a mi plata%'`,
-    `${t} LIKE '%traspaso entre mis cuentas%'`
-  ].join(" OR ")+")";
-  const unclear="(m.payment_method='bank_transfer' AND ("+[
-    `${t} LIKE 'bre-b%'`, `${t} LIKE 'transferencia%'`,
-    `${t} LIKE 'transferi%'`, `${t} LIKE 'transferí%'`,
-    `${t} LIKE 'le transferi%'`, `${t} LIKE 'le transferí%'`,
-    `${t} LIKE 'envio de dinero%'`, `${t} LIKE 'envié dinero%'`,
-    `${t} LIKE 'paso plata%'`, `${t} LIKE 'le mande plata%'`
-  ].join(" OR ")+"))";
+  // SQLite lower() only folds ASCII. Normalize the Spanish characters before
+  // comparison so the SQL projection and interactive classifier agree.
+  const t=["á","é","í","ó","ú","Á","É","Í","Ó","Ú","ü","Ü","Ñ"].reduce((expr,ch,i)=>
+    "replace("+expr+",'"+ch+"','"+["a","e","i","o","u","a","e","i","o","u","u","u","ñ"][i]+"')",
+    "lower(trim(coalesce(m.merchant,'')))");
+  const like=(patterns:string[])=>"("+patterns.map(p=>t+" LIKE '"+p+"'").join(" OR ")+")";
+  const debt="("+like([
+    "pago prestamo%","pago de prestamo%","pago del prestamo%","pago credito%","pago de credito%","pago del credito%",
+    "pago tarjeta de credito%","pago de tarjeta de credito%","pago del tarjeta de credito%",
+    "abono prestamo%","abono a prestamo%","abono de prestamo%","abono al prestamo%",
+    "abono credito%","abono a credito%","abono de credito%","abono al credito%",
+    "cuota prestamo%","cuota de prestamo%","cuota del prestamo%",
+    "pague el prestamo%","pague un prestamo%"
+  ])+" OR ("+like(["%devolvi%","%devolucion%","%le pague%","%me prestaron%","%me habia prestado%"])+" AND "+like(["%prestamo%","%deuda%","%debia%","%me prest%","%lo prestado%"])+"))";
+  const own=like(["%entre mis cuentas%","%a mi otra cuenta%","%de mi cuenta a mi%","%a mi cuenta de%","%a mi plata%",
+    "%de mi bancolombia a plata%","%de mi bancolombia a mi plata%","%pase dinero a mi cuenta%","%paso dinero a mi cuenta%"]);
+  const unclear="(m.payment_method='bank_transfer' AND "+like([
+    "bre-b%","transferencia","transferencia %","transferi%","le transferi%","envio a dinero%","envio de dinero%",
+    "envie dinero%","paso plata%","le mande plata%","le pague a","le pague a %"
+  ])+")";
   const confident="(a.needs_review=0 AND a.confidence>=0.9)";
   return "CASE " +
     "WHEN m.kind='income' THEN 'income' " +
