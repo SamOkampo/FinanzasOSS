@@ -49,7 +49,7 @@ function parseApexHoldings(lines:string[],asOf:string){
 export function parseHapiReport(text:string) {
   if(!/\bhapi\b/i.test(text)||!(/\bapex clearing\b/i.test(text)))return null;
   const lines=text.split(/\r?\n/).map(line=>line.trim().replace(/[ \t]+/g," "));
-  const dateLine=lines.find(line=>/\bstatement period\b/i.test(line))??lines.find(line=>periodDate(line)!==null);
+  const dateLine=lines.find(line=>/\bstatement period\b/i.test(line)&&periodDate(line)!==null)??lines.find(line=>periodDate(line)!==null);
   const asOf=dateLine?periodDate(dateLine):null;
   if(asOf&&lines.some(l=>/^total equity holdings\b/i.test(l)))return parseApexHoldings(lines,asOf);
   const matched=lines.filter(line=>/^total priced portfolio\b/i.test(line)).slice(0,2);
