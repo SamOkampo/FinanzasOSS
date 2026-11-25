@@ -80,6 +80,32 @@ await assert.rejects(
  }),
  /categoría y subcategoría específicas/i);
 for(const script of [DASH_JS,INSIGHTS_JS,MOBILE_INPUT_JS])new Function(script);
+ // Run the actual dashboard network orchestration with deterministic fake requests.
+ const excerpt=DASH_JS.slice(DASH_JS.indexOf("  async function fetchJson("),DASH_JS.indexOf("  document.querySelectorAll",DASH_JS.indexOf("  async function loadHistory(")));
+ const nodes=new Map(), pending=[], renders=[], events=[];
+ const element=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,disabled:false,textContent:"",setAttribute(){}});return nodes.get(id);};
+ const make=()=>new Function("fetch","AbortController","setTimeout","clearTimeout","$","document","window","CustomEvent","renderDashboard","showHistory","state",
+   excerpt+"\nreturn {refresh,loadHistory,fetchJson};");
+ const state={history:[],page:0,hasMore:false,loadingHistory:false};
+ const timers=new Map();let nextTimer=0;
+ const api=make()((url,options)=>new Promise((resolve,reject)=>{
+   const req={url,options,resolve:data=>resolve({ok:true,status:200,json:async()=>data}),reject};
+   options.signal.addEventListener("abort",()=>reject(new Error("aborted")),{once:true});pending.push(req);
+ }),AbortController,(fn)=>{timers.set(++nextTimer,fn);return nextTimer;},id=>timers.delete(id),element,{dispatchEvent:e=>events.push(e)},{},class{constructor(type,options){this.type=type;this.detail=options.detail;}},
+ ()=>renders.push("overview"),()=>renders.push("history"),state);
+ const run=api.refresh();
+ assert.equal(pending.length,2,"overview and history should start together");
+ assert.ok(pending.every(p=>p.options.cache==="no-store"));
+ pending[1].resolve({truncated:false});pending[0].resolve({entries:[{id:"first"}],hasMore:true});await run;
+ assert.equal(state.history[0].id,"first");assert.equal(element("reload").disabled,false);
+ const old=api.loadHistory(),fresh=api.loadHistory(true);
+ assert.equal(pending[2].options.signal.aborted,true);
+ pending[3].resolve({entries:[{id:"fresh"}],hasMore:false});await Promise.all([old,fresh]);
+ assert.deepEqual(state.history,[{id:"fresh"}]);assert.equal(element("load-more").disabled,false);
+ assert.equal(timers.size,0);
+ const slow=api.fetchJson("/slow");for(const expire of [...timers.values()])expire();
+ await assert.rejects(slow,/tardó demasiado/);assert.equal(timers.size,0);
+ console.log("v42.3 parallel dashboard loading, superseded history cancellation and timeout recovery passed");
 assert.match(DASH_HTML,/category-spend-list/);
 assert.match(DASH_HTML,/mobile-input\.js/);
 assert.match(DASH_JS,/history-category-chip/);
