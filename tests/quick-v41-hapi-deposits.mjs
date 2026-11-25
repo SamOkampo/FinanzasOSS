@@ -82,6 +82,33 @@ await req("portfolio",{...snapshot,asOf:"2026-10-12",cashUsd:"0",positions:[]});
 assert.equal((await req("portfolio")).data.latest.id,cut.data.id);
 assert.deepEqual((await req("portfolio")).data.history.map(x=>x.asOf),["2026-10-13","2026-10-12"]);
 assert.equal((await req("portfolio",null,B)).data.latest,null);
+// Synthetic Apex layout with independently reconciled opening/closing totals.
+const apexText=[
+ "Apex Clearing Corporation", "HAPI", "October 1, 2026 - October 31, 2026",
+ "Cash account $0.00 $50.00", "NET ACCOUNT BALANCE 0.00 50.00",
+ "Securities 150.00 125.00", "TOTAL PRICED PORTFOLIO 150.00 125.00",
+ "Total Equity Holdings $150.00 $175.00",
+ "SYMBOL/ ACCOUNT MARKET LAST PERIOD'S EST. ANNUAL % OF TOTAL",
+ "DESCRIPTION CUSIP TYPE QUANTITY PRICE VALUE MARKET VALUE % CHANGE INCOME PORTFOLIO",
+ "* EXAMPLE FUND TESTA C 0.5 $100.00 $50.00 $60.00 -16 28.57%",
+ "EXAMPLE HOLDINGS TESTB C 1.25 60.00 75.00 90.00 -16 42.86%",
+ "Total Equities $125.00 $3 71.429%",
+ "Total Cash (Net Portfolio Balance) $50.00 28.571%",
+ "TOTAL PRICED PORTFOLIO $175.00 $3",
+].join("\n");
+const apex=parseHapiReport(apexText);
+assert.deepEqual(apex,{asOf:"2026-10-31",cashUsd:"50.00",totalUsd:"175.00",positions:[
+ {symbol:"TESTA",quantity:"0.5",marketValueUsd:"50.00"},
+ {symbol:"TESTB",quantity:"1.25",marketValueUsd:"75.00"}
+]});
+assert.equal(parseHapiReport(apexText.replace("75.00 90.00","75.01 90.00")),null);
+assert.equal(parseHapiReport(apexText.replace("TOTAL PRICED PORTFOLIO $175.00","TOTAL PRICED PORTFOLIO $125.00")),null);
+assert.equal(parseHapiReport(apexText.replace("Net Portfolio Balance) $50.00","Net Portfolio Balance) $51.00")),null);
+const apexPdf=PDF.create(),apexPage=apexPdf.addPage({size:"letter"});
+apexText.split("\n").forEach((row,index)=>apexPage.drawText(row,{x:25,y:765-index*20,fontSize:8}));
+assert.deepEqual(await readHapiPdf(new File([await apexPdf.save()],"synthetic-apex.pdf",{type:"application/pdf"})),apex);
+console.log("v42.2 Apex Clearing report: overview and holdings reconciliation passed");
+
 const reportText=[
   "Hapi · Apex Clearing", "Statement period: October 1, 2026 - October 31, 2026",
   "Cash Balance $15.00 $10.00", "Total Priced Portfolio $150.00 $210.00",
