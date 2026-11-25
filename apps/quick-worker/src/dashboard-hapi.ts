@@ -132,7 +132,7 @@ export const HAPI_JS = String.raw`
     const valid=calculated===printed&&(verifiedPdfTotal===null||printed===verifiedPdfTotal);
     node("total-check").textContent="Total calculado: "+money(calculated,"USD")+" · Diferencia: "+money(calculated-printed,"USD")+(valid?" · Cuadre exacto.":" · Revisa los valores contra el PDF.")+(verifiedPdfTotal!==null&&printed!==verifiedPdfTotal?" · El total impreso no coincide con el PDF leído.":"");return valid;
   }
-  node("snapshot").addEventListener("input",()=>{node("snapshot-confirm").checked=false;checkTotal();});
+  node("snapshot").addEventListener("input",event=>{if(event.target!==node("snapshot-confirm")){node("snapshot-confirm").checked=false;checkTotal();}});
   function addPosition(position){
     if(positionFields.children.length>=60)return;
     const field=document.createElement("fieldset");
@@ -488,7 +488,7 @@ export const HAPI_JS = String.raw`
       const asOf=node("asof").value,rate=amount(node("fx-rate").value),source=node("fx-source").value.trim(),time=node("fx-time").value;
       if((rate||source||time)&&!(rate&&source&&time))throw Error("Completa la tasa, la fuente y la hora para mostrar el equivalente en COP.");
       const fx=rate?{copPerUsd:rate,source,observedAt:new Date(asOf+"T"+time+":00-05:00").toISOString()}:undefined;
-      const data=await request("portfolio",{asOf,cashUsd:amount(node("cash").value),positions,fx,confirmed:true});
+      const data=await request("portfolio",{asOf,cashUsd:amount(node("cash").value),positions,fx,printedTotalUsd:amount(node("printed-total").value),confirmed:true});
       form.reset();positionFields.replaceChildren();verifiedPdfTotal=null;checkTotal();
       renderPortfolio(await request("portfolio"));
       status.textContent="Corte del "+data.asOf+" guardado.";
