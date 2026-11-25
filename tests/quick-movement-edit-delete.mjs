@@ -147,4 +147,43 @@ assert.equal(noBank.desc.children.length,3,"Classification stays visible even wi
 assert.equal(noBank.method.children[0].textContent,"Efectivo");
 assert.equal(noBank.method.children.length,1,"No bank row when bank is absent");
 console.log("Edit/delete: owner-scoped soft deletion, revisions, ledger totals, UI, CSRF passed");
+
+ // v42.1: real SQLite triggers + authenticated correction endpoint.
+ sql.exec(readFileSync(new URL("../docs/quick/v42-own-transfers.sql",import.meta.url),"utf8"));
+ sql.exec(readFileSync(new URL("../docs/quick/v421-own-transfer-corrections.sql",import.meta.url),"utf8"));
+ const {saveOwnTransfer}=await import("../dist/apps/quick-worker/src/own-transfer-v42.js");
+ const draft={clientEntryId:"transfer-test-0001",amount:"55",fromBankLabel:"Bancolombia",toBankLabel:"Daviplata"};
+ const created=await saveOwnTransfer(db,A,draft);assert.equal(created.status,201);
+ const transferId=(await created.json()).entryId;
+ const otherTransfer=await saveOwnTransfer(db,B,{...draft,amount:"23"});assert.equal(otherTransfer.status,201);
+ const correction="/api/quick/studio/transfer/change";
+ const editTransfer={operation:"edit",id:transferId,expectedRevision:0,confirmed:true,amount:"75.25",fromBankLabel:"Plata Pay",toBankLabel:"Bancolombia"};
+ const totals=()=>sql.prepare("SELECT bank_label,signed_minor FROM quick_v42_own_transfer_legs WHERE id=? ORDER BY signed_minor").all(transferId).map(x=>[x.bank_label,x.signed_minor]);
+ assert.deepEqual(totals(),[["Bancolombia",-5500],["Daviplata",5500]]);
+ assert.equal((await call(correction,"POST",editTransfer,owner(B))).status,409);
+ assert.equal((await call(correction,"POST",editTransfer,{})).status,401);
+ assert.equal((await call(correction,"POST",editTransfer,owner(A),{origin:"https://evil.example"})).status,403);
+ assert.equal((await call(correction,"POST",editTransfer,owner(A),{env:{...env,ALLOW_WRITES:"false"}})).status,503);
+ assert.equal((await call(correction,"POST",{...editTransfer,confirmed:false})).status,422);
+ assert.equal((await call(correction,"POST",{...editTransfer,toBankLabel:"Plata Pay"})).status,422);
+ assert.equal((await call(correction,"POST",{...editTransfer,amount:"0"})).status,422);
+ const updatedTransfer=await call(correction,"POST",editTransfer);assert.equal(updatedTransfer.status,200);assert.equal(updatedTransfer.data.saved,true);assert.equal(updatedTransfer.data.revision,1);
+ assert.deepEqual(totals(),[["Plata Pay",-7525],["Bancolombia",7525]]);
+ assert.equal((await call(correction,"POST",editTransfer)).status,409);
+ const revised=(await call("/api/quick/dashboard/movements")).data.entries.find(x=>x.id===transferId);
+ assert.equal(revised.revision,1);assert.equal(revised.merchant,"Plata Pay → Bancolombia");
+ assert.equal((await saveOwnTransfer(db,A,draft)).status,409);
+ const removeTransfer={operation:"delete",id:transferId,expectedRevision:1,confirmed:true};
+ assert.equal((await call(correction,"POST",{...removeTransfer,expectedRevision:0})).status,409);
+ assert.equal((await call(correction,"POST",removeTransfer,owner(B))).status,409);
+ const removedTransfer=await call(correction,"POST",removeTransfer);assert.equal(removedTransfer.status,200);assert.equal(removedTransfer.data.deleted,true);
+ assert.deepEqual(totals(),[]);
+ assert.equal((await call(correction,"POST",removeTransfer)).status,409);
+ assert.equal((await saveOwnTransfer(db,A,draft)).status,409);
+ assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM quick_v421_transfer_audit WHERE owner_id=? AND transfer_id=?").get(A,transferId).n,2);
+ assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM quick_v42_own_transfers WHERE owner_id=?").get(B).n,1);
+ assert.equal((await call("/api/quick/dashboard/movements")).data.entries.some(x=>x.id===transferId),false);
+ assert.equal(String((await call(overview)).data.daily.reduce((sum,x)=>sum+Number(x.minor),0)),"3500");
+ console.log("v42.1: transfer edit/delete, paired balances, owner isolation, stale revisions and replay prevention passed");
+
 sql.close();
