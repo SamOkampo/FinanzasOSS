@@ -52,6 +52,27 @@ assert.equal(monthly.top[0].name,"Alimentación");
 assert.equal(monthly.series.length,30);
 assert.equal(monthly.series.find(x=>x.day==="2026-11-20").total,250000n);
 
+// Audit the actual deployed report model across the four period boundaries.
+const fixture={
+ daily:[{day:"2026-11-22",minor:"10001",count:1},{day:"2026-11-23",minor:"25050",count:1},{day:"2026-11-24",minor:"500",count:1},{day:"2026-12-01",minor:"30000",count:1},{day:"2027-01-01",minor:"99999",count:1}],
+ incomeDaily:[{day:"2026-11-23",minor:"100000",count:1},{day:"2026-12-01",minor:"1000",count:1}],
+ categoryDaily:[],debtPaymentsMinor:"900000",pendingTransferReviewMinor:"800000"
+};
+for(const [period,start,income,expense] of [
+ ["day","2026-11-23",100000n,25050n],
+ ["week","2026-11-23",100000n,25550n],
+ ["month","2026-11-01",100000n,35551n],
+ ["year","2026-01-01",101000n,65551n]
+]){
+ const report=model.summarize(fixture,model.periodRange(period,start));
+ assert.equal(report.income.total,income,period);
+ assert.equal(report.expense.total,expense,period);
+ assert.equal(report.net,income-expense,period);
+}
+assert.equal(model.periodRange("month","2028-02-01").end,"2028-02-29");
+assert.equal(model.dayInBogota(new Date("2027-01-01T04:59:59Z")),"2026-12-31");
+assert.equal(model.dayInBogota(new Date("2027-01-01T05:00:00Z")),"2027-01-01");
+console.log("v42.2 daily, weekly, monthly and annual report arithmetic and Bogotá cutoffs passed");
 const origin="https://finanzasoss-quick-staging.socampoecheverry.workers.dev";
 const env={DB:{},ACCESS_AUD:"qa-reports",ALLOW_WRITES:"false"};
 const ctx={access:{aud:"qa-reports",async getIdentity(){return {user_uuid:"synthetic-owner"};}}};
