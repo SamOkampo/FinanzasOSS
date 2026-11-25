@@ -2,7 +2,7 @@
 // ONLY the authenticated owner's rows; no external references, macros,
 // formulas, Google tokens, cached exports or remote links.
 import type {QuickD1} from "./index.js";
-import {ownerMovements,ruleCategory} from "./categorization.js";
+import {readDashboardMovementRows} from "./dashboard-data.js";
 const encoder=new TextEncoder();
 const xml=(v:string)=>v.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]||c))
  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
@@ -66,22 +66,25 @@ function zip(files:Array<{path:string;text:string}>):Uint8Array{
  return out;
 }
 export async function excelExport(db:QuickD1,owner:string):Promise<Response>{
- const entries=await ownerMovements(db,owner,2000);
- const rows:(string|number)[][]=[],totals=new Map<string,{count:number;minor:number}>();
+ const limit=2000;
+ const result=await readDashboardMovementRows(db,owner,limit+1);
+ const truncated=result.results.length>limit;
+ const entries=result.results.slice(0,limit);
+ const rows:(string|number)[][]=[],totals=new Map<string,{count:number;minor:bigint}>();
  for(const e of entries){
-   const r=ruleCategory(e.merchant||"");
-   const category=e.category||r.category,subcategory=e.subcategory||r.subcategory;
+   const category=e.category||"Pendiente de clasificar",subcategory=e.subcategory||"";
+   const local=new Date(Date.parse(e.occurred_at)-5*3600000).toISOString();
    const amount=e.amount_minor/100;
-   rows.push([e.occurred_at.slice(0,10),e.occurred_at.slice(11,16),e.merchant||"Sin concepto",
+   rows.push([local.slice(0,10),local.slice(11,16),e.merchant||"Sin concepto",
      category,subcategory,amount,e.currency,e.payment_method,e.bank_label||"",
-     e.kind,e.classification_source==="manual"?"Confirmada":"Sugerida",e.source]);
-   if(e.kind==="purchase"&&e.currency==="COP"){
-     const current=totals.get(category)||{count:0,minor:0};
-     current.count++;current.minor+=e.amount_minor;totals.set(category,current);
+     e.kind,e.category_status||"",e.source||"",e.economic_group||"",e.direction||""]);
+   if(e.economic_group==="expense"&&e.currency==="COP"){
+     const current=totals.get(category)||{count:0,minor:0n};
+     current.count++;current.minor+=BigInt(e.amount_minor);totals.set(category,current);
    }
  }
- const summary=[...totals.entries()].sort((a,b)=>b[1].minor-a[1].minor)
-  .map(([category,total])=>[category,total.count,total.minor/100]);
+ const summary=[...totals.entries()].sort((a,b)=>a[1].minor>b[1].minor?-1:a[1].minor<b[1].minor?1:0)
+  .map(([category,total])=>[category,total.count,Number(total.minor)/100]);
  const contentTypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
  '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
  '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
@@ -101,8 +104,8 @@ export async function excelExport(db:QuickD1,owner:string):Promise<Response>{
   {path:"xl/workbook.xml",text:workbook},
   {path:"xl/_rels/workbook.xml.rels",text:'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
   {path:"xl/styles.xml",text:styles},
-  {path:"xl/worksheets/sheet1.xml",text:sheet("Movimientos",["Fecha","Hora","Concepto","Categoría","Subcategoría","Importe (COP)","Moneda","Método","Banco","Tipo","Categoría estado","Origen"],rows)},
-  {path:"xl/worksheets/sheet2.xml",text:sheet("Resumen categorías",["Categoría","Movimientos","Total COP"],summary)},
+  {path:"xl/worksheets/sheet1.xml",text:sheet("Movimientos",["Fecha (Bogotá)","Hora (Bogotá)","Concepto","Categoría","Subcategoría","Importe","Moneda","Método","Banco origen","Tipo","Categoría estado","Origen","Grupo económico","Dirección"],rows)},
+  {path:"xl/worksheets/sheet2.xml",text:sheet("Resumen categorías",["Categoría (solo gastos COP)","Movimientos","Total COP"],[...summary,[truncated?"Exportación parcial: últimos 2000 movimientos":"Exportación completa del historial disponible",entries.length,""]])},
  ]);
  const date=new Date().toISOString().slice(0,10);
  return new Response(bytes,{status:200,headers:{
@@ -111,6 +114,6 @@ export async function excelExport(db:QuickD1,owner:string):Promise<Response>{
   "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
   "Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'",
   "Referrer-Policy":"no-referrer",
-  "X-Export-Limit":"2000",
+  "X-Export-Limit":String(limit),"X-Export-Truncated":String(truncated),
  }});
 }
