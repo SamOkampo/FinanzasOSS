@@ -1,0 +1,85 @@
+name: FinanzasOSS v42 - staging candidate upload
+on:
+  pull_request:
+    types: [synchronize, reopened]
+    branches: [feature/studio-on-device-ios-qa-20261028]
+    paths: ['.github/workflows/v42-staging-candidate.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: finanzasoss-v42-candidate
+  cancel-in-progress: false
+jobs:
+  upload-reviewed-candidate:
+    if: github.repository == 'SamOkampo/FinanzasOSS' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/v42-reconciliation-beta' && github.event.pull_request.number == 241
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Download immutable artifact from successful CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45637962388 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
+          grep -Fx 'success 51ea7d533bebe0182511baef02add16dea1bba03' /tmp/reviewed-run
+          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15035035319/zip > /tmp/worker.zip
+          echo '36ac7741bcb628084de78fc2968a35fba92f679dbf2de178a81c76d8969ccbb7  /tmp/worker.zip' | sha256sum -c -
+          unzip -p /tmp/worker.zip finanzasoss-quick-worker.mjs > /tmp/worker.mjs
+          echo 'ba290a7d657c2f36941cdea9d8d1ff6467d8e47ffaf7949a2d03545239c5807b  /tmp/worker.mjs' | sha256sum -c -
+          node --check /tmp/worker.mjs
+          grep -Fq '/api/quick/shortcut/transfer' /tmp/worker.mjs
+      - name: Upload immutable candidate without routing traffic
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::error::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the repository or approved environment. No deployment was attempted."
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import {readFile} from 'node:fs/promises';
+          const base = 'https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(process.env.CF_ACCOUNT)+'/workers/scripts/finanzasoss-quick-staging';
+          const auth = {Authorization:'Bearer '+process.env.CF_TOKEN};
+          async function api(path,init={}) {
+            const response=await fetch(base+path,{...init,headers:{...auth,...init.headers}});
+            const body=await response.json();
+            if(!response.ok||!body.success)throw Error('Cloudflare API failed: '+response.status+' / '+(body.errors||[]).map(e=>e.code).join(','));
+            return body.result;
+          }
+          const before=await api('/deployments');
+          const active=before.deployments[0].versions;
+          const previous='8c5b5b19-b2a7-4ce6-b6e6-aef5e70f4c89';
+          if(active.length!==1||active[0].version_id!==previous||active[0].percentage!==100)throw Error('Active version changed; refusing upload');
+          const old=await api('/versions/'+previous);
+          const settings=await api('/settings');
+          const bindingNames=old.resources.bindings.map(x=>x.name).sort();
+          if(bindingNames.length!==24||JSON.stringify(bindingNames)!==JSON.stringify(settings.bindings.map(x=>x.name).sort()))throw Error('Binding inventory changed');
+          const listed=await api('/versions');
+          const latest=(listed.items||listed)[0];
+          if(latest.id!==previous)throw Error('Latest upload differs from active version; inheritance blocked');
+          const metadata={
+            main_module:'worker.mjs',
+            compatibility_date:settings.compatibility_date,
+            compatibility_flags:settings.compatibility_flags||[],
+            usage_model:settings.usage_model,
+            bindings:settings.bindings.map(x=>({type:'inherit',name:x.name})),
+            annotations:{'workers/message':'v42 reviewed transfer candidate, no traffic','workers/commit_sha':'51ea7d533bebe0182511baef02add16dea1bba03'}
+          };
+          const form=new FormData();
+          form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+          form.append('worker.mjs',new Blob([await readFile('/tmp/worker.mjs')],{type:'application/javascript+module'}),'worker.mjs');
+          const candidate=await api('/versions?bindings_inherit=strict',{method:'POST',body:form});
+          const uploaded=await api('/versions/'+candidate.id);
+          const shape=xs=>xs.map(x=>x.name+':'+x.type).sort();
+          if(JSON.stringify(shape(uploaded.resources.bindings))!==JSON.stringify(shape(old.resources.bindings)))throw Error('Candidate binding parity failed');
+          const after=await api('/deployments');
+          if(JSON.stringify(after.deployments[0].versions)!==JSON.stringify(active))throw Error('Traffic changed unexpectedly');
+          console.log('CANDIDATE_VERSION_ID='+candidate.id);
+          console.log('Verified binding parity; active version unchanged. No traffic was moved.');
+          NODE
