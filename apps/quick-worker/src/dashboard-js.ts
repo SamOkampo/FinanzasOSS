@@ -439,9 +439,9 @@ export const DASH_JS = `(() => {
       remove.type="button";remove.className="history-action-remove";
       remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
       remove.setAttribute("title","Eliminar movimiento");
-      if(x.source==="statement_credit" || x.source==="income"){
+      if(x.source==="statement_credit" || x.source==="income" || x.source==="own_transfer"){
         remove.disabled=true;
-        remove.title="Ingreso o abono protegido: la edición de gastos no aplica";
+        remove.title="Movimiento protegido: la edición de gastos no aplica";
       }
       const symbol=document.createElement("span");symbol.className="history-trash-icon";
       symbol.setAttribute("aria-hidden","true");remove.appendChild(symbol);
