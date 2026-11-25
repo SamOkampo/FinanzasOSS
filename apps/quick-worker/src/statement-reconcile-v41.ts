@@ -80,7 +80,7 @@ export async function previewReconciliationV41(db:QuickD1,owner:string,raw:unkno
   const fingerprints=new Map<string,number>();
   const review=[];
   const counts={possibleMatch:0,needsPurpose:0,needsType:0,possibleTransfer:0,needsCorrection:0,repeatedInFile:0};
-  for(const row of rows.rows){
+  const prepared=rows.rows.map(row=>{
     const c=row.candidate,issues=[...row.issues];
     const amount=cents(c.amount),description=(c.rawDescription||"").trim();
     if(!localDay(c.postedAt||""))issues.push("Fecha inválida o futura");
@@ -88,13 +88,27 @@ export async function previewReconciliationV41(db:QuickD1,owner:string,raw:unkno
     if(description.length<1||description.length>120)issues.push("Descripción inválida");
     if(c.currency&&c.currency!=="COP")issues.push("Moneda no compatible con la conciliación COP");
     if(!c.direction)issues.push("Indica debit o credit");
+    return {row,c,issues,amount,description};
+  });
+  // Same day/amount/direction lookups are identical for this owner and bank.
+  // Reuse them only inside this request; cap concurrent D1 calls at five.
+  const lookupKey=(item:typeof prepared[number])=>JSON.stringify([item.c.postedAt,item.amount,item.c.direction]);
+  const distinct=new Map<string,typeof prepared[number]>();
+  for(const item of prepared)if(!item.issues.length)distinct.set(lookupKey(item),item);
+  const lookups=[...distinct.entries()],matches=new Map<string,Existing[]>();
+  for(let i=0;i<lookups.length;i+=5){
+    await Promise.all(lookups.slice(i,i+5).map(async([key,item])=>{
+      matches.set(key,await existing(db,owner,input.bankLabel,item.c.postedAt!,item.amount!,item.c.direction as "credit"|"debit"));
+    }));
+  }
+  for(const {row,c,issues,amount,description} of prepared){
     if(issues.length){
       review.push({index:row.rowIndex,status:"needs_correction",direction:c.direction||null,
         date:c.postedAt,description,amountCOP:c.amount,issues,existing:[],requiresReview:true});
       counts.needsCorrection++;continue;
     }
     const direction=c.direction as "credit"|"debit";
-    const records=await existing(db,owner,input.bankLabel,c.postedAt!,amount!,direction);
+    const records=matches.get(JSON.stringify([c.postedAt,amount,direction]))??[];
     const exact=records.filter(r=>folded(r.label||"")===folded(description));
     const candidates=(exact.length?exact:records).slice(0,3).map(r=>({
       source:r.source,id:r.id,date:r.occurred_at.slice(0,10),description:r.label,
