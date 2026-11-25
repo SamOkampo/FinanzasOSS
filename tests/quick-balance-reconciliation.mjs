@@ -145,5 +145,40 @@ assert.match(DASH_HTML,/\/balances\.js/);
 assert.match(BALANCES_JS,/not.*connected|no se|No se/i);
 assert.ok(!BALANCES_JS.includes("localStorage")&&!BALANCES_JS.includes("sessionStorage"));
 new Function(BALANCES_JS);
+
+ // v42.2: cash + bank historical projection share the same eligibility rules.
+ sql.exec(readFileSync(new URL("../docs/quick/v42-own-transfers.sql",import.meta.url),"utf8"));
+ sql.exec(readFileSync(new URL("../docs/quick/v42-reconciliation-views.sql",import.meta.url),"utf8"));
+ const {saveOwnTransfer}=await import("../dist/apps/quick-worker/src/own-transfer-v42.js");
+ const cashBase={...first,bankLabel:"Efectivo",accountType:"cash",amount:"100000",asOf:earlier,requestKey:"cash-audit-baseline-001"};
+ assert.equal((await call("/api/quick/balances/verify","POST",cashBase)).status,201);
+ p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,'COP','cash','purchase',?,'Cash audit',NULL)",
+ ["cash-audit-expense",A,"cash-audit-expense",250000,middle]);
+ p("INSERT INTO quick_income_entries(id,owner_id,client_entry_id,amount_minor,occurred_at,concept,payment_method) VALUES(?,?,?,?,?,'Cash receipt','cash')",
+ ["cash-audit-income",A,"cash-audit-income",500000,middle]);
+ p("INSERT INTO quick_v42_own_transfers(id,owner_id,client_entry_id,amount_minor,from_bank_label,to_bank_label,occurred_at) VALUES(?,?,?,?,?,?,?)",
+ ["cash-audit-transfer",A,"cash-audit-transfer",100000,"Efectivo","Plata Pay",middle]);
+ p("INSERT INTO quick_shortcut_expenses(id,owner_id,client_entry_id,amount_minor,currency,payment_method,kind,occurred_at,merchant,bank_label) VALUES(?,?,?,?,'COP','credit_card','purchase',?,'Card purchase not deposit','Plata Pay')",
+ ["card-audit-exclusion",A,"card-audit-exclusion",990000,middle]);
+ const cashAccount=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Efectivo");
+ // The existing cash shortcut income is 8500 COP, after earlier.
+ assert.equal(cashAccount.estimate.amountMinor,"11000000");
+ assert.equal(cashAccount.estimate.incomingCount,2);
+ assert.equal(cashAccount.estimate.outgoingCount,2);
+ assert.equal((await call("/api/quick/balances/verify","POST",{...cashBase,amount:"101500",asOf:later,requestKey:"cash-audit-second-002"})).status,201);
+ const cashRec=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Efectivo").reconciliation;
+ assert.equal(cashRec.expectedMinor,"10150000");
+ assert.equal(cashRec.differenceMinor,"0");
+ const view=sql.prepare("SELECT calculated_minor,difference_minor FROM quick_v42_reconciliation_history WHERE owner_id=? AND bank_label='Efectivo' AND as_of=?").get(A,later);
+ assert.equal(String(view.calculated_minor),cashRec.expectedMinor);
+ assert.equal(String(view.difference_minor),cashRec.differenceMinor);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM quick_v42_reconciliation_movements WHERE id='card-audit-exclusion'").get().n,0);
+ assert.equal(sql.prepare("SELECT SUM(signed_minor) n FROM quick_v42_reconciliation_movements WHERE id='cash-audit-transfer'").get().n,0);
+ const savedTransfer=await saveOwnTransfer(db,A,{clientEntryId:"audit-own-transfer-002",amount:"10",fromBankLabel:"Plata Pay",toBankLabel:"Efectivo"});
+ assert.equal(savedTransfer.status,201);
+ const cashAfter=(await call("/api/quick/balances")).body.accounts.find(x=>x.label==="Efectivo");
+ assert.equal(cashAfter.estimate.amountMinor,"11001000");
+ console.log("v42.2 cash estimates, bank/card isolation, paired legs and historical reconciliation parity passed");
+
 sql.close();
 console.log("Verified bank balances: owner isolation, snapshot idempotency, credit separation, matched and unmatched flows PASSED");
