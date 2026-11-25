@@ -7,7 +7,7 @@ export class BalanceInputError extends Error {
 }
 type SqlAccount={id:string;owner_id:string;bank_label:string;account_type:string;currency:string};
 type SqlSnapshot={id:string;account_id:string;request_key:string;amount_minor:number;as_of:string;created_at:string};
-type Window={id:string;label:string;after:string;until:string;estimated:boolean};
+type Window={id:string;label:string;type:string;after:string;until:string;estimated:boolean};
 type Flow={id:string;in_minor:string;out_minor:string;in_count:number;out_count:number;uncertain_count:number};
 const KEY=/^[A-Za-z0-9][A-Za-z0-9_-]{11,95}$/;
 const TYPES=new Set(["deposit","cash","credit"]);
@@ -88,33 +88,35 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
  const rangeStart=new Date(Date.parse(from)-86400000).toISOString();
  const rangeEnd=new Date(Date.parse(through)+86400000).toISOString();
   const transferTable=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='quick_v42_own_transfers'").first<{name:string}>();
- const transferSql=transferTable?` UNION ALL SELECT from_bank_label,occurred_at,amount_minor,'debit',0,0 FROM quick_v42_own_transfers WHERE owner_id=? AND occurred_at BETWEEN ? AND ? UNION ALL SELECT to_bank_label,occurred_at,amount_minor,'credit',0,0 FROM quick_v42_own_transfers WHERE owner_id=? AND occurred_at BETWEEN ? AND ?`:"";
+ const transferSql=transferTable?` UNION ALL SELECT bank_label,occurred_at,ABS(signed_minor),CASE WHEN signed_minor<0 THEN 'debit' ELSE 'credit' END,0,0,CASE WHEN lower(trim(bank_label))='efectivo' THEN 'cash' ELSE 'deposit' END FROM quick_v42_own_transfer_legs WHERE owner_id=? AND occurred_at BETWEEN ? AND ?`:"";
  const query=`
   WITH periods AS (
     SELECT json_extract(value,'$.id') id, lower(trim(json_extract(value,'$.label'))) label,
       json_extract(value,'$.after') start_at, json_extract(value,'$.until') end_at,
+      json_extract(value,'$.type') account_type,
       date(json_extract(value,'$.after'),'-5 hours') start_day,
       date(json_extract(value,'$.until'),'-5 hours') end_day,
       json_extract(value,'$.estimated') estimated
     FROM json_each(?)
   ), movements AS (
-    SELECT bank_label,occurred_at,amount_minor,'debit' direction,
-      (client_entry_id GLOB 'import_*' OR client_entry_id GLOB 'v41_*') date_only, 0 estimate_only
+    SELECT CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END AS bank_label,occurred_at,amount_minor,'debit' direction,
+      (client_entry_id GLOB 'import_*' OR client_entry_id GLOB 'v41_*') date_only, 0 estimate_only,
+      CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END account_scope
     FROM quick_shortcut_expenses
     WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP' AND kind='purchase' AND deleted_at IS NULL
-      AND payment_method IN ('debit_card','bank_transfer','digital_wallet')
+      AND payment_method IN ('debit_card','bank_transfer','digital_wallet','cash')
     UNION ALL
-    SELECT bank_label,occurred_at,amount_minor,'debit',0,(kind<>'purchase')
+    SELECT CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END,occurred_at,amount_minor,'debit',0,(kind<>'purchase'),CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END
     FROM quick_manual_entries
     WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP' AND deleted_at IS NULL
-      AND payment_method IN ('debit_card','bank_transfer','digital_wallet')
+      AND payment_method IN ('debit_card','bank_transfer','digital_wallet','cash')
     UNION ALL
-    SELECT bank_label,occurred_at,amount_minor,'credit',0,0
+    SELECT CASE WHEN payment_method='cash' THEN 'Efectivo' ELSE bank_label END,occurred_at,amount_minor,'credit',0,0,CASE WHEN payment_method='cash' THEN 'cash' ELSE 'deposit' END
     FROM quick_income_entries
     WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP'
-      AND payment_method IN ('bank_transfer','digital_wallet')
+      AND payment_method IN ('bank_transfer','digital_wallet','cash')
     UNION ALL
-    SELECT bank_label,occurred_at,amount_minor,'credit',1,0
+    SELECT bank_label,occurred_at,amount_minor,'credit',1,0,'deposit'
     FROM quick_statement_credits
     WHERE owner_id=? AND occurred_at BETWEEN ? AND ? AND currency='COP'
     ${transferSql}
@@ -124,7 +126,7 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
         date(m.occurred_at,'-5 hours') > p.start_day AND date(m.occurred_at,'-5 hours') <= p.end_day
       ELSE m.occurred_at > p.start_at AND m.occurred_at <= p.end_at END included,
       (p.estimated AND m.date_only AND date(m.occurred_at,'-5 hours')=p.start_day) uncertain
-    FROM periods p JOIN movements m ON p.label=lower(trim(m.bank_label))
+    FROM periods p JOIN movements m ON p.label=lower(trim(m.bank_label)) AND p.account_type=m.account_scope
     WHERE p.estimated OR NOT m.estimate_only
   )
   SELECT id,
@@ -135,7 +137,7 @@ async function bankFlows(db:QuickD1,owner:string,windows:Window[]):Promise<Map<s
     SUM(CASE WHEN uncertain THEN 1 ELSE 0 END) uncertain_count
   FROM candidates GROUP BY id`;
  const bounds=[owner,rangeStart,rangeEnd] as const;
- const rows=await db.prepare(query).bind(JSON.stringify(windows),...bounds,...bounds,...bounds,...bounds,...(transferTable?[...bounds,...bounds]:[])).all<Flow>();
+ const rows=await db.prepare(query).bind(JSON.stringify(windows),...bounds,...bounds,...bounds,...bounds,...(transferTable?[...bounds]:[])).all<Flow>();
  return new Map(rows.results.map(row=>[row.id,row]));
 }
 type VerifiedBalance = {
@@ -164,10 +166,10 @@ export async function readVerifiedBalances(db:QuickD1,owner:string,estimateAt?:s
     previous:previous?{amountMinor:String(previous.amount_minor),asOf:previous.as_of}:null,
     reconciliation:null,estimate:null,connectionStatus:"not_connected"
   };
-  if(latest&&account.account_type==="deposit"){
-    if(previous)windows.push({id:account.id,label:account.bank_label,after:previous.as_of,until:latest.as_of,estimated:false});
+  if(latest&&(account.account_type==="deposit"||(account.account_type==="cash"&&account.bank_label.trim().toLowerCase()==="efectivo"))){
+    if(previous)windows.push({id:account.id,label:account.bank_label,type:account.account_type,after:previous.as_of,until:latest.as_of,estimated:false});
     if(estimateAt&&latest.as_of<=estimateAt)
-      windows.push({id:account.id+":estimate",label:account.bank_label,after:latest.as_of,until:estimateAt,estimated:true});
+      windows.push({id:account.id+":estimate",label:account.bank_label,type:account.account_type,after:latest.as_of,until:estimateAt,estimated:true});
   }
   items.push(item);
  }
@@ -175,7 +177,7 @@ export async function readVerifiedBalances(db:QuickD1,owner:string,estimateAt?:s
  const empty={in_minor:"0",out_minor:"0",in_count:0,out_count:0,uncertain_count:0};
  for(const item of items){
   const {latest,previous}=item;
-  if(!latest||item.type!=="deposit")continue;
+  if(!latest||(item.type!=="deposit"&&!(item.type==="cash"&&item.label.trim().toLowerCase()==="efectivo")))continue;
   if(previous){
     const flow=flows.get(item.id)??empty;
     const expected=BigInt(previous.amountMinor)+BigInt(flow.in_minor)-BigInt(flow.out_minor);
@@ -212,5 +214,5 @@ export async function verifiedBalances(db:QuickD1,owner:string):Promise<Response
  ).bind(owner,owner,owner,owner).all<{label:string}>();
  return response({accounts:items,bankLabels:aliases.results.map(x=>x.label),
   connectionStatus:"not_connected",balanceSource:"user_verified",
-  note:"La estimación parte del último saldo confirmado y los movimientos en COP de la misma cuenta. La deuda de tarjetas y el efectivo informado se muestran por separado."});
+  note:"La estimación parte del último saldo confirmado y los movimientos en COP de la misma cuenta. La deuda de tarjetas se muestra por separado. El efectivo se estima solo para la cuenta agregada llamada Efectivo; otras cajas conservan el saldo confirmado."});
 }
