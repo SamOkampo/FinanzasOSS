@@ -433,13 +433,13 @@ export const DASH_JS = `(() => {
       edit.type="button";edit.className="history-action-edit";
       edit.textContent="Editar";
       edit.setAttribute("aria-label","Editar "+(x.merchant||"movimiento"));
-      edit.disabled=x.kind!=="purchase"||x.currency!=="COP"||x.source==="statement_credit";
+      edit.disabled=x.source!=="own_transfer"&&(x.kind!=="purchase"||x.currency!=="COP"||x.source==="statement_credit");
       if(edit.disabled)edit.title="Por seguridad, solo se editan gastos COP";
       const remove=document.createElement("button");
       remove.type="button";remove.className="history-action-remove";
       remove.textContent="";remove.setAttribute("aria-label","Eliminar "+(x.merchant||"movimiento"));
       remove.setAttribute("title","Eliminar movimiento");
-      if(x.source==="statement_credit" || x.source==="income" || x.source==="own_transfer"){
+      if(x.source==="statement_credit" || x.source==="income"){
         remove.disabled=true;
         remove.title="Movimiento protegido: la edición de gastos no aplica";
       }
