@@ -225,7 +225,7 @@ export async function sendOwnerCategoryQuestion(
 }
 
 async function sendDeviceNotice(env:QuickWorkerEnv,device:{endpoint:string;p256dh?:string|null;auth_secret?:string|null},
- receipt:"income"|"expense"|"test",now=Date.now(),send:typeof fetch=fetch,payload:string=receipt):Promise<Response>{
+ receipt:"income"|"expense"|"transfer"|"test",now=Date.now(),send:typeof fetch=fetch,payload:string=receipt):Promise<Response>{
  let stage="prepare";
  try{
   const endpoint=endpointOf(device.endpoint);
@@ -266,7 +266,7 @@ async function movementPayload(env:QuickWorkerEnv,owner:string,entryId:string,
  return JSON.stringify({kind:receipt,amountMinor:row.amount_minor,concept});
 }
 
-async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expense"|"income",payload:string=receipt){
+async function sendMovementReceipt(env:QuickWorkerEnv,owner:string,receipt:"expense"|"income"|"transfer",payload:string=receipt){
  const devices=await env.DB.prepare(
   "SELECT endpoint_hash,endpoint,p256dh,auth_secret FROM quick_push_subscriptions " +
   "WHERE owner_id=? AND p256dh IS NOT NULL AND auth_secret IS NOT NULL ORDER BY created_at LIMIT 5"
@@ -302,6 +302,17 @@ export async function notifyCreatedMovement(
   });
   if(ctx.waitUntil)ctx.waitUntil(delivery);
   else await delivery;
+ }
+ return response;
+}
+
+export async function notifyOwnTransfer(response:Response,env:QuickWorkerEnv,ctx:QuickWorkerContext,owner:string):Promise<Response>{
+ if(response.status===201&&movementPushConfigured(env)){
+  const delivery=(async()=>{
+   const created=await response.clone().json() as {amountMinor:number;fromBankLabel:string;toBankLabel:string};
+   await sendMovementReceipt(env,owner,"transfer",JSON.stringify({kind:"transfer",amountMinor:created.amountMinor,concept:created.fromBankLabel+" → "+created.toBankLabel}));
+  })().catch(()=>{console.warn({event:"finanzasoss_push_delivery",receipt:"transfer",outcome:"subscription_lookup_failed"});});
+  if(ctx.waitUntil)ctx.waitUntil(delivery);else await delivery;
  }
  return response;
 }
