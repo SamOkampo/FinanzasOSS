@@ -107,12 +107,18 @@ export const HAPI_JS = String.raw`
   const money=(minor,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency}).format(Number(minor)/100);
   const amount=value=>value.trim().replace(",",".");
   async function request(path,body){
-    const response=await fetch("/api/quick/v41/hapi/"+path,{
-      credentials:"same-origin",cache:"no-store",...(body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(data.error||"No se pudo consultar Hapi.");
-    return data;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    try{
+      const response=await fetch("/api/quick/v41/hapi/"+path,{
+        credentials:"same-origin",cache:"no-store",signal:controller.signal,...(body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(data.error||"No se pudo consultar Hapi.");
+      return data;
+    }catch(error){
+      if(controller.signal.aborted)throw Error(body?"No se pudo confirmar la respuesta. Actualiza el portafolio antes de intentar guardar de nuevo.":"La consulta de Hapi tardó demasiado. Actualiza para reintentar.");
+      throw error;
+    }finally{clearTimeout(timer);}
   }
   function manualFields(){
     const manual=!origin.value;
@@ -299,17 +305,20 @@ export const HAPI_JS = String.raw`
   }
   async function readAlignedHapi(file){
     if(!file||file.size<5||file.size>4000000||!file.name.toLowerCase().endsWith(".pdf"))return null;
-    let loading=null,timer=null;
+    let loading=null,timer=null,cancelled=false;
     const extract=async()=>{
       const engine=await import("/statement-pdf-renderer.mjs?v=41.10");
       engine.GlobalWorkerOptions.workerSrc="/statement-pdf-render-worker.mjs?v=41.10";
+      if(cancelled)return null;
       loading=engine.getDocument({data:new Uint8Array(await file.arrayBuffer()),useWasm:false,useWorkerFetch:false,
         disableFontFace:true,useSystemFonts:true,enableXfa:false,isEvalSupported:false,verbosity:0});
       const doc=await loading.promise;
-      if(doc.numPages>20)return null;
+      if(cancelled||doc.numPages>20)return null;
       const pages=[];let size=0;
       for(let n=1;n<=doc.numPages;n++){
+        if(cancelled)return null;
         const page=await doc.getPage(n),view=page.getViewport({scale:1}),data=await page.getTextContent();
+        if(cancelled){page.cleanup();return null;}
         const groups=[];
         for(const item of data.items){
           if(!("str" in item)||!item.str.trim())continue;
@@ -327,7 +336,7 @@ export const HAPI_JS = String.raw`
     };
     try{return await Promise.race([extract(),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),25000);})]);}
     catch{return null;}
-    finally{clearTimeout(timer);if(loading)void loading.destroy().catch(()=>{});}
+    finally{cancelled=true;clearTimeout(timer);if(loading)void loading.destroy().catch(()=>{});}
   }
   async function readPdf(file,kind){
     // PDF.js handles rotated Apex documents whose text order LibPDF can corrupt.
