@@ -16,11 +16,42 @@ function periodDate(text:string):string|null{
   const parsed=new Date(end+"T12:00:00Z");
   return end&&start&&start<=end&&Number.isFinite(+parsed)&&parsed.toISOString().slice(0,10)===end?end:null;
 }
+// Apex's overview labels the securities subtotal "Total Priced Portfolio",
+// whereas the holdings page uses that label for securities plus cash.
+// Require both pages to agree; do not choose a total by its label alone.
+function parseApexHoldings(lines:string[],asOf:string){
+ const one=(pattern:RegExp)=>{const found=lines.filter(l=>pattern.test(l));return found.length===1?found[0]:null;};
+ const overview=one(/^total equity holdings\b/i);
+ const overviewCash=one(/^cash account\b/i);
+ const equity=one(/^total equities\b/i);
+ const cash=one(/^total cash\s*\(net portfolio balance\)/i);
+ if(!overview||!overviewCash||!equity||!cash)return null;
+ const close=(line:string)=>{const m=line.match(AMOUNTS);return m?.length===2?clean(m[1]!):null;};
+ const first=(line:string)=>{const m=line.match(AMOUNTS);return m?.length?clean(m[0]!):null;};
+ const totalUsd=close(overview),cashUsd=close(overviewCash),equityUsd=first(equity);
+ if(!totalUsd||!cashUsd||!equityUsd||first(cash)!==cashUsd)return null;
+ const totals=lines.filter(l=>/^total priced portfolio\b/i.test(l));
+ if(totals.length!==2||close(totals[0]!)!==equityUsd||first(totals[1]!)!==totalUsd)return null;
+ const end=lines.indexOf(equity);
+ const head=lines.findIndex(l=>/\bdescription\b/i.test(l)&&/\bquantity\b/i.test(l)&&/\bprice\b/i.test(l)&&/\bvalue\b/i.test(l));
+ if(head<0||end<=head||!lines.slice(Math.max(0,head-2),head+1).some(l=>/\b(?:symbol|cusip)\b/i.test(l)))return null;
+ const row=new RegExp("(?:^|\\s)([A-Z][A-Z0-9./-]{0,15})\\s+[CMLSHD]\\s+(\\d+(?:\\.\\d{1,12})?)\\s+"+USD+"\\s+("+USD+")\\s+"+USD+"(?:\\s|$)");
+ const positions=lines.slice(head+1,end).flatMap(line=>{
+   const m=row.exec(line);
+   return m?[{symbol:m[1]!,quantity:m[2]!,marketValueUsd:clean(m[3]!)}]:[];
+ });
+ if(!positions.length||positions.length>60||new Set(positions.map(p=>p.symbol)).size!==positions.length||
+    positions.some(p=>p.marketValueUsd.startsWith("-")||!/[1-9]/.test(p.quantity)))return null;
+ const securities=positions.reduce((sum,p)=>sum+minor(p.marketValueUsd),0n);
+ if(securities!==minor(equityUsd)||securities+minor(cashUsd)!==minor(totalUsd))return null;
+ return {asOf,cashUsd,totalUsd,positions};
+}
 export function parseHapiReport(text:string) {
   if(!/\bhapi\b/i.test(text)||!(/\bapex clearing\b/i.test(text)))return null;
   const lines=text.split(/\r?\n/).map(line=>line.trim().replace(/[ \t]+/g," "));
   const dateLine=lines.find(line=>/\bstatement period\b/i.test(line))??lines.find(line=>periodDate(line)!==null);
   const asOf=dateLine?periodDate(dateLine):null;
+  if(asOf&&lines.some(l=>/^total equity holdings\b/i.test(l)))return parseApexHoldings(lines,asOf);
   const matched=lines.filter(line=>/^total priced portfolio\b/i.test(line)).slice(0,2);
   const totalMatches=matched.length===1?matched[0]!.match(AMOUNTS):null;
   // The overview needs clearly printed opening and closing values on the same row.
@@ -138,7 +169,25 @@ export function parseHapiActivity(text:string){
 }
 export async function readHapiPdf(file:File) {
  const text=await readHapiText(file);
- return text?parseHapiReport(text):null;
+ const direct=text?parseHapiReport(text):null;
+ if(direct)return direct;
+ if(!file.name.toLowerCase().endsWith(".pdf")||file.size<5||file.size>LIMIT)return null;
+ try{
+   const pdf=await PDF.load(new Uint8Array(await file.arrayBuffer()),{lenient:false});
+   if(pdf.isEncrypted||pdf.getPageCount()>20)return null;
+   const aligned=pdf.getPages().map(page=>{
+     const groups:{baseline:number;spans:{x:number;text:string}[]}[]=[];
+     for(const line of page.extractText().lines){
+       let group=groups.find(g=>Math.abs(g.baseline-line.baseline)<=2);
+       if(!group){group={baseline:line.baseline,spans:[]};groups.push(group);}
+       for(const span of line.spans)group.spans.push({x:span.bbox.x,text:span.text});
+     }
+     // Extractor baselines use bottom-origin coordinates; preserve the
+     // natural page order by retaining first encounter for each baseline.
+     return groups.map(g=>g.spans.sort((a,b)=>a.x-b.x).map(x=>x.text).join(" ")).join("\n");
+   }).join("\n");
+   return parseHapiReport(aligned);
+ }catch{return null;}
 }
 export async function readHapiActivityPdf(file:File) {
  const text=await readHapiText(file);
