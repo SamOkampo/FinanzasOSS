@@ -1,4 +1,4 @@
-name: FinanzasOSS v42 - staging candidate upload
+name: FinanzasOSS v42.1 - staging candidate upload
 on:
   pull_request:
     types: [synchronize, reopened]
@@ -24,14 +24,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45637962388 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
-          grep -Fx 'success 51ea7d533bebe0182511baef02add16dea1bba03' /tmp/reviewed-run
-          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15035035319/zip > /tmp/worker.zip
-          echo '36ac7741bcb628084de78fc2968a35fba92f679dbf2de178a81c76d8969ccbb7  /tmp/worker.zip' | sha256sum -c -
+          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45646723428 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
+          grep -Fx 'success ec9ca5720460f2be1dcdbc21c10a8ec2a6cbfdf1' /tmp/reviewed-run
+          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15038131549/zip > /tmp/worker.zip
+          echo 'd80ebffbfb6c98d9444191f447ff1a240f9805032800a3ecc18d2afd6c9bf8a2  /tmp/worker.zip' | sha256sum -c -
           unzip -p /tmp/worker.zip finanzasoss-quick-worker.mjs > /tmp/worker.mjs
-          echo 'ba290a7d657c2f36941cdea9d8d1ff6467d8e47ffaf7949a2d03545239c5807b  /tmp/worker.mjs' | sha256sum -c -
+          sha256sum /tmp/worker.mjs
           node --check /tmp/worker.mjs
           grep -Fq '/api/quick/shortcut/transfer' /tmp/worker.mjs
+          grep -Fq '/api/quick/studio/transfer/change' /tmp/worker.mjs
       - name: Upload immutable candidate without routing traffic
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -54,7 +55,7 @@ jobs:
           }
           const before=await api('/deployments');
           const active=before.deployments[0].versions;
-          const previous='8c5b5b19-b2a7-4ce6-b6e6-aef5e70f4c89';
+          const previous='c18a272c-4c18-44d7-890e-6b82e42d48d6';
           if(active.length!==1||active[0].version_id!==previous||active[0].percentage!==100)throw Error('Active version changed; refusing upload');
           const old=await api('/versions/'+previous);
           const settings=await api('/settings');
@@ -69,7 +70,7 @@ jobs:
             compatibility_flags:settings.compatibility_flags||[],
             usage_model:settings.usage_model,
             bindings:settings.bindings.map(x=>({type:'inherit',name:x.name})),
-            annotations:{'workers/message':'v42 reviewed transfer candidate, no traffic','workers/commit_sha':'51ea7d533bebe0182511baef02add16dea1bba03'}
+            annotations:{'workers/message':'v42.1 reviewed transfer corrections candidate, no traffic','workers/commit_sha':'ec9ca5720460f2be1dcdbc21c10a8ec2a6cbfdf1'}
           };
           const form=new FormData();
           form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
