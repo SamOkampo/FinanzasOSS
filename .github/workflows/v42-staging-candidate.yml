@@ -24,10 +24,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45649394782 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
-          grep -Fx 'success c825825a5994a4988a487a745df1a0d6c7067aa6' /tmp/reviewed-run
-          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15038304373/zip > /tmp/worker.zip
-          echo 'fc77199965538b3c0a5eae2f910bf6d203b1cbe06932e9f5817a26b24031ea42  /tmp/worker.zip' | sha256sum -c -
+          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45652454052 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
+          grep -Fx 'success 59f017b3479fbf90538963de336e9bfdbfbfbe8f' /tmp/reviewed-run
+          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15040467915/zip > /tmp/worker.zip
+          echo '62fb30dc0343a9c96a92f306b05419e1ffc7ed7202f101f6604f06e897620e9d  /tmp/worker.zip' | sha256sum -c -
           unzip -p /tmp/worker.zip finanzasoss-quick-worker.mjs > /tmp/worker.mjs
           sha256sum /tmp/worker.mjs
           node --check /tmp/worker.mjs
@@ -63,14 +63,18 @@ jobs:
           if(bindingNames.length!==24||JSON.stringify(bindingNames)!==JSON.stringify(settings.bindings.map(x=>x.name).sort()))throw Error('Binding inventory changed');
           const listed=await api('/versions');
           const latest=(listed.items||listed)[0];
-          if(latest.id!==previous)throw Error('Latest upload differs from active version; inheritance blocked');
+          const expectedLatest='0a0e5303-9626-40ee-b742-3f8b5c01f607';
+          if(latest.id!==expectedLatest)throw Error('Unexpected inheritance source; upload blocked');
+          const inheritance=await api('/versions/'+expectedLatest);
+          const comparable=x=>JSON.stringify(x.resources.bindings.map(y=>({name:y.name,type:y.type,id:y.id??y.database_id??null})).sort((a,b)=>a.name.localeCompare(b.name)));
+          if(comparable(inheritance)!==comparable(old)||JSON.stringify(inheritance.resources.script_runtime)!==JSON.stringify(old.resources.script_runtime))throw Error('Inheritance source differs from active configuration');
           const metadata={
             main_module:'worker.mjs',
             compatibility_date:settings.compatibility_date,
             compatibility_flags:settings.compatibility_flags||[],
             usage_model:settings.usage_model,
             bindings:settings.bindings.map(x=>({type:'inherit',name:x.name})),
-            annotations:{'workers/message':'v42.2 reviewed financial audit candidate, no traffic','workers/commit_sha':'c825825a5994a4988a487a745df1a0d6c7067aa6'}
+            annotations:{'workers/message':'v42.2 reviewed financial audit round two, no traffic','workers/commit_sha':'59f017b3479fbf90538963de336e9bfdbfbfbe8f'}
           };
           const form=new FormData();
           form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
