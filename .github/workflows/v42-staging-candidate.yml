@@ -1,4 +1,4 @@
-name: FinanzasOSS v42.1 - staging candidate upload
+name: FinanzasOSS v42.2 - staging candidate upload
 on:
   pull_request:
     types: [synchronize, reopened]
@@ -24,10 +24,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45646723428 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
-          grep -Fx 'success ec9ca5720460f2be1dcdbc21c10a8ec2a6cbfdf1' /tmp/reviewed-run
-          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15038131549/zip > /tmp/worker.zip
-          echo 'd80ebffbfb6c98d9444191f447ff1a240f9805032800a3ecc18d2afd6c9bf8a2  /tmp/worker.zip' | sha256sum -c -
+          gh api repos/SamOkampo/FinanzasOSS/actions/runs/45649394782 --jq '.conclusion + " " + .head_sha' > /tmp/reviewed-run
+          grep -Fx 'success c825825a5994a4988a487a745df1a0d6c7067aa6' /tmp/reviewed-run
+          gh api repos/SamOkampo/FinanzasOSS/actions/artifacts/15038304373/zip > /tmp/worker.zip
+          echo 'fc77199965538b3c0a5eae2f910bf6d203b1cbe06932e9f5817a26b24031ea42  /tmp/worker.zip' | sha256sum -c -
           unzip -p /tmp/worker.zip finanzasoss-quick-worker.mjs > /tmp/worker.mjs
           sha256sum /tmp/worker.mjs
           node --check /tmp/worker.mjs
@@ -55,7 +55,7 @@ jobs:
           }
           const before=await api('/deployments');
           const active=before.deployments[0].versions;
-          const previous='c18a272c-4c18-44d7-890e-6b82e42d48d6';
+          const previous='835d42ca-352e-4760-84cb-da588b8c1ea9';
           if(active.length!==1||active[0].version_id!==previous||active[0].percentage!==100)throw Error('Active version changed; refusing upload');
           const old=await api('/versions/'+previous);
           const settings=await api('/settings');
@@ -70,7 +70,7 @@ jobs:
             compatibility_flags:settings.compatibility_flags||[],
             usage_model:settings.usage_model,
             bindings:settings.bindings.map(x=>({type:'inherit',name:x.name})),
-            annotations:{'workers/message':'v42.1 reviewed transfer corrections candidate, no traffic','workers/commit_sha':'ec9ca5720460f2be1dcdbc21c10a8ec2a6cbfdf1'}
+            annotations:{'workers/message':'v42.2 reviewed financial audit candidate, no traffic','workers/commit_sha':'c825825a5994a4988a487a745df1a0d6c7067aa6'}
           };
           const form=new FormData();
           form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
