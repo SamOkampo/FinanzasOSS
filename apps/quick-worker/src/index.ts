@@ -1,4 +1,4 @@
-import { saveOwnTransfer } from "./own-transfer-v42.js";
+import { saveOwnTransfer, changeOwnTransfer } from "./own-transfer-v42.js";
 import { notifyOwnTransfer } from "./push.js";
 import {inspectStatementPage,STATEMENT_VISION_PATH} from "./statement-vision.js";
 import { prepareQuickEntry } from "../../../packages/finance-core/src/quick-entry.js";
@@ -549,6 +549,7 @@ export async function handleQuickRequest(
         await saveIncome(env.DB,owner,data,true),env,ctx,owner,"income");
       if (pathname === "/api/quick/balances/verify") return await saveVerifiedBalance(env.DB,owner,data);
       if (pathname === "/api/quick/budgets") return await writeBudget(env.DB, owner, data);
+      if (pathname === "/api/quick/studio/transfer/change") return await changeOwnTransfer(env.DB, owner, data);
       if (pathname === "/api/quick/studio/movement/change") return await changeMovement(env.DB, owner, data);
       if (pathname === "/api/quick/push/subscribe") return await subscribe(env.DB, owner, env, data);
       if (pathname === "/api/quick/push/unsubscribe") return await unsubscribe(env.DB, owner, data);
