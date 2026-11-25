@@ -1,8 +1,10 @@
-CREATE VIEW IF NOT EXISTS quick_v42_reconciliation_movements AS
+DROP VIEW IF EXISTS quick_v42_reconciliation_movements;
+CREATE VIEW quick_v42_reconciliation_movements AS
 SELECT owner_id,id,'shortcut' AS source,bank_label,occurred_at,-amount_minor AS signed_minor,merchant AS concept,'purchase' AS kind FROM quick_shortcut_expenses WHERE deleted_at IS NULL AND bank_label IS NOT NULL
 UNION ALL SELECT owner_id,id,'manual',bank_label,occurred_at,-amount_minor,merchant,kind FROM quick_manual_entries WHERE deleted_at IS NULL AND currency='COP' AND bank_label IS NOT NULL
 UNION ALL SELECT owner_id,id,'statement_credit',bank_label,occurred_at,amount_minor,merchant,kind FROM quick_statement_credits
-UNION ALL SELECT owner_id,id,'income',bank_label,occurred_at,amount_minor,concept,income_category FROM quick_income_entries WHERE bank_label IS NOT NULL;
+UNION ALL SELECT owner_id,id,'income',bank_label,occurred_at,amount_minor,concept,income_category FROM quick_income_entries WHERE bank_label IS NOT NULL
+UNION ALL SELECT l.owner_id,l.id,'own_transfer',l.bank_label,l.occurred_at,l.signed_minor,t.from_bank_label || ' → ' || t.to_bank_label,'transfer' FROM quick_v42_own_transfer_legs l JOIN quick_v42_own_transfers t ON t.id=l.id AND t.owner_id=l.owner_id;
 CREATE VIEW IF NOT EXISTS quick_v42_reconciliation_history AS
 WITH ordered AS (SELECT s.*,a.bank_label,LAG(s.amount_minor) OVER (PARTITION BY s.owner_id,s.account_id ORDER BY s.as_of) AS previous_minor,LAG(s.as_of) OVER (PARTITION BY s.owner_id,s.account_id ORDER BY s.as_of) AS previous_as_of FROM quick_balance_snapshots s JOIN quick_balance_accounts a ON a.id=s.account_id AND a.owner_id=s.owner_id WHERE a.account_type IN ('deposit','cash')),
 flows AS (SELECT o.*,COALESCE((SELECT SUM(m.signed_minor) FROM quick_v42_reconciliation_movements m WHERE m.owner_id=o.owner_id AND m.bank_label=o.bank_label COLLATE NOCASE AND julianday(m.occurred_at)>julianday(o.previous_as_of) AND julianday(m.occurred_at)<=julianday(o.as_of)),0) AS net_minor FROM ordered o)
